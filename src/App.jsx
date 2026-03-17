@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { products as seedProducts } from "./data/products";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
+const brandLogo = "/assets/brand/decorbeats-logo.svg";
+
 const emptyForm = {
   id: "",
   sku: "",
@@ -166,122 +168,147 @@ function dedupePayloadBySku(rows) {
   };
 }
 
-function ProductImage({ product }) {
-  if (product.imageUrl) {
+function ProductImage({ product, compact = false }) {
+  if (product?.imageUrl) {
     return (
-      <div className="product-image-shell">
+      <div className={`product-image-shell ${compact ? "compact" : ""}`}>
         <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
       </div>
     );
   }
 
   return (
-    <div className="product-image-shell product-image-fallback">
-      <span>{product.category}</span>
-      <strong>{product.material}</strong>
-      <small>{product.driveUrl ? "Drive folder linked" : "No image yet"}</small>
+    <div className={`product-image-shell product-image-fallback ${compact ? "compact" : ""}`}>
+      <span>{product?.category ?? "Decorbeats"}</span>
+      <strong>{product?.material ?? "Crafted collection"}</strong>
+      <small>{product?.driveUrl ? "Drive folder linked" : "Image coming soon"}</small>
     </div>
   );
 }
 
-function ProductCard({ product, customerMode, onSelect }) {
+function BrandHeader({ customerMode, setCustomerMode, userEmail }) {
   return (
-    <button type="button" className="product-card" onClick={() => onSelect(product)}>
-      <ProductImage product={product} />
-      <div className="product-card-top">
-        <span className={`stock-pill ${product.stockStatus !== "In stock" ? "warn" : ""}`}>{product.stockStatus}</span>
-        <span className="sku-chip">{product.sku}</span>
-      </div>
-      <h3>{product.name}</h3>
-      <p className="product-meta">
-        {product.category} · {product.material}
-      </p>
-      <div className="product-quantity">{product.quantity} units available</div>
-      <div className="product-pricing">
+    <header className="brand-header">
+      <div className="brand-lockup">
+        <img src={brandLogo} alt="Decorbeats" className="brand-logo" />
         <div>
-          <span>MRP</span>
-          <strong>{formatCurrency(product.pricing.mrp)}</strong>
+          <p className="eyebrow">Decorbeats Studio</p>
+          <h1>{customerMode ? "Shareable catalog with a premium feel." : "Inventory command center for your collection."}</h1>
         </div>
-        {!customerMode ? (
-          <div>
-            <span>B2B</span>
-            <strong>{formatCurrency(product.pricing.b2b)}</strong>
-          </div>
-        ) : null}
       </div>
-    </button>
+      <div className="brand-actions">
+        <div className="mode-switch" role="tablist" aria-label="View mode">
+          <button type="button" className={!customerMode ? "mode-pill active" : "mode-pill"} onClick={() => setCustomerMode(false)}>
+            Admin
+          </button>
+          <button type="button" className={customerMode ? "mode-pill active" : "mode-pill"} onClick={() => setCustomerMode(true)}>
+            Customer
+          </button>
+        </div>
+        <div className="user-badge">{userEmail ? `Signed in: ${userEmail}` : "Admin sign-in available"}</div>
+      </div>
+    </header>
   );
 }
 
-function DetailPanel({ product, customerMode }) {
-  if (!product) {
-    return (
-      <aside className="detail-panel empty-panel">
-        <p>Select a product to view product details.</p>
-      </aside>
-    );
-  }
-
+function HeroPanel({ customerMode, selectedProduct, stats, statusMessage }) {
   return (
-    <aside className="detail-panel">
-      <ProductImage product={product} />
-      <div className="detail-header">
-        <div>
-          <p className="eyebrow">Selected Product</p>
-          <h2>{product.name}</h2>
-        </div>
-        <span className={`stock-pill ${product.stockStatus !== "In stock" ? "warn" : ""}`}>{product.stockStatus}</span>
+    <section className="hero-panel">
+      <div className="hero-copy">
+        <p className="eyebrow">{customerMode ? "Catalog Experience" : "Inventory Overview"}</p>
+        <h2>{customerMode ? "A calmer product browsing experience for customers." : "Everything you need to stock, curate, and share your range."}</h2>
+        <p>
+          {customerMode
+            ? "Browse by category, see availability, and focus on the hero product without getting buried in admin controls."
+            : "Bring in your CSV, keep product data current, upload imagery, and manage the catalog without losing the Decorbeats character."}
+        </p>
+        <div className="hero-status">{statusMessage}</div>
       </div>
-      <div className="detail-grid">
-        <div>
-          <span className="detail-label">SKU</span>
-          <strong>{product.sku}</strong>
+
+      <div className="hero-focus">
+        <div className="stats-strip">
+          <article>
+            <span>Products</span>
+            <strong>{stats.totalProducts}</strong>
+          </article>
+          <article>
+            <span>Total units</span>
+            <strong>{stats.totalUnits}</strong>
+          </article>
+          <article>
+            <span>Low stock</span>
+            <strong>{stats.lowStock}</strong>
+          </article>
+          <article>
+            <span>With photos</span>
+            <strong>{stats.withImages}</strong>
+          </article>
         </div>
-        <div>
-          <span className="detail-label">Category</span>
-          <strong>{product.category}</strong>
-        </div>
-        <div>
-          <span className="detail-label">Material</span>
-          <strong>{product.material}</strong>
-        </div>
-        <div>
-          <span className="detail-label">Quantity</span>
-          <strong>{product.quantity}</strong>
-        </div>
+
+        {selectedProduct ? (
+          <div className="focus-card">
+            <ProductImage product={selectedProduct} compact />
+            <div className="focus-copy">
+              <span className={`stock-pill ${selectedProduct.stockStatus !== "In stock" ? "warn" : ""}`}>{selectedProduct.stockStatus}</span>
+              <h3>{selectedProduct.name}</h3>
+              <p>
+                {selectedProduct.category} · {selectedProduct.material}
+              </p>
+              <div className="focus-meta">
+                <div>
+                  <span>SKU</span>
+                  <strong>{selectedProduct.sku}</strong>
+                </div>
+                <div>
+                  <span>MRP</span>
+                  <strong>{formatCurrency(selectedProduct.pricing.mrp)}</strong>
+                </div>
+                <div>
+                  <span>Qty</span>
+                  <strong>{selectedProduct.quantity}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
-      <div className="detail-section">
-        <span className="detail-label">Pricing</span>
-        <div className="pricing-stack">
-          <div>MRP: {formatCurrency(product.pricing.mrp)}</div>
-          {!customerMode ? <div>B2B: {formatCurrency(product.pricing.b2b)}</div> : null}
-          {!customerMode ? <div>Unit cost: {formatCurrency(product.pricing.unitCost)}</div> : null}
-        </div>
+    </section>
+  );
+}
+
+function ControlBar({ search, setSearch, categoryFilter, setCategoryFilter, categories }) {
+  return (
+    <section className="control-bar">
+      <input
+        className="search-input"
+        type="search"
+        placeholder="Search by product, SKU, material, or category"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+      />
+      <div className="filter-pills">
+        {categories.map((category) => (
+          <button
+            key={category}
+            type="button"
+            className={category === categoryFilter ? "filter-pill active" : "filter-pill"}
+            onClick={() => setCategoryFilter(category)}
+          >
+            {category}
+          </button>
+        ))}
       </div>
-      {product.notes && !customerMode ? (
-        <div className="detail-section">
-          <span className="detail-label">Notes</span>
-          <p>{product.notes}</p>
-        </div>
-      ) : null}
-      <div className="detail-section">
-        <span className="detail-label">Media</span>
-        <div className="pricing-stack">
-          <div>Image URL: {product.imageUrl || "Not set"}</div>
-          <div>Drive folder: {product.driveUrl || "Not set"}</div>
-        </div>
-      </div>
-    </aside>
+    </section>
   );
 }
 
 function AuthPanel({ email, setEmail, authBusy, userEmail, onSignIn, onSignOut }) {
   return (
-    <section className="admin-panel auth-panel">
-      <div className="admin-header">
+    <section className="panel-card admin-card">
+      <div className="section-head">
         <div>
           <p className="eyebrow">Admin Access</p>
-          <h2>{userEmail ? "Signed in" : "Sign in for admin actions"}</h2>
+          <h3>{userEmail ? "Studio access unlocked" : "Sign in to manage inventory"}</h3>
         </div>
         {userEmail ? (
           <button type="button" className="ghost-button" onClick={onSignOut}>
@@ -289,25 +316,21 @@ function AuthPanel({ email, setEmail, authBusy, userEmail, onSignIn, onSignOut }
           </button>
         ) : null}
       </div>
-
       {userEmail ? (
-        <p className="auth-copy">Admin edits and photo uploads are enabled for {userEmail}.</p>
+        <p className="support-copy">You can now import stock, edit products, and upload images.</p>
       ) : (
-        <>
-          <p className="auth-copy">Enter your email and Supabase will send you a secure magic link to sign in.</p>
-          <div className="auth-row">
-            <input
-              className="search-input"
-              type="email"
-              placeholder="your-email@example.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-            <button type="button" className="primary-button" disabled={authBusy} onClick={onSignIn}>
-              {authBusy ? "Sending..." : "Send magic link"}
-            </button>
-          </div>
-        </>
+        <div className="auth-row">
+          <input
+            className="search-input"
+            type="email"
+            placeholder="admin-email@example.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+          <button type="button" className="primary-button" disabled={authBusy} onClick={onSignIn}>
+            {authBusy ? "Sending..." : "Send magic link"}
+          </button>
+        </div>
       )}
     </section>
   );
@@ -315,33 +338,29 @@ function AuthPanel({ email, setEmail, authBusy, userEmail, onSignIn, onSignOut }
 
 function ImportPanel({ importBusy, onFileChange }) {
   return (
-    <section className="admin-panel">
-      <div className="admin-header">
+    <section className="panel-card admin-card">
+      <div className="section-head">
         <div>
           <p className="eyebrow">Bulk Import</p>
-          <h2>Load inventory from CSV</h2>
+          <h3>Refresh inventory from CSV</h3>
         </div>
       </div>
-      <p className="auth-copy">
-        Upload your inventory CSV to create or refresh products in Supabase. Existing SKUs are updated, new SKUs are inserted.
-      </p>
-      <div className="upload-row">
-        <label className="upload-button">
-          {importBusy ? "Importing..." : "Choose CSV"}
-          <input type="file" accept=".csv,text/csv" onChange={onFileChange} disabled={importBusy} />
-        </label>
-      </div>
+      <p className="support-copy">Use the same spreadsheet format to create new products or refresh matching SKUs in one go.</p>
+      <label className="upload-button">
+        {importBusy ? "Importing..." : "Choose inventory CSV"}
+        <input type="file" accept=".csv,text/csv" onChange={onFileChange} disabled={importBusy} />
+      </label>
     </section>
   );
 }
 
 function ProductForm({ form, setForm, onSubmit, onReset, uploadBusy, saveBusy, onFileChange }) {
   return (
-    <form className="admin-panel" onSubmit={onSubmit}>
-      <div className="admin-header">
+    <form className="panel-card admin-card" onSubmit={onSubmit}>
+      <div className="section-head">
         <div>
-          <p className="eyebrow">Admin</p>
-          <h2>{form.id ? "Edit product" : "Add product"}</h2>
+          <p className="eyebrow">Product Studio</p>
+          <h3>{form.id ? "Edit selected product" : "Add a new product"}</h3>
         </div>
         <button type="button" className="ghost-button" onClick={onReset}>
           Clear
@@ -370,12 +389,12 @@ function ProductForm({ form, setForm, onSubmit, onReset, uploadBusy, saveBusy, o
           <input type="number" value={form.quantity} onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))} />
         </label>
         <label>
-          Unit cost
-          <input type="number" value={form.unitCost} onChange={(event) => setForm((current) => ({ ...current, unitCost: event.target.value }))} />
-        </label>
-        <label>
           MRP
           <input type="number" value={form.mrp} onChange={(event) => setForm((current) => ({ ...current, mrp: event.target.value }))} />
+        </label>
+        <label>
+          Unit cost
+          <input type="number" value={form.unitCost} onChange={(event) => setForm((current) => ({ ...current, unitCost: event.target.value }))} />
         </label>
         <label>
           B2B price
@@ -395,9 +414,9 @@ function ProductForm({ form, setForm, onSubmit, onReset, uploadBusy, saveBusy, o
         </label>
       </div>
 
-      <div className="upload-row">
-        <label className="upload-button">
-          {uploadBusy ? "Uploading..." : "Upload photo"}
+      <div className="cta-row">
+        <label className="upload-button secondary">
+          {uploadBusy ? "Uploading..." : "Upload image"}
           <input type="file" accept="image/*" onChange={onFileChange} disabled={uploadBusy} />
         </label>
         <button type="submit" className="primary-button" disabled={saveBusy}>
@@ -408,14 +427,116 @@ function ProductForm({ form, setForm, onSubmit, onReset, uploadBusy, saveBusy, o
   );
 }
 
+function ProductCard({ product, customerMode, onSelect }) {
+  return (
+    <article className="product-card" onClick={() => onSelect(product)}>
+      <ProductImage product={product} compact />
+      <div className="product-card-body">
+        <div className="product-card-top">
+          <span className={`stock-pill ${product.stockStatus !== "In stock" ? "warn" : ""}`}>{product.stockStatus}</span>
+          <span className="sku-chip">{product.sku}</span>
+        </div>
+        <h3>{product.name}</h3>
+        <p className="product-meta">
+          {product.category} · {product.material}
+        </p>
+        <div className="product-card-footer">
+          <div>
+            <span>MRP</span>
+            <strong>{formatCurrency(product.pricing.mrp)}</strong>
+          </div>
+          <div>
+            <span>{customerMode ? "Available" : "In stock"}</span>
+            <strong>{product.quantity}</strong>
+          </div>
+          {!customerMode ? (
+            <div>
+              <span>B2B</span>
+              <strong>{formatCurrency(product.pricing.b2b)}</strong>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function DetailPanel({ product, customerMode }) {
+  if (!product) {
+    return (
+      <aside className="detail-panel">
+        <div className="detail-empty">
+          <p className="eyebrow">Selection</p>
+          <h3>Choose a product to see full details.</h3>
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="detail-panel">
+      <ProductImage product={product} />
+      <div className="section-head">
+        <div>
+          <p className="eyebrow">Selected Product</p>
+          <h3>{product.name}</h3>
+        </div>
+        <span className={`stock-pill ${product.stockStatus !== "In stock" ? "warn" : ""}`}>{product.stockStatus}</span>
+      </div>
+      <div className="detail-grid">
+        <div>
+          <span>SKU</span>
+          <strong>{product.sku}</strong>
+        </div>
+        <div>
+          <span>Category</span>
+          <strong>{product.category}</strong>
+        </div>
+        <div>
+          <span>Material</span>
+          <strong>{product.material}</strong>
+        </div>
+        <div>
+          <span>Quantity</span>
+          <strong>{product.quantity}</strong>
+        </div>
+        <div>
+          <span>MRP</span>
+          <strong>{formatCurrency(product.pricing.mrp)}</strong>
+        </div>
+        {!customerMode ? (
+          <div>
+            <span>B2B</span>
+            <strong>{formatCurrency(product.pricing.b2b)}</strong>
+          </div>
+        ) : null}
+      </div>
+      {product.notes && !customerMode ? <p className="detail-note">{product.notes}</p> : null}
+      <div className="detail-links">
+        {product.imageUrl ? (
+          <a className="ghost-button" href={product.imageUrl} target="_blank" rel="noreferrer">
+            Open image
+          </a>
+        ) : null}
+        {product.driveUrl ? (
+          <a className="ghost-button" href={product.driveUrl} target="_blank" rel="noreferrer">
+            Open Drive folder
+          </a>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
 export default function App() {
   const [customerMode, setCustomerMode] = useState(false);
   const [products, setProducts] = useState(seedProducts.map(toProduct));
   const [selectedId, setSelectedId] = useState(seedProducts[0]?.id ?? null);
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusMessage, setStatusMessage] = useState(
     isSupabaseConfigured
-      ? "Supabase is connected. Sign in to lock admin actions to your account before deploying."
+      ? "Supabase is connected. Sign in to manage products, import stock, and upload imagery."
       : "Supabase env vars are not set yet, so the app is running with your local seed inventory."
   );
   const [form, setForm] = useState(emptyForm);
@@ -451,7 +572,7 @@ export default function App() {
         return;
       }
       if (error) {
-        setStatusMessage("Supabase is configured, but the products table is not ready yet.");
+        setStatusMessage("Supabase is configured, but product data could not be loaded.");
         return;
       }
       if (data?.length) {
@@ -462,7 +583,7 @@ export default function App() {
       } else {
         setProducts([]);
         setSelectedId(null);
-        setStatusMessage("Supabase is connected. Use the admin form to create your first product.");
+        setStatusMessage("Supabase is connected. Add products manually or import your CSV.");
       }
     }
 
@@ -477,18 +598,32 @@ export default function App() {
   const userEmail = session?.user?.email ?? "";
   const canManage = Boolean(userEmail) || !isSupabaseConfigured;
 
+  const categories = useMemo(() => {
+    return ["All", ...new Set(products.map((product) => product.category).filter(Boolean).sort((left, right) => left.localeCompare(right)))];
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
-      const haystack = [product.name, product.sku, product.category, product.material]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(search.toLowerCase());
+      const haystack = [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase();
+      const matchesSearch = haystack.includes(search.toLowerCase());
+      const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
+      return matchesSearch && matchesCategory;
     });
-  }, [products, search]);
+  }, [categoryFilter, products, search]);
 
   const selectedProduct =
-    filteredProducts.find((product) => product.id === selectedId) || products.find((product) => product.id === selectedId) || null;
+    filteredProducts.find((product) => product.id === selectedId) ||
+    products.find((product) => product.id === selectedId) ||
+    null;
+
+  const stats = useMemo(() => {
+    return {
+      totalProducts: products.length,
+      totalUnits: products.reduce((sum, product) => sum + Number(product.quantity || 0), 0),
+      lowStock: products.filter((product) => product.stockStatus === "Low stock").length,
+      withImages: products.filter((product) => product.imageUrl).length
+    };
+  }, [products]);
 
   function startEdit(product) {
     setSelectedId(product.id);
@@ -524,7 +659,7 @@ export default function App() {
       if (error) {
         throw error;
       }
-      setStatusMessage(`Magic link sent to ${authEmail}. Open it on this device to unlock admin actions.`);
+      setStatusMessage(`Magic link sent to ${authEmail}. Use the newest email to sign in on this device.`);
     } catch (error) {
       setStatusMessage(error.message || "Could not send sign-in link.");
     } finally {
@@ -538,7 +673,7 @@ export default function App() {
     }
     await supabase.auth.signOut();
     setForm(emptyForm);
-    setStatusMessage("Signed out. Customer catalog is still visible, but admin actions are locked.");
+    setStatusMessage("Signed out. Customer browsing stays open, while editing is locked.");
   }
 
   async function handleSubmit(event) {
@@ -579,36 +714,21 @@ export default function App() {
         const normalized = toProduct(data);
         setProducts((current) => {
           const exists = current.some((product) => product.id === normalized.id);
-          return exists
-            ? current.map((product) => (product.id === normalized.id ? normalized : product))
-            : [normalized, ...current];
+          return exists ? current.map((product) => (product.id === normalized.id ? normalized : product)) : [normalized, ...current];
         });
         setSelectedId(normalized.id);
         setStatusMessage(`${normalized.name} saved to Supabase.`);
       } else {
         const normalized = toProduct({
           id: form.id || Date.now(),
-          sku: payload.sku,
-          slug: payload.slug,
-          name: payload.name,
-          category: payload.category,
-          material: payload.material,
-          quantity: payload.quantity,
-          unit_cost: payload.unit_cost,
-          mrp: payload.mrp,
-          b2b_price: payload.b2b_price,
-          notes: payload.notes,
-          drive_url: payload.drive_url,
-          image_url: payload.image_url
+          ...payload
         });
         setProducts((current) => {
           const exists = current.some((product) => product.id === normalized.id);
-          return exists
-            ? current.map((product) => (product.id === normalized.id ? normalized : product))
-            : [normalized, ...current];
+          return exists ? current.map((product) => (product.id === normalized.id ? normalized : product)) : [normalized, ...current];
         });
         setSelectedId(normalized.id);
-        setStatusMessage(`${normalized.name} saved locally. Add Supabase env vars to make it shared across devices.`);
+        setStatusMessage(`${normalized.name} saved locally.`);
       }
 
       setForm(emptyForm);
@@ -626,7 +746,7 @@ export default function App() {
     }
 
     if (!isSupabaseConfigured) {
-      setStatusMessage("Photo upload needs Supabase Storage configured. For now, paste a direct image URL into the form.");
+      setStatusMessage("Photo upload needs Supabase Storage configured.");
       return;
     }
 
@@ -639,16 +759,14 @@ export default function App() {
     try {
       const extension = file.name.split(".").pop();
       const path = `${form.sku || "draft"}/${Date.now()}.${extension}`;
-      const { error: uploadError } = await supabase.storage.from("product-images").upload(path, file, {
-        upsert: true
-      });
+      const { error: uploadError } = await supabase.storage.from("product-images").upload(path, file, { upsert: true });
       if (uploadError) {
         throw uploadError;
       }
 
       const { data } = supabase.storage.from("product-images").getPublicUrl(path);
       setForm((current) => ({ ...current, imageUrl: data.publicUrl }));
-      setStatusMessage("Photo uploaded. Save the product to store the image URL.");
+      setStatusMessage("Image uploaded. Save the product to store it.");
     } catch (error) {
       setStatusMessage(error.message || "Image upload failed.");
     } finally {
@@ -685,23 +803,22 @@ export default function App() {
         return;
       }
 
-      const { data, error } = await supabase.from("products").upsert(payload, { onConflict: "sku" }).select();
+      const { error } = await supabase.from("products").upsert(payload, { onConflict: "sku" });
       if (error) {
         throw error;
       }
 
-      const nextProducts = (data ?? []).map(toProduct);
       const { data: refreshed, error: refreshError } = await supabase.from("products").select("*").order("name");
       if (refreshError) {
         throw refreshError;
       }
 
-      const normalized = (refreshed ?? nextProducts).map(toProduct);
+      const normalized = (refreshed ?? []).map(toProduct);
       setProducts(normalized);
       setSelectedId(normalized[0]?.id ?? null);
       setStatusMessage(
         duplicates
-          ? `Imported ${payload.length} unique SKUs from ${file.name}. ${duplicates} duplicate SKU row(s) were merged during import.`
+          ? `Imported ${payload.length} unique SKUs from ${file.name}. ${duplicates} duplicate SKU row(s) were merged.`
           : `Imported ${payload.length} rows from ${file.name}.`
       );
     } catch (error) {
@@ -712,57 +829,20 @@ export default function App() {
     }
   }
 
-  const stats = useMemo(() => {
-    return {
-      totalProducts: products.length,
-      totalUnits: products.reduce((sum, product) => sum + Number(product.quantity || 0), 0),
-      lowStock: products.filter((product) => product.stockStatus === "Low stock").length,
-      withImages: products.filter((product) => product.imageUrl).length
-    };
-  }, [products]);
-
   return (
     <div className="app-shell">
-      <header className="hero-shell">
-        <div className="hero-copy-shell">
-          <p className="eyebrow">Decorbeats Inventory</p>
-          <h1>Mobile-friendly inventory software with a real backend path.</h1>
-          <p className="hero-copy">
-            Use admin mode to add products, update stock, and upload photos. Use customer mode to browse a cleaner shareable catalog.
-          </p>
-          <div className="toggle-row">
-            <button type="button" className={customerMode ? "toggle-button" : "toggle-button active"} onClick={() => setCustomerMode(false)}>
-              Admin view
-            </button>
-            <button type="button" className={customerMode ? "toggle-button active" : "toggle-button"} onClick={() => setCustomerMode(true)}>
-              Customer view
-            </button>
-          </div>
-          <p className="status-banner">{statusMessage}</p>
-        </div>
-
-        <section className="stats-grid">
-          <article>
-            <span>Total products</span>
-            <strong>{stats.totalProducts}</strong>
-          </article>
-          <article>
-            <span>Total units</span>
-            <strong>{stats.totalUnits}</strong>
-          </article>
-          <article>
-            <span>Low stock</span>
-            <strong>{stats.lowStock}</strong>
-          </article>
-          <article>
-            <span>With photos</span>
-            <strong>{stats.withImages}</strong>
-          </article>
-        </section>
-      </header>
+      <BrandHeader customerMode={customerMode} setCustomerMode={setCustomerMode} userEmail={userEmail} />
+      <HeroPanel customerMode={customerMode} selectedProduct={selectedProduct} stats={stats} statusMessage={statusMessage} />
+      <ControlBar
+        search={search}
+        setSearch={setSearch}
+        categoryFilter={categoryFilter}
+        setCategoryFilter={setCategoryFilter}
+        categories={categories}
+      />
 
       {!customerMode ? (
-        <>
+        <section className="admin-grid">
           <AuthPanel
             email={authEmail}
             setEmail={setAuthEmail}
@@ -785,35 +865,15 @@ export default function App() {
               />
             </>
           ) : null}
-        </>
+        </section>
       ) : null}
 
-      <section className="controls-shell">
-        <input
-          className="search-input"
-          type="search"
-          placeholder="Search by product name, SKU, category, or material"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-      </section>
-
-      <main className="workspace-grid">
+      <main className="content-grid">
         <section className="catalog-grid">
           {filteredProducts.map((product) => (
-            <div key={product.id} className="catalog-item">
-              <ProductCard product={product} customerMode={customerMode} onSelect={startEdit} />
-              {!customerMode && canManage ? (
-                <div className="inline-actions">
-                  <button type="button" className="ghost-button" onClick={() => startEdit(product)}>
-                    Edit
-                  </button>
-                </div>
-              ) : null}
-            </div>
+            <ProductCard key={product.id} product={product} customerMode={customerMode} onSelect={startEdit} />
           ))}
         </section>
-
         <DetailPanel product={selectedProduct} customerMode={customerMode} />
       </main>
     </div>
