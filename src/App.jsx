@@ -189,11 +189,14 @@ function ProductImage({ product, compact = false }) {
 function BrandHeader({ customerMode, setCustomerMode, userEmail }) {
   return (
     <header className="brand-header">
-      <div className="brand-lockup">
+      <div className="brand-lockup welcome-lockup">
         <img src={brandLogo} alt="Decorbeats" className="brand-logo" />
         <div>
-          <p className="eyebrow">Decorbeats Studio</p>
-          <h1>{customerMode ? "Shareable catalog with a premium feel." : "Inventory command center for your collection."}</h1>
+          <p className="eyebrow">Decorbeats</p>
+          <h1>Welcome to the World of Gifting</h1>
+          <p className="welcome-subcopy">
+            Discover a cleaner Decorbeats experience designed to feel elegant for customers and effortless for your team, especially on mobile.
+          </p>
         </div>
       </div>
       <div className="brand-actions">
@@ -215,13 +218,9 @@ function HeroPanel({ customerMode, selectedProduct, stats, statusMessage }) {
   return (
     <section className="hero-panel">
       <div className="hero-copy">
-        <p className="eyebrow">{customerMode ? "Catalog Experience" : "Inventory Overview"}</p>
-        <h2>{customerMode ? "A calmer product browsing experience for customers." : "Everything you need to stock, curate, and share your range."}</h2>
-        <p>
-          {customerMode
-            ? "Browse by category, see availability, and focus on the hero product without getting buried in admin controls."
-            : "Bring in your CSV, keep product data current, upload imagery, and manage the catalog without losing the Decorbeats character."}
-        </p>
+        <p className="eyebrow">{customerMode ? "Customer Entrance" : "Admin Entrance"}</p>
+        <h2>{customerMode ? "A polished catalogue for sharing with customers." : "A refined workspace to manage products and gifting collections."}</h2>
+        <p>{customerMode ? "Browse products with less clutter and more focus on the collection itself." : "Import stock, update products, and manage imagery without losing the premium Decorbeats feel."}</p>
         <div className="hero-status">{statusMessage}</div>
       </div>
 
@@ -249,7 +248,7 @@ function HeroPanel({ customerMode, selectedProduct, stats, statusMessage }) {
           <div className="focus-card">
             <ProductImage product={selectedProduct} compact />
             <div className="focus-copy">
-              <span className={`stock-pill ${selectedProduct.stockStatus !== "In stock" ? "warn" : ""}`}>{selectedProduct.stockStatus}</span>
+              <span className={`stock-pill ${selectedProduct.stockStatus !== "In stock" ? "warn" : ""}`}>{customerMode ? "Featured Now" : selectedProduct.stockStatus}</span>
               <h3>{selectedProduct.name}</h3>
               <p>
                 {selectedProduct.category} · {selectedProduct.material}

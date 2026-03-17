@@ -87,6 +87,10 @@ img {
   min-width: 0;
 }
 
+.welcome-lockup {
+  align-items: flex-start;
+}
+
 .brand-logo {
   width: 74px;
   height: 74px;
@@ -101,6 +105,7 @@ img {
   display: grid;
   gap: 0.7rem;
   justify-items: end;
+  align-self: center;
 }
 
 .eyebrow {
@@ -121,8 +126,16 @@ h3 {
 }
 
 h1 {
-  font-size: clamp(1.9rem, 4vw, 3.4rem);
-  max-width: 13ch;
+  font-size: clamp(2.5rem, 6vw, 5rem);
+  max-width: 10ch;
+}
+
+.welcome-subcopy {
+  margin: 0.8rem 0 0;
+  max-width: 42ch;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.7;
 }
 
 h2 {
@@ -200,11 +213,13 @@ h3 {
   gap: 1rem;
   padding: 1rem;
   margin-bottom: 1rem;
+  background: linear-gradient(180deg, rgba(255, 251, 244, 0.95), rgba(244, 232, 215, 0.78));
 }
 
 .hero-copy {
   display: grid;
   gap: 0.9rem;
+  align-content: start;
 }
 
 .hero-copy p {
@@ -534,6 +549,12 @@ h3 {
   }
 
   h1 {
-    max-width: 9ch;
+    max-width: 8ch;
+    font-size: clamp(2.2rem, 13vw, 3.5rem);
+  }
+
+  .welcome-subcopy {
+    font-size: 0.96rem;
+    line-height: 1.6;
   }
 }
