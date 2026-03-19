@@ -201,6 +201,25 @@ function parseCsv(text) {
   });
 }
 
+function normalizeCsvKey(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function getCsvValue(row, ...keys) {
+  const entries = Object.entries(row);
+  for (const key of keys) {
+    const match = entries.find(([header]) => normalizeCsvKey(header) === key);
+    if (match) {
+      return match[1];
+    }
+  }
+  return "";
+}
+
 function mapCsvRowToPayload(row) {
   const sku = safeText(row.SKU);
   const name = safeText(row["Product Name"]);
@@ -221,6 +240,26 @@ function mapCsvRowToPayload(row) {
     notes: safeText(row.Notes),
     drive_url: normalizeUrl(row["Column 1"]),
     image_url: normalizeUrl(row["Product Image URL"])
+  };
+}
+
+function mapSettingsCsvRowToPayload(row) {
+  const sku = safeText(getCsvValue(row, "sku"));
+  const name = safeText(getCsvValue(row, "name", "product_name"));
+  if (!sku || !name) {
+    return null;
+  }
+
+  return {
+    sku,
+    slug: slugify(`${sku}-${name}`),
+    name,
+    category: safeText(getCsvValue(row, "category"), "Uncategorized"),
+    material: safeText(getCsvValue(row, "material"), "Unspecified"),
+    quantity: Math.trunc(parseNumber(getCsvValue(row, "stock", "quantity")) ?? 0),
+    mrp: parseNumber(getCsvValue(row, "mrp")),
+    b2b_price: parseNumber(getCsvValue(row, "b2b_price", "b2b")),
+    notes: safeText(getCsvValue(row, "description", "notes"))
   };
 }
 
@@ -406,20 +445,102 @@ function AuthPanel({ email, setEmail, authBusy, userEmail, onSignIn, onSignOut }
   );
 }
 
-function ImportPanel({ importBusy, onFileChange }) {
+function ImportPanel({ importBusy, previewRows, previewFileName, previewCount, onFileChange, onConfirm, onClearPreview }) {
   return (
     <section className="panel-card admin-card">
       <div className="section-head">
         <div>
-          <p className="eyebrow">Bulk Import</p>
-          <h3>Refresh inventory from CSV</h3>
+          <p className="eyebrow">CSV Import</p>
+          <h3>Import Products from CSV</h3>
         </div>
       </div>
-      <p className="support-copy">Use the same spreadsheet format to refresh stock and update matching SKUs in one pass.</p>
-      <label className="upload-button">
-        {importBusy ? "Importing..." : "Choose inventory CSV"}
+      <p className="support-copy">
+        Upload a CSV with columns for `sku`, `name`, `category`, `material`, `mrp`, `stock`, `b2b_price`, and
+        `description`.
+      </p>
+      <label className="import-dropzone">
+        <strong>{importBusy ? "Preparing import..." : "Tap to upload CSV"}</strong>
+        <span>We’ll preview the first 5 rows before anything is imported.</span>
         <input type="file" accept=".csv,text/csv" onChange={onFileChange} disabled={importBusy} />
       </label>
+      {previewRows.length ? (
+        <div className="import-preview">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Preview</p>
+              <h3>{previewFileName}</h3>
+            </div>
+            <div className="user-badge">{previewCount} row(s) ready</div>
+          </div>
+          <div className="preview-table-wrap">
+            <table className="preview-table">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Name</th>
+                  <th>Category</th>
+                  <th>Material</th>
+                  <th>MRP</th>
+                  <th>Stock</th>
+                  <th>B2B</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewRows.map((row, index) => (
+                  <tr key={`${row.sku}-${index}`}>
+                    <td>{row.sku}</td>
+                    <td>{row.name}</td>
+                    <td>{row.category}</td>
+                    <td>{row.material}</td>
+                    <td>{row.mrp ?? "-"}</td>
+                    <td>{row.quantity}</td>
+                    <td>{row.b2b_price ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="detail-edit-actions">
+            <button type="button" className="primary-button detail-save-button" disabled={importBusy} onClick={onConfirm}>
+              {importBusy ? "Importing..." : "Confirm Import"}
+            </button>
+            <button type="button" className="detail-cancel-link" onClick={onClearPreview}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function AccountCard({ userEmail, onSignOut }) {
+  return (
+    <section className="panel-card admin-card settings-card">
+      <div className="section-head">
+        <div>
+          <p className="eyebrow">Account</p>
+          <h3>Signed-in admin</h3>
+        </div>
+      </div>
+      <p className="support-copy">{userEmail || "No signed-in email"}</p>
+      <button type="button" className="ghost-button settings-button" onClick={onSignOut}>
+        Sign out
+      </button>
+    </section>
+  );
+}
+
+function AppInfoCard({ lastSyncLabel }) {
+  return (
+    <section className="panel-card admin-card settings-card">
+      <div className="section-head">
+        <div>
+          <p className="eyebrow">App Info</p>
+          <h3>Decorbeats Studio</h3>
+        </div>
+      </div>
+      <p className="support-copy">Last sync: {lastSyncLabel}</p>
     </section>
   );
 }
@@ -974,6 +1095,10 @@ export default function App() {
   const [showArchived, setShowArchived] = useState(false);
   const [publicScreen, setPublicScreen] = useState("landing");
   const [activeTab, setActiveTab] = useState("products");
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [csvPreviewRows, setCsvPreviewRows] = useState([]);
+  const [csvPreviewPayload, setCsvPreviewPayload] = useState([]);
+  const [csvPreviewFileName, setCsvPreviewFileName] = useState("");
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -1007,10 +1132,12 @@ export default function App() {
         const nextProducts = data.map(toProduct);
         setProducts(nextProducts);
         setSelectedId(null);
+        setLastSyncAt(new Date().toISOString());
         setStatusMessage(`Loaded ${nextProducts.length} products from Supabase.`);
       } else {
         setProducts([]);
         setSelectedId(null);
+        setLastSyncAt(new Date().toISOString());
         setStatusMessage("Supabase is connected. Add products manually or import your CSV.");
       }
     }
@@ -1139,6 +1266,7 @@ export default function App() {
         setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
         setSelectedId(normalized.id);
         populateForm(normalized);
+        setLastSyncAt(new Date().toISOString());
         setStatusMessage(`${normalized.name} updated.`);
       } else {
         setProducts((current) =>
@@ -1223,6 +1351,7 @@ export default function App() {
         setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
         setSelectedId(normalized.id);
         populateForm(normalized);
+        setLastSyncAt(new Date().toISOString());
         setStatusMessage("Product image updated.");
       } else {
         const imageUrl = URL.createObjectURL(file);
@@ -1320,6 +1449,7 @@ export default function App() {
           return exists ? current.map((product) => (product.id === normalized.id ? normalized : product)) : [normalized, ...current];
         });
         setSelectedId(normalized.id);
+        setLastSyncAt(new Date().toISOString());
         setStatusMessage(`${normalized.name} saved to Supabase.`);
       } else {
         const normalized = toProduct({
@@ -1399,15 +1529,37 @@ export default function App() {
     try {
       const text = await file.text();
       const rows = parseCsv(text);
-      const mappedRows = rows.map(mapCsvRowToPayload).filter(Boolean);
+      const mappedRows = rows.map(mapSettingsCsvRowToPayload).filter(Boolean);
       const { rows: payload, duplicates } = dedupePayloadBySku(mappedRows);
 
       if (!payload.length) {
         setStatusMessage("No usable inventory rows were found in that CSV.");
         return;
       }
+      setCsvPreviewPayload(payload);
+      setCsvPreviewRows(payload.slice(0, 5));
+      setCsvPreviewFileName(file.name);
+      setStatusMessage(
+        duplicates
+          ? `Preview ready. ${payload.length} unique SKU rows found and ${duplicates} duplicate row(s) were merged.`
+          : `Preview ready for ${payload.length} rows from ${file.name}.`
+      );
+    } catch (error) {
+      setStatusMessage(error.message || "CSV import failed.");
+    } finally {
+      setImportBusy(false);
+      event.target.value = "";
+    }
+  }
 
-      const { error } = await supabase.from("products").upsert(payload, { onConflict: "sku" });
+  async function handleConfirmCsvImport() {
+    if (!csvPreviewPayload.length) {
+      return;
+    }
+
+    setImportBusy(true);
+    try {
+      const { error } = await supabase.from("products").upsert(csvPreviewPayload, { onConflict: "sku" });
       if (error) {
         throw error;
       }
@@ -1419,18 +1571,24 @@ export default function App() {
 
       const normalized = (refreshed ?? []).map(toProduct);
       setProducts(normalized);
-      setSelectedId(normalized[0]?.id ?? null);
-      setStatusMessage(
-        duplicates
-          ? `Imported ${payload.length} unique SKUs from ${file.name}. ${duplicates} duplicate SKU row(s) were merged.`
-          : `Imported ${payload.length} rows from ${file.name}.`
-      );
+      setSelectedId(null);
+      setLastSyncAt(new Date().toISOString());
+      setStatusMessage(`Imported ${csvPreviewPayload.length} rows from ${csvPreviewFileName}.`);
+      setCsvPreviewPayload([]);
+      setCsvPreviewRows([]);
+      setCsvPreviewFileName("");
     } catch (error) {
       setStatusMessage(error.message || "CSV import failed.");
     } finally {
       setImportBusy(false);
-      event.target.value = "";
     }
+  }
+
+  function handleClearCsvPreview() {
+    setCsvPreviewPayload([]);
+    setCsvPreviewRows([]);
+    setCsvPreviewFileName("");
+    setStatusMessage("CSV preview cleared.");
   }
 
   async function handleArchiveToggle(product, archived) {
@@ -1455,6 +1613,7 @@ export default function App() {
         const normalized = toProduct(data);
         setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
         setSelectedId(normalized.id);
+        setLastSyncAt(new Date().toISOString());
         setStatusMessage(archived ? `${product.name} archived.` : `${product.name} restored.`);
       } else {
         setProducts((current) =>
@@ -1482,6 +1641,13 @@ export default function App() {
     { label: "Low stock", value: stats.lowStock, emphasis: stats.lowStock > 0 },
     { label: "With photos", value: stats.withImages }
   ];
+
+  const lastSyncLabel = lastSyncAt
+    ? new Intl.DateTimeFormat("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short"
+      }).format(new Date(lastSyncAt))
+    : "Not synced yet";
 
   const rootElement = !adminActive && publicScreen === "landing" ? (
     <div className="app-shell">
@@ -1661,32 +1827,18 @@ export default function App() {
 
         {activeTab === "settings" ? (
           <section className="stack-grid">
-            <StatusStrip statusMessage={statusMessage} items={statsItems} />
-            <AuthPanel
-              email={authEmail}
-              setEmail={setAuthEmail}
-              authBusy={authBusy}
-              userEmail={userEmail}
-              onSignIn={handleSignIn}
-              onSignOut={handleSignOut}
+            <StatusStrip statusMessage={statusMessage} />
+            <ImportPanel
+              importBusy={importBusy}
+              previewRows={csvPreviewRows}
+              previewFileName={csvPreviewFileName}
+              previewCount={csvPreviewPayload.length}
+              onFileChange={handleCsvImport}
+              onConfirm={handleConfirmCsvImport}
+              onClearPreview={handleClearCsvPreview}
             />
-            <ImportPanel importBusy={importBusy} onFileChange={handleCsvImport} />
-            <section className="panel-card admin-card settings-card">
-              <div className="section-head">
-                <div>
-                  <p className="eyebrow">Archive Visibility</p>
-                  <h3>Show archived products in admin lists</h3>
-                </div>
-              </div>
-              <p className="support-copy">Keep archived items hidden by default, or reveal them while restoring older products.</p>
-              <button
-                type="button"
-                className={showArchived ? "filter-pill active" : "filter-pill"}
-                onClick={() => setShowArchived((value) => !value)}
-              >
-                {showArchived ? "Hide archived products" : "Show archived products"}
-              </button>
-            </section>
+            <AccountCard userEmail={userEmail} onSignOut={handleSignOut} />
+            <AppInfoCard lastSyncLabel={lastSyncLabel} />
           </section>
         ) : null}
       </div>
