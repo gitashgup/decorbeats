@@ -399,6 +399,14 @@ h3 {
   transform: translateY(100%);
 }
 
+.customer-sheet-handle-zone {
+  height: 48px;
+  display: grid;
+  place-items: center;
+  margin: -0.1rem 0 0.35rem;
+  touch-action: none;
+}
+
 .customer-carousel {
   display: grid;
   gap: 0.75rem;
@@ -422,11 +430,11 @@ h3 {
   border: 0;
   border-radius: 999px;
   background: rgba(44, 24, 16, 0.18);
-  margin: 0 auto 0.85rem;
+  margin: 0;
   display: block;
   appearance: none;
   cursor: grab;
-  touch-action: none;
+  pointer-events: none;
 }
 
 .customer-sheet-image-wrap {

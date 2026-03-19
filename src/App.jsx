@@ -702,11 +702,13 @@ function CustomerProductCard({ product, onSelect }) {
 
 function CustomerSheet({ product, onClose, onShare }) {
   const [closing, setClosing] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
   const closeTimerRef = useRef(null);
-  const dragStartRef = useRef(null);
+  const dragStateRef = useRef({ startY: 0, deltaY: 0, dragging: false });
 
   useEffect(() => {
     setClosing(false);
+    setDragOffset(0);
     return () => {
       if (closeTimerRef.current) {
         window.clearTimeout(closeTimerRef.current);
@@ -733,40 +735,72 @@ function CustomerSheet({ product, onClose, onShare }) {
       return;
     }
     setClosing(true);
+    setDragOffset(0);
     closeTimerRef.current = window.setTimeout(() => {
       onClose();
     }, 300);
   };
+  const resetDrag = () => {
+    dragStateRef.current = { startY: 0, deltaY: 0, dragging: false };
+    setDragOffset(0);
+  };
+  const sheetStyle =
+    dragOffset > 0
+      ? {
+          transform: `translateY(${dragOffset}px)`,
+          transition: "none"
+        }
+      : undefined;
 
   return (
     <div className={closing ? "customer-sheet-overlay open closing" : "customer-sheet-overlay open"} onClick={dismissSheet}>
       <aside
         className={closing ? "customer-sheet open closing" : "customer-sheet open"}
+        style={sheetStyle}
         onClick={(event) => event.stopPropagation()}
       >
-        <button
-          type="button"
-          className="customer-sheet-handle"
-          aria-label="Close product details"
-          onClick={dismissSheet}
+        <div
+          className="customer-sheet-handle-zone"
           onTouchStart={(event) => {
             const touch = event.touches[0];
-            dragStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
-          }}
-          onTouchEnd={(event) => {
-            const start = dragStartRef.current;
-            const touch = event.changedTouches[0];
-            dragStartRef.current = null;
-            if (!start || !touch) {
+            if (!touch) {
               return;
             }
-            const deltaX = touch.clientX - start.x;
-            const deltaY = touch.clientY - start.y;
-            if (deltaY > 80 && Math.abs(deltaY) > Math.abs(deltaX)) {
-              dismissSheet();
+            dragStateRef.current = {
+              startY: touch.clientY,
+              deltaY: 0,
+              dragging: true
+            };
+          }}
+          onTouchMove={(event) => {
+            const touch = event.touches[0];
+            const state = dragStateRef.current;
+            if (!touch || !state.dragging) {
+              return;
+            }
+            const deltaY = touch.clientY - state.startY;
+            state.deltaY = deltaY;
+            if (deltaY > 0) {
+              setDragOffset(deltaY);
+            } else {
+              setDragOffset(0);
             }
           }}
-        />
+          onTouchEnd={(event) => {
+            const state = dragStateRef.current;
+            if (!state.dragging) {
+              return;
+            }
+            if (state.deltaY > 80) {
+              dismissSheet();
+            } else {
+              resetDrag();
+            }
+          }}
+          onTouchCancel={resetDrag}
+        >
+          <button type="button" className="customer-sheet-handle" aria-label="Close product details" onClick={dismissSheet} />
+        </div>
         <CustomerImageCarousel product={product} />
         <div className="customer-sheet-copy">
           <h2>{product.name}</h2>
