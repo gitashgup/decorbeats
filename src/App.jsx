@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { products as seedProducts } from "./data/products";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
@@ -115,14 +114,6 @@ function ShareIcon() {
         d="M15 8a3 3 0 1 0-2.82-4H12a3 3 0 0 0 .18 1l-5.1 2.95a3 3 0 1 0 0 8.1l5.1 2.95A3 3 0 1 0 13 18a3 3 0 0 0-.18 1l-5.1-2.95a3 3 0 0 0 0-2.1L12.82 11A3 3 0 0 0 15 12a3 3 0 1 0 0-4Z"
         fill="currentColor"
       />
-    </svg>
-  );
-}
-
-function BackIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M14.7 5.3 8 12l6.7 6.7 1.4-1.4L10.8 12l5.3-5.3-1.4-1.4Z" fill="currentColor" />
     </svg>
   );
 }
@@ -521,81 +512,108 @@ function ArchivePanel({ product, onArchive, onRestore, archiveBusy }) {
   );
 }
 
-function ProductCard({ product, customerMode, onSelect, onEdit, onShare, onArchiveToggle, archivedVisible = false }) {
+function ProductCard({
+  product,
+  customerMode,
+  expanded,
+  canManage,
+  onSelect,
+  onEdit,
+  onShare,
+  onArchiveToggle,
+  onInlineEdit,
+  onInlineImageReplace,
+  imageBusy,
+  archivedVisible = false
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const stockTone = product.quantity <= 0 ? "danger" : product.quantity <= 5 ? "warn" : "ok";
 
   return (
-    <article className={`product-card product-card-row ${product.archivedAt ? "archived" : ""}`} onClick={() => onSelect(product)}>
-      <ProductThumb product={product} />
-      <div className="product-card-body product-card-body-row">
-        <div className="product-card-meta">
-          <div className="product-card-top-row">
-            <span className="sku-chip">{product.sku}</span>
-            {!customerMode ? (
-              <div className="card-menu-wrap">
-                <button
-                  type="button"
-                  className="card-menu-button"
-                  aria-label={`More actions for ${product.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setMenuOpen((value) => !value);
-                  }}
-                >
-                  &#8230;
-                </button>
-                {menuOpen ? (
-                  <div
-                    className="card-menu"
+    <article className={`product-card ${product.archivedAt ? "archived" : ""}`}>
+      <div className="product-card-row" onClick={() => onSelect(product)}>
+        <ProductThumb product={product} />
+        <div className="product-card-body product-card-body-row">
+          <div className="product-card-meta">
+            <div className="product-card-top-row">
+              <span className="sku-chip">{product.sku}</span>
+              {!customerMode ? (
+                <div className="card-menu-wrap">
+                  <button
+                    type="button"
+                    className="card-menu-button"
+                    aria-label={`More actions for ${product.name}`}
                     onClick={(event) => {
                       event.stopPropagation();
+                      setMenuOpen((value) => !value);
                     }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onEdit(product);
+                    &#8230;
+                  </button>
+                  {menuOpen ? (
+                    <div
+                      className="card-menu"
+                      onClick={(event) => {
+                        event.stopPropagation();
                       }}
                     >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onShare(product);
-                      }}
-                    >
-                      Share
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onArchiveToggle(product, !product.archivedAt);
-                      }}
-                    >
-                      {product.archivedAt ? "Restore" : "Archive"}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onEdit(product);
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onShare(product);
+                        }}
+                      >
+                        Share
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onArchiveToggle(product, !product.archivedAt);
+                        }}
+                      >
+                        {product.archivedAt ? "Restore" : "Archive"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            <h3>{product.name}</h3>
+            <p className="product-meta">{product.category}</p>
           </div>
-          <h3>{product.name}</h3>
-          <p className="product-meta">{product.category}</p>
-        </div>
-        <div className={`stock-count-badge ${stockTone}`}>
-          {product.archivedAt && archivedVisible ? "Archived" : `${product.quantity} in stock`}
+          <div className={`stock-count-badge ${stockTone}`}>
+            {product.archivedAt && archivedVisible ? "Archived" : `${product.quantity} in stock`}
+          </div>
         </div>
       </div>
+      {expanded ? (
+        <DetailPanel
+          product={product}
+          customerMode={customerMode}
+          canManage={canManage}
+          onEdit={onInlineEdit}
+          onShare={onShare}
+          onImageReplace={onInlineImageReplace}
+          imageBusy={imageBusy}
+          inline
+        />
+      ) : null}
     </article>
   );
 }
 
-function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImageReplace, imageBusy }) {
+function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImageReplace, imageBusy, inline = false }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
     name: "",
@@ -622,7 +640,7 @@ function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImag
 
   if (!product) {
     return (
-      <aside className="detail-panel panel-card">
+      <aside className={inline ? "detail-panel detail-panel-inline panel-card" : "detail-panel panel-card"}>
         <div className="detail-empty">
           <p className="eyebrow">Selection</p>
           <h3>Choose a product to see full details.</h3>
@@ -632,7 +650,7 @@ function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImag
   }
 
   return (
-    <aside className="detail-panel panel-card">
+    <aside className={inline ? "detail-panel detail-panel-inline panel-card" : "detail-panel panel-card"}>
       <div className="detail-image-wrap">
         <button
           type="button"
@@ -682,9 +700,18 @@ function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImag
           <span>Material</span>
           <strong>{product.material}</strong>
         </div>
-        <div>
+        <div className="detail-quantity-block">
           <span>Quantity</span>
-          <strong>{product.quantity}</strong>
+          <div className="detail-quantity-row">
+            <strong>{product.quantity}</strong>
+            <span
+              className={`stock-count-badge ${
+                product.quantity <= 0 ? "danger" : product.quantity <= 5 ? "warn" : "ok"
+              }`}
+            >
+              {product.quantity <= 0 ? "Out of stock" : product.quantity <= 5 ? "Low stock" : "In stock"}
+            </span>
+          </div>
         </div>
         {hasDisplayValue(product.pricing.mrp) ? (
           <div>
@@ -692,29 +719,27 @@ function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImag
             <strong>{formatCurrency(product.pricing.mrp)}</strong>
           </div>
         ) : null}
-        {!customerMode ? (
-          hasDisplayValue(product.pricing.b2b) ? (
-            <div>
-              <span>B2B</span>
-              <strong>{formatCurrency(product.pricing.b2b)}</strong>
-            </div>
-          ) : null
+        {hasDisplayValue(product.pricing.b2b) ? (
+          <div>
+            <span>B2B</span>
+            <strong>{formatCurrency(product.pricing.b2b)}</strong>
+          </div>
         ) : null}
       </div>
-      {product.notes && !customerMode ? <p className="detail-note">{product.notes}</p> : null}
-      {!customerMode ? (
-        <div className="detail-actions">
-          <button type="button" className="primary-button detail-action-button" onClick={() => setEditing((value) => !value)}>
+      {product.notes ? <p className="detail-note">{product.notes}</p> : null}
+      {canManage && !customerMode ? (
+        <div className="detail-actions detail-actions-inline">
+          <button type="button" className="ghost-button detail-action-button" onClick={() => setEditing((value) => !value)}>
             {editing ? "Close Editor" : "Edit Product"}
           </button>
-          <button type="button" className="ghost-button detail-action-button detail-share-button" onClick={() => onShare(product)}>
+          <button type="button" className="primary-button detail-action-button detail-share-button" onClick={() => onShare(product)}>
             <ShareIcon />
             <span>Share Product</span>
           </button>
         </div>
       ) : (
-        <div className="detail-actions">
-          <button type="button" className="ghost-button detail-action-button detail-share-button" onClick={() => onShare(product)}>
+        <div className="detail-actions detail-actions-inline">
+          <button type="button" className="primary-button detail-action-button detail-share-button" onClick={() => onShare(product)}>
             <ShareIcon />
             <span>Share Product</span>
           </button>
@@ -778,10 +803,15 @@ function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImag
 function CatalogSection({
   products,
   customerMode,
+  selectedId,
+  canManage,
   onSelect,
   onEdit,
   onShare,
   onArchiveToggle,
+  onInlineEdit,
+  onInlineImageReplace,
+  imageBusy,
   search,
   setSearch,
   categoryFilter,
@@ -806,10 +836,15 @@ function CatalogSection({
                 key={product.id}
                 product={product}
                 customerMode={customerMode}
+                expanded={selectedId === product.id}
+                canManage={canManage}
                 onSelect={onSelect}
                 onEdit={onEdit}
                 onShare={onShare}
                 onArchiveToggle={onArchiveToggle}
+                onInlineEdit={onInlineEdit}
+                onInlineImageReplace={onInlineImageReplace}
+                imageBusy={imageBusy}
                 archivedVisible={archivedVisible}
               />
             ))
@@ -822,71 +857,6 @@ function CatalogSection({
         </section>
       </main>
     </>
-  );
-}
-
-function ProductDetailRoute({
-  products,
-  customerMode,
-  canManage,
-  onDetailEdit,
-  onDetailShare,
-  onDetailImageReplace,
-  imageBusy
-}) {
-  const navigate = useNavigate();
-  const { id } = useParams();
-  const product = products.find((item) => String(item.id) === id) || null;
-
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "auto" });
-  }, [id]);
-
-  if (!product) {
-    return (
-      <div className="app-shell">
-        <div className="screen-shell detail-route-shell">
-          <button type="button" className="back-link" onClick={() => navigate(-1)}>
-            <BackIcon />
-            <span>Back</span>
-          </button>
-          <section className="panel-card empty-state">
-            <p className="eyebrow">Not found</p>
-            <h3>This product could not be found.</h3>
-          </section>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="app-shell">
-      <div className="screen-shell detail-route-shell">
-        <button
-          type="button"
-          className="back-link"
-          onClick={() => {
-            if (window.history.length > 1) {
-              navigate(-1);
-            } else {
-              navigate("/");
-            }
-          }}
-        >
-          <BackIcon />
-          <span>Back</span>
-        </button>
-        <DetailPanel
-          product={product}
-          customerMode={customerMode}
-          canManage={canManage}
-          onEdit={onDetailEdit}
-          onShare={onDetailShare}
-          onImageReplace={onDetailImageReplace}
-          imageBusy={imageBusy}
-        />
-      </div>
-    </div>
   );
 }
 
@@ -945,9 +915,8 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
 }
 
 export default function App() {
-  const navigate = useNavigate();
   const [products, setProducts] = useState(seedProducts.map(toProduct));
-  const [selectedId, setSelectedId] = useState(seedProducts[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusMessage, setStatusMessage] = useState(
@@ -998,7 +967,7 @@ export default function App() {
       if (data?.length) {
         const nextProducts = data.map(toProduct);
         setProducts(nextProducts);
-        setSelectedId(nextProducts[0]?.id ?? null);
+        setSelectedId(null);
         setStatusMessage(`Loaded ${nextProducts.length} products from Supabase.`);
       } else {
         setProducts([]);
@@ -1094,11 +1063,10 @@ export default function App() {
   }
 
   function handleProductSelect(product) {
-    setSelectedId(product.id);
+    setSelectedId((current) => (current === product.id ? null : product.id));
     if (adminActive) {
       populateForm(product);
     }
-    navigate(`/product/${product.id}`);
   }
 
   function handleEditProduct(product) {
@@ -1156,31 +1124,26 @@ export default function App() {
   }
 
   async function handleShareProduct(product) {
-    const shareUrl = `${window.location.origin}?product=${product.slug}`;
     const message = [
       product.name,
       `SKU: ${product.sku}`,
-      `Category: ${product.category}`,
-      `Material: ${product.material}`,
       `Stock: ${product.quantity}`,
-      product.imageUrl ? `Image: ${product.imageUrl}` : null,
-      `Link: ${shareUrl}`
+      product.imageUrl ? `Image: ${product.imageUrl}` : null
     ]
       .filter(Boolean)
       .join("\n");
     const shareData = {
       title: product.name,
-      text: message,
-      url: shareUrl
+      text: message
     };
 
     try {
       if (navigator.share) {
         await navigator.share(shareData);
       } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl);
+        await navigator.clipboard.writeText(message);
       }
-      setStatusMessage(`${product.name} link ready to share.`);
+      setStatusMessage(`${product.name} details ready to share.`);
     } catch (error) {
       if (error?.name !== "AbortError") {
         setStatusMessage("Could not share this product right now.");
@@ -1222,7 +1185,16 @@ export default function App() {
         setStatusMessage("Product image updated.");
       } else {
         const imageUrl = URL.createObjectURL(file);
-        setProducts((current) => current.map((item) => (item.id === product.id ? { ...item, imageUrl } : item)));
+        setProducts((current) =>
+          current.map((item) =>
+            item.id === product.id
+              ? {
+                  ...item,
+                  imageUrl
+                }
+              : item
+          )
+        );
         setStatusMessage("Product image updated locally.");
       }
     } catch (error) {
@@ -1515,9 +1487,14 @@ export default function App() {
           products={filteredProducts}
           customerMode
           onSelect={handleProductSelect}
+          selectedId={selectedId}
+          canManage={false}
           onEdit={() => {}}
-          onShare={() => {}}
+          onShare={handleShareProduct}
           onArchiveToggle={() => {}}
+          onInlineEdit={() => {}}
+          onInlineImageReplace={() => {}}
+          imageBusy={false}
           search={search}
           setSearch={setSearch}
           categoryFilter={categoryFilter}
@@ -1559,10 +1536,15 @@ export default function App() {
             <CatalogSection
               products={filteredProducts}
               customerMode={false}
+              selectedId={selectedId}
+              canManage={canManage}
               onSelect={handleProductSelect}
               onEdit={handleEditProduct}
               onShare={handleShareProduct}
               onArchiveToggle={handleArchiveToggle}
+              onInlineEdit={handleDetailEdit}
+              onInlineImageReplace={handleReplaceDetailImage}
+              imageBusy={uploadBusy}
               search={search}
               setSearch={setSearch}
               categoryFilter={categoryFilter}
@@ -1615,10 +1597,15 @@ export default function App() {
             <CatalogSection
               products={filteredProducts}
               customerMode={false}
+              selectedId={selectedId}
+              canManage={canManage}
               onSelect={handleProductSelect}
               onEdit={handleEditProduct}
               onShare={handleShareProduct}
               onArchiveToggle={handleArchiveToggle}
+              onInlineEdit={handleDetailEdit}
+              onInlineImageReplace={handleReplaceDetailImage}
+              imageBusy={uploadBusy}
               search={search}
               setSearch={setSearch}
               categoryFilter={categoryFilter}
@@ -1665,23 +1652,5 @@ export default function App() {
     </div>
   );
 
-  return (
-    <Routes>
-      <Route path="/" element={rootElement} />
-      <Route
-        path="/product/:id"
-        element={
-          <ProductDetailRoute
-            products={products}
-            customerMode={!adminActive}
-            canManage={canManage}
-            onDetailEdit={handleDetailEdit}
-            onDetailShare={handleShareProduct}
-            onDetailImageReplace={handleReplaceDetailImage}
-            imageBusy={uploadBusy}
-          />
-        }
-      />
-    </Routes>
-  );
+  return rootElement;
 }

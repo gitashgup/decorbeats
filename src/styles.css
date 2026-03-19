@@ -87,10 +87,6 @@ h3 {
   gap: 1rem;
 }
 
-.detail-route-shell {
-  align-content: start;
-}
-
 .panel-card,
 .product-card,
 .detail-panel,
@@ -200,23 +196,6 @@ h3 {
 .screen-header,
 .panel-card {
   padding: 1rem;
-}
-
-.back-link {
-  width: fit-content;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.15rem 0.1rem;
-  font-weight: 700;
-}
-
-.back-link svg {
-  width: 22px;
-  height: 22px;
 }
 
 .screen-header {
@@ -628,6 +607,12 @@ h3 {
   padding: 1rem;
 }
 
+.detail-panel-inline {
+  margin-top: 0.15rem;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+}
+
 .detail-image-wrap {
   display: grid;
   gap: 0.5rem;
@@ -670,9 +655,25 @@ h3 {
   flex-wrap: wrap;
 }
 
+.detail-quantity-block {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.detail-quantity-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 .detail-actions {
   display: grid;
   gap: 0.7rem;
+}
+
+.detail-actions-inline {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .detail-action-button {
