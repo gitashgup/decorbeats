@@ -5,6 +5,13 @@ import { isSupabaseConfigured, supabase } from "./lib/supabase";
 const brandLogo = "/assets/brand/decorbeats-logo.svg";
 const WHATSAPP_NUMBER = "919XXXXXXXXX";
 const PRODUCT_STORAGE_BUCKET = "products";
+const ANNOUNCEMENTS = [
+  "✦ Summer Sale — Up to 30% off selected items",
+  "✦ Bulk orders welcome · 50 to 400+ units",
+  "✦ Handcrafted in India · Shipped across the country",
+  "✦ WhatsApp us for custom gifting solutions",
+  "✦ New arrivals added weekly"
+];
 
 const emptyForm = {
   id: "",
@@ -622,6 +629,22 @@ function CustomerPreviewBanner({ onBack }) {
         Back to Admin
       </button>
     </div>
+  );
+}
+
+function AnnouncementBar() {
+  const items = [...ANNOUNCEMENTS, ...ANNOUNCEMENTS];
+
+  return (
+    <section className="announcement-bar" aria-label="Store announcements">
+      <div className="announcement-track">
+        {items.map((message, index) => (
+          <span key={`${message}-${index}`} className="announcement-item">
+            {message}
+          </span>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -2201,6 +2224,7 @@ export default function App() {
     </div>
   ) : !adminActive || previewCustomerView ? (
     <div className="customer-page">
+      <AnnouncementBar />
       <CustomerHeader scrolled={customerHeaderElevated} onSearchTap={handleFocusCustomerSearch} />
       <main className="customer-main">
         {adminActive && previewCustomerView ? <CustomerPreviewBanner onBack={() => {

@@ -111,6 +111,50 @@ h3 {
   background: var(--bg);
 }
 
+.announcement-bar {
+  height: 36px;
+  overflow: hidden;
+  background: var(--accent);
+  color: #fffaf4;
+  display: flex;
+  align-items: center;
+}
+
+.announcement-track {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  white-space: nowrap;
+  will-change: transform;
+  animation: customer-marquee 42s linear infinite;
+}
+
+.announcement-item {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  padding-right: 1.5rem;
+}
+
+.announcement-item::after {
+  content: "·";
+  margin-left: 1.5rem;
+  opacity: 0.7;
+}
+
+@keyframes customer-marquee {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
 .customer-main {
   width: min(100%, 680px);
   margin: 0 auto;
