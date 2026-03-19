@@ -656,6 +656,7 @@ function CustomerSheet({ product, onClose, onShare }) {
   );
   const whatsappLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${whatsappMessage}`;
   const showDescription = product.notes && product.notes.trim() !== product.name.trim();
+  const occasionLine = showDescription ? product.notes.trim() : "";
 
   return (
     <div className="customer-sheet-overlay open" onClick={onClose}>
@@ -672,11 +673,11 @@ function CustomerSheet({ product, onClose, onShare }) {
         </div>
         <div className="customer-sheet-copy">
           <h2>{product.name}</h2>
+          {hasDisplayValue(product.pricing.mrp) ? <p className="customer-sheet-price">{formatCurrency(product.pricing.mrp)}</p> : null}
+          {occasionLine ? <p className="customer-sheet-occasion">{occasionLine}</p> : null}
           <p className="customer-sheet-meta">
             {product.category} · {product.material}
           </p>
-          {hasDisplayValue(product.pricing.mrp) ? <p className="customer-sheet-price">{formatCurrency(product.pricing.mrp)}</p> : null}
-          {showDescription ? <p className="customer-sheet-description">{product.notes}</p> : null}
           <a className="customer-whatsapp-button" href={whatsappLink} target="_blank" rel="noreferrer">
             <WhatsAppIcon />
             <span>Enquire on WhatsApp</span>

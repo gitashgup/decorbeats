@@ -399,6 +399,20 @@ h3 {
   line-height: 1.6;
 }
 
+.customer-sheet-price {
+  font-size: 1.55rem;
+  line-height: 1;
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.customer-sheet-occasion {
+  margin: -0.2rem 0 0;
+  color: var(--muted);
+  font-style: italic;
+  line-height: 1.5;
+}
+
 .customer-whatsapp-button {
   min-height: 52px;
   border-radius: 999px;
