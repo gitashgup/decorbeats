@@ -391,6 +391,23 @@ h3 {
   transform: translateY(0);
 }
 
+.customer-carousel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.customer-carousel-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transition: transform 250ms ease;
+}
+
+.customer-carousel-slide {
+  min-width: 100%;
+  height: 100%;
+}
+
 .customer-sheet-handle {
   width: 56px;
   height: 6px;
@@ -405,6 +422,45 @@ h3 {
   aspect-ratio: 1 / 1;
   overflow: hidden;
   border-radius: 24px;
+}
+
+.customer-carousel-count {
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.customer-carousel-thumbs {
+  display: flex;
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+}
+
+.customer-carousel-thumbs::-webkit-scrollbar {
+  display: none;
+}
+
+.customer-carousel-thumb {
+  flex: 0 0 auto;
+  width: 58px;
+  height: 58px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.customer-carousel-thumb.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px rgba(139, 74, 42, 0.2);
+}
+
+.customer-carousel-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .customer-sheet-copy {
@@ -887,6 +943,14 @@ h3 {
   text-align: center;
 }
 
+.product-placeholder-logo,
+.product-thumb-logo,
+.customer-placeholder-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
 .stock-pill,
 .sku-chip {
   display: inline-flex;
@@ -1001,6 +1065,88 @@ h3 {
 .detail-image-wrap {
   display: grid;
   gap: 0.5rem;
+}
+
+.media-manager {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.media-strip {
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+}
+
+.media-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.media-thumb,
+.media-add-tile {
+  position: relative;
+  flex: 0 0 auto;
+  width: 76px;
+  height: 76px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.68);
+  padding: 0;
+}
+
+.media-thumb.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px rgba(139, 74, 42, 0.3);
+}
+
+.media-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-thumb-label {
+  position: absolute;
+  left: 0.35rem;
+  bottom: 0.35rem;
+  border-radius: 999px;
+  background: rgba(44, 24, 16, 0.7);
+  color: #fff8f2;
+  font-size: 0.65rem;
+  padding: 0.12rem 0.4rem;
+}
+
+.media-delete {
+  position: absolute;
+  right: 0.2rem;
+  top: 0.2rem;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(44, 24, 16, 0.72);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.media-add-tile {
+  display: grid;
+  place-items: center;
+  gap: 0.1rem;
+  color: var(--accent);
+}
+
+.media-add-tile span {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.media-add-tile small {
+  font-size: 0.72rem;
 }
 
 .detail-image-button {

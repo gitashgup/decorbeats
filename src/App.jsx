@@ -92,6 +92,30 @@ function normalizeUrl(value) {
   return url;
 }
 
+function normalizeImageUrls(value) {
+  if (Array.isArray(value)) {
+    return value.map(normalizeUrl).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    const normalized = normalizeUrl(value);
+    return normalized ? [normalized] : [];
+  }
+  return [];
+}
+
+function getProductImages(product) {
+  const urls = normalizeImageUrls(product?.imageUrls);
+  if (urls.length) {
+    return urls;
+  }
+  const fallback = normalizeUrl(product?.imageUrl);
+  return fallback ? [fallback] : [];
+}
+
+function getPrimaryImage(product) {
+  return getProductImages(product)[0] ?? "";
+}
+
 function slugify(value) {
   return String(value ?? "")
     .toLowerCase()
@@ -158,6 +182,8 @@ function WhatsAppIcon() {
 
 function toProduct(raw, index = 0) {
   const quantity = Number(raw.quantity ?? 0);
+  const imageUrls = normalizeImageUrls(raw.imageUrls ?? raw.image_urls);
+  const primaryImage = imageUrls[0] ?? normalizeUrl(raw.imageUrl ?? raw.image_url);
   return {
     id: raw.id ?? index + 1,
     slug: raw.slug ?? slugify(`${raw.sku}-${raw.name}`),
@@ -168,7 +194,8 @@ function toProduct(raw, index = 0) {
     quantity,
     stockStatus: quantity <= 0 ? "Out of stock" : quantity <= 10 ? "Low stock" : "In stock",
     driveUrl: raw.driveUrl ?? raw.drive_url ?? "",
-    imageUrl: raw.imageUrl ?? raw.image_url ?? "",
+    imageUrl: primaryImage,
+    imageUrls,
     notes: raw.notes ?? "",
     archivedAt: raw.archivedAt ?? raw.archived_at ?? null,
     pricing: {
@@ -304,35 +331,37 @@ function dedupePayloadBySku(rows) {
 }
 
 function ProductImage({ product, compact = false }) {
-  if (product?.imageUrl) {
+  const primaryImage = getPrimaryImage(product);
+  if (primaryImage) {
     return (
       <div className={`product-image-shell ${compact ? "compact" : ""}`}>
-        <img className="product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
+        <img className="product-image" src={primaryImage} alt={product.name} loading="lazy" />
       </div>
     );
   }
 
   return (
     <div className={`product-image-shell product-image-fallback ${compact ? "compact" : ""}`}>
-      <span>{product?.category ?? "Decorbeats"}</span>
-      <strong>{product?.material ?? "Crafted collection"}</strong>
+      <img src={brandLogo} alt="Decorbeats" className="product-placeholder-logo" loading="lazy" />
+      <strong>{product?.name ?? "Decorbeats"}</strong>
       <small>{product?.driveUrl ? "Drive folder linked" : "Image coming soon"}</small>
     </div>
   );
 }
 
 function ProductThumb({ product }) {
-  if (product?.imageUrl) {
+  const primaryImage = getPrimaryImage(product);
+  if (primaryImage) {
     return (
       <div className="product-thumb">
-        <img className="product-thumb-image" src={product.imageUrl} alt={product.name} loading="lazy" />
+        <img className="product-thumb-image" src={primaryImage} alt={product.name} loading="lazy" />
       </div>
     );
   }
 
   return (
     <div className="product-thumb product-thumb-fallback">
-      <span>{product?.category?.slice(0, 1) || "D"}</span>
+      <img src={brandLogo} alt="Decorbeats" className="product-thumb-logo" loading="lazy" />
     </div>
   );
 }
@@ -633,14 +662,15 @@ function CustomerCategoryBar({ categories, categoryFilter, setCategoryFilter }) 
 
 function CustomerProductCard({ product, onSelect }) {
   const showLowStock = product.quantity > 0 && product.quantity <= 5;
+  const primaryImage = getPrimaryImage(product);
   return (
     <button type="button" className="customer-product-card" onClick={() => onSelect(product)}>
       <div className="customer-product-image-wrap">
-        {product.imageUrl ? (
-          <img className="customer-product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
+        {primaryImage ? (
+          <img className="customer-product-image" src={primaryImage} alt={product.name} loading="lazy" />
         ) : (
           <div className="customer-product-image customer-product-fallback">
-            <span>{product.category}</span>
+            <img src={brandLogo} alt="Decorbeats" className="customer-placeholder-logo" loading="lazy" />
           </div>
         )}
       </div>
@@ -673,15 +703,7 @@ function CustomerSheet({ product, onClose, onShare }) {
     <div className="customer-sheet-overlay open" onClick={onClose}>
       <aside className="customer-sheet open" onClick={(event) => event.stopPropagation()}>
         <button type="button" className="customer-sheet-handle" aria-label="Close product details" onClick={onClose} />
-        <div className="customer-sheet-image-wrap">
-          {product.imageUrl ? (
-            <img className="customer-sheet-image" src={product.imageUrl} alt={product.name} loading="lazy" />
-          ) : (
-            <div className="customer-sheet-image customer-product-fallback">
-              <span>{product.category}</span>
-            </div>
-          )}
-        </div>
+        <CustomerImageCarousel product={product} />
         <div className="customer-sheet-copy">
           <h2>{product.name}</h2>
           {hasDisplayValue(product.pricing.mrp) ? <p className="customer-sheet-price">{formatCurrency(product.pricing.mrp)}</p> : null}
@@ -713,6 +735,141 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
         </button>
       ) : null}
     </footer>
+  );
+}
+
+function ProductMediaManager({ product, busy, onAddImages, onDeleteImage, onSetCoverImage }) {
+  const fileInputRef = useRef(null);
+  const images = getProductImages(product);
+
+  return (
+    <div className="media-manager">
+      <div className="media-strip">
+        {images.map((url, index) => (
+          <button
+            key={`${url}-${index}`}
+            type="button"
+            className={index === 0 ? "media-thumb active" : "media-thumb"}
+            onClick={() => onSetCoverImage(product, url)}
+          >
+            <img src={url} alt={`${product.name} ${index + 1}`} loading="lazy" />
+            <span className="media-thumb-label">{index === 0 ? "Cover" : `#${index + 1}`}</span>
+            <span
+              className="media-delete"
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDeleteImage(product, url);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onDeleteImage(product, url);
+                }
+              }}
+            >
+              ×
+            </span>
+          </button>
+        ))}
+        <button type="button" className="media-add-tile" onClick={() => fileInputRef.current?.click()} disabled={busy}>
+          <span>+</span>
+          <small>{busy ? "Uploading..." : "Add"}</small>
+        </button>
+      </div>
+      <input
+        ref={fileInputRef}
+        className="visually-hidden"
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          if (files.length) {
+            onAddImages(product, files);
+          }
+          event.target.value = "";
+        }}
+      />
+    </div>
+  );
+}
+
+function CustomerImageCarousel({ product }) {
+  const images = getProductImages(product);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const touchStartRef = useRef(null);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [product?.id]);
+
+  if (!images.length) {
+    return (
+      <div className="customer-sheet-image-wrap">
+        <div className="customer-sheet-image customer-product-fallback">
+          <img src={brandLogo} alt="Decorbeats" className="customer-placeholder-logo" loading="lazy" />
+        </div>
+      </div>
+    );
+  }
+
+  const hasCarousel = images.length > 1;
+
+  return (
+    <div className="customer-carousel">
+      <div
+        className="customer-sheet-image-wrap"
+        onTouchStart={(event) => {
+          touchStartRef.current = event.touches[0]?.clientX ?? null;
+        }}
+        onTouchEnd={(event) => {
+          if (touchStartRef.current == null) {
+            return;
+          }
+          const endX = event.changedTouches[0]?.clientX ?? touchStartRef.current;
+          const delta = endX - touchStartRef.current;
+          if (Math.abs(delta) > 40 && hasCarousel) {
+            setActiveIndex((current) => {
+              if (delta < 0) {
+                return Math.min(current + 1, images.length - 1);
+              }
+              return Math.max(current - 1, 0);
+            });
+          }
+          touchStartRef.current = null;
+        }}
+      >
+        <div className="customer-carousel-track" style={{ transform: `translateX(-${activeIndex * 100}%)` }}>
+          {images.map((url, index) => (
+            <div key={`${url}-${index}`} className="customer-carousel-slide">
+              <img className="customer-sheet-image" src={url} alt={`${product.name} ${index + 1}`} loading="lazy" />
+            </div>
+          ))}
+        </div>
+      </div>
+      {hasCarousel ? (
+        <>
+          <div className="customer-carousel-count">
+            {activeIndex + 1}/{images.length}
+          </div>
+          <div className="customer-carousel-thumbs">
+            {images.map((url, index) => (
+              <button
+                key={`${url}-thumb-${index}`}
+                type="button"
+                className={index === activeIndex ? "customer-carousel-thumb active" : "customer-carousel-thumb"}
+                onClick={() => setActiveIndex(index)}
+              >
+                <img src={url} alt={`${product.name} thumbnail ${index + 1}`} loading="lazy" />
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
 
@@ -829,7 +986,9 @@ function ProductCard({
   onShare,
   onArchiveToggle,
   onInlineEdit,
-  onInlineImageReplace,
+  onInlineAddImages,
+  onInlineDeleteImage,
+  onInlineSetCoverImage,
   imageBusy,
   saveBusy,
   archivedVisible = false
@@ -918,7 +1077,9 @@ function ProductCard({
           canManage={canManage}
           onEdit={onInlineEdit}
           onShare={onShare}
-          onImageReplace={onInlineImageReplace}
+          onAddImages={onInlineAddImages}
+          onDeleteImage={onInlineDeleteImage}
+          onSetCoverImage={onInlineSetCoverImage}
           imageBusy={imageBusy}
           saveBusy={saveBusy}
           inline
@@ -928,7 +1089,19 @@ function ProductCard({
   );
 }
 
-function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImageReplace, imageBusy, saveBusy, inline = false }) {
+function DetailPanel({
+  product,
+  customerMode,
+  canManage,
+  onEdit,
+  onShare,
+  onAddImages,
+  onDeleteImage,
+  onSetCoverImage,
+  imageBusy,
+  saveBusy,
+  inline = false
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
     name: "",
@@ -937,8 +1110,6 @@ function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImag
     quantity: "",
     notes: ""
   });
-  const fileInputRef = useRef(null);
-
   useEffect(() => {
     if (!product) {
       return;
@@ -967,39 +1138,18 @@ function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImag
   return (
     <aside className={inline ? "detail-panel detail-panel-inline panel-card" : "detail-panel panel-card"}>
       <div className="detail-image-wrap">
-        <button
-          type="button"
-          className={canManage && !customerMode ? "detail-image-button editable" : "detail-image-button"}
-          onClick={() => {
-            if (canManage && !customerMode) {
-              fileInputRef.current?.click();
-            }
-          }}
-        >
-          <ProductImage product={product} />
-          {canManage && !customerMode ? (
-            <>
-              <span className="detail-image-camera">
-                <CameraIcon />
-              </span>
-              <span className="detail-image-hint">{imageBusy ? "Uploading..." : "Tap to replace photo"}</span>
-            </>
-          ) : null}
-        </button>
+        <ProductImage product={product} />
         {canManage && !customerMode ? (
-          <input
-            ref={fileInputRef}
-            className="visually-hidden"
-            type="file"
-            accept="image/*"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) {
-                onImageReplace(product, file);
-              }
-              event.target.value = "";
-            }}
-          />
+          <>
+            <span className="detail-image-hint">{imageBusy ? "Updating gallery..." : "Tap a thumbnail to set cover image"}</span>
+            <ProductMediaManager
+              product={product}
+              busy={imageBusy}
+              onAddImages={onAddImages}
+              onDeleteImage={onDeleteImage}
+              onSetCoverImage={onSetCoverImage}
+            />
+          </>
         ) : null}
       </div>
       <div className="section-head">
@@ -1139,7 +1289,9 @@ function CatalogSection({
   onShare,
   onArchiveToggle,
   onInlineEdit,
-  onInlineImageReplace,
+  onInlineAddImages,
+  onInlineDeleteImage,
+  onInlineSetCoverImage,
   imageBusy,
   saveBusy,
   search,
@@ -1173,7 +1325,9 @@ function CatalogSection({
                 onShare={onShare}
                 onArchiveToggle={onArchiveToggle}
                 onInlineEdit={onInlineEdit}
-                onInlineImageReplace={onInlineImageReplace}
+                onInlineAddImages={onInlineAddImages}
+                onInlineDeleteImage={onInlineDeleteImage}
+                onInlineSetCoverImage={onInlineSetCoverImage}
                 imageBusy={imageBusy}
                 saveBusy={saveBusy}
                 archivedVisible={archivedVisible}
@@ -1402,7 +1556,7 @@ export default function App() {
       totalProducts: products.filter((product) => !product.archivedAt).length,
       totalUnits: products.filter((product) => !product.archivedAt).reduce((sum, product) => sum + Number(product.quantity || 0), 0),
       lowStock: products.filter((product) => !product.archivedAt && product.stockStatus === "Low stock").length,
-      withImages: products.filter((product) => !product.archivedAt && product.imageUrl).length
+      withImages: products.filter((product) => !product.archivedAt && getProductImages(product).length).length
     };
   }, [products]);
 
@@ -1524,55 +1678,101 @@ export default function App() {
     }
   }
 
-  async function handleReplaceDetailImage(product, file) {
+  async function persistProductImages(product, nextImageUrls) {
+    const cleaned = nextImageUrls.map(normalizeUrl).filter(Boolean);
+    const primaryImage = cleaned[0] ?? null;
+
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase
+        .from("products")
+        .update({ image_urls: cleaned, image_url: primaryImage })
+        .eq("id", product.id)
+        .select()
+        .single();
+      if (error) {
+        throw error;
+      }
+      const normalized = toProduct(data);
+      setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+      setSelectedId(normalized.id);
+      populateForm(normalized);
+      setLastSyncAt(new Date().toISOString());
+      return normalized;
+    }
+
+    const normalized = toProduct({
+      ...product,
+      image_urls: cleaned,
+      image_url: primaryImage
+    });
+    setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+    return normalized;
+  }
+
+  async function handleAddDetailImages(product, files) {
     if (!canManage) {
-      setStatusMessage("Sign in first to replace product photos.");
+      setStatusMessage("Sign in first to manage product photos.");
       return;
     }
 
     setUploadBusy(true);
     try {
       if (isSupabaseConfigured) {
-        const extension = file.name.split(".").pop();
-        const path = `${product.sku}.${extension}`;
-        const { error: uploadError } = await supabase.storage.from("product-images").upload(path, file, { upsert: true });
-        if (uploadError) {
-          throw uploadError;
+        const uploadedUrls = [];
+        for (const file of files) {
+          const extension = file.name.split(".").pop();
+          const path = `products/${product.sku}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+          const { error: uploadError } = await supabase.storage.from("product-images").upload(path, file, { upsert: false });
+          if (uploadError) {
+            throw uploadError;
+          }
+          const { data: publicUrlData } = supabase.storage.from("product-images").getPublicUrl(path);
+          uploadedUrls.push(publicUrlData.publicUrl);
         }
-
-        const { data: publicUrlData } = supabase.storage.from("product-images").getPublicUrl(path);
-        const { data, error } = await supabase
-          .from("products")
-          .update({ image_url: publicUrlData.publicUrl })
-          .eq("id", product.id)
-          .select()
-          .single();
-        if (error) {
-          throw error;
-        }
-
-        const normalized = toProduct(data);
-        setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
-        setSelectedId(normalized.id);
-        populateForm(normalized);
-        setLastSyncAt(new Date().toISOString());
-        setStatusMessage("Product image updated.");
+        await persistProductImages(product, [...getProductImages(product), ...uploadedUrls]);
+        setStatusMessage(uploadedUrls.length === 1 ? "Image added to gallery." : `${uploadedUrls.length} images added to gallery.`);
       } else {
-        const imageUrl = URL.createObjectURL(file);
-        setProducts((current) =>
-          current.map((item) =>
-            item.id === product.id
-              ? {
-                  ...item,
-                  imageUrl
-                }
-              : item
-          )
-        );
-        setStatusMessage("Product image updated locally.");
+        const localUrls = files.map((file) => URL.createObjectURL(file));
+        await persistProductImages(product, [...getProductImages(product), ...localUrls]);
+        setStatusMessage(localUrls.length === 1 ? "Image added locally." : `${localUrls.length} images added locally.`);
       }
     } catch (error) {
-      setStatusMessage(error.message || "Could not replace this image.");
+      setStatusMessage(error.message || "Could not update this gallery.");
+    } finally {
+      setUploadBusy(false);
+    }
+  }
+
+  async function handleDeleteDetailImage(product, imageUrlToRemove) {
+    if (!canManage) {
+      return;
+    }
+
+    const nextImages = getProductImages(product).filter((url) => url !== imageUrlToRemove);
+    setUploadBusy(true);
+    try {
+      await persistProductImages(product, nextImages);
+      setStatusMessage("Image removed from gallery.");
+    } catch (error) {
+      setStatusMessage(error.message || "Could not remove this image.");
+    } finally {
+      setUploadBusy(false);
+    }
+  }
+
+  async function handleSetCoverImage(product, imageUrlToPromote) {
+    if (!canManage) {
+      return;
+    }
+
+    const images = getProductImages(product);
+    const nextImages = [imageUrlToPromote, ...images.filter((url) => url !== imageUrlToPromote)];
+    setUploadBusy(true);
+    try {
+      await persistProductImages(product, nextImages);
+      setStatusMessage("Cover image updated.");
+    } catch (error) {
+      setStatusMessage(error.message || "Could not update the cover image.");
     } finally {
       setUploadBusy(false);
     }
@@ -1634,7 +1834,8 @@ export default function App() {
       b2b_price: form.b2b === "" ? null : Number(form.b2b),
       notes: form.notes,
       drive_url: form.driveUrl,
-      image_url: form.imageUrl
+      image_url: form.imageUrl,
+      image_urls: normalizeUrl(form.imageUrl) ? [normalizeUrl(form.imageUrl)] : []
     };
 
     try {
@@ -1854,7 +2055,7 @@ export default function App() {
       }).format(new Date(lastSyncAt))
     : "Not synced yet";
 
-  const featuredCustomerProduct = customerCatalog.find((product) => product.imageUrl) || customerCatalog[0] || null;
+  const featuredCustomerProduct = customerCatalog.find((product) => getProductImages(product).length) || customerCatalog[0] || null;
 
   const rootElement = !adminActive && publicScreen === "admin-auth" ? (
     <div className="app-shell">
@@ -1951,7 +2152,9 @@ export default function App() {
               onShare={handleShareProduct}
               onArchiveToggle={handleArchiveToggle}
               onInlineEdit={handleDetailEdit}
-              onInlineImageReplace={handleReplaceDetailImage}
+              onInlineAddImages={handleAddDetailImages}
+              onInlineDeleteImage={handleDeleteDetailImage}
+              onInlineSetCoverImage={handleSetCoverImage}
               imageBusy={uploadBusy}
               saveBusy={saveBusy}
               search={search}
@@ -1988,8 +2191,11 @@ export default function App() {
               canManage={canManage}
               onEdit={handleDetailEdit}
               onShare={handleShareProduct}
-              onImageReplace={handleReplaceDetailImage}
+              onAddImages={handleAddDetailImages}
+              onDeleteImage={handleDeleteDetailImage}
+              onSetCoverImage={handleSetCoverImage}
               imageBusy={uploadBusy}
+              saveBusy={saveBusy}
             />
           </section>
         ) : null}
@@ -2013,7 +2219,9 @@ export default function App() {
               onShare={handleShareProduct}
               onArchiveToggle={handleArchiveToggle}
               onInlineEdit={handleDetailEdit}
-              onInlineImageReplace={handleReplaceDetailImage}
+              onInlineAddImages={handleAddDetailImages}
+              onInlineDeleteImage={handleDeleteDetailImage}
+              onInlineSetCoverImage={handleSetCoverImage}
               imageBusy={uploadBusy}
               saveBusy={saveBusy}
               search={search}
