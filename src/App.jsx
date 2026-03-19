@@ -568,6 +568,17 @@ function AppInfoCard({ lastSyncLabel }) {
   );
 }
 
+function CustomerPreviewBanner({ onBack }) {
+  return (
+    <div className="customer-preview-banner">
+      <span>You're previewing the customer view — </span>
+      <button type="button" onClick={onBack}>
+        Back to Admin
+      </button>
+    </div>
+  );
+}
+
 function CustomerHeader({ scrolled, onSearchTap }) {
   return (
     <header className={scrolled ? "customer-header scrolled" : "customer-header"}>
@@ -691,14 +702,16 @@ function CustomerSheet({ product, onClose, onShare }) {
   );
 }
 
-function CustomerFooter({ onAdmin }) {
+function CustomerFooter({ onAdmin, showAdminLink = true }) {
   return (
     <footer className="customer-footer">
       <img src={brandLogo} alt="Decorbeats" className="customer-footer-logo" />
       <p>Artisanal decor, gifted with love.</p>
-      <button type="button" className="customer-admin-link" onClick={onAdmin}>
-        Are you the owner? Sign in →
-      </button>
+      {showAdminLink ? (
+        <button type="button" className="customer-admin-link" onClick={onAdmin}>
+          Are you the owner? Sign in →
+        </button>
+      ) : null}
     </footer>
   );
 }
@@ -1258,6 +1271,7 @@ export default function App() {
   const [csvPreviewPayload, setCsvPreviewPayload] = useState([]);
   const [csvPreviewFileName, setCsvPreviewFileName] = useState("");
   const [customerHeaderElevated, setCustomerHeaderElevated] = useState(false);
+  const [previewCustomerView, setPreviewCustomerView] = useState(false);
   const productGridRef = useRef(null);
   const customerSearchRef = useRef(null);
 
@@ -1319,6 +1333,12 @@ export default function App() {
     if (adminActive) {
       setPublicScreen("customer");
       setActiveTab("products");
+    }
+  }, [adminActive]);
+
+  useEffect(() => {
+    if (!adminActive) {
+      setPreviewCustomerView(false);
     }
   }, [adminActive]);
 
@@ -1860,10 +1880,14 @@ export default function App() {
         />
       </div>
     </div>
-  ) : !adminActive ? (
+  ) : !adminActive || previewCustomerView ? (
     <div className="customer-page">
       <CustomerHeader scrolled={customerHeaderElevated} onSearchTap={handleFocusCustomerSearch} />
       <main className="customer-main">
+        {adminActive && previewCustomerView ? <CustomerPreviewBanner onBack={() => {
+          setPreviewCustomerView(false);
+          setActiveTab("products");
+        }} /> : null}
         <CustomerHero featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
         <section className="customer-catalog-shell" ref={productGridRef}>
           <CustomerCategoryBar categories={categories} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} />
@@ -1883,7 +1907,7 @@ export default function App() {
             ))}
           </section>
         </section>
-        <CustomerFooter onAdmin={() => setPublicScreen("admin-auth")} />
+        <CustomerFooter onAdmin={() => setPublicScreen("admin-auth")} showAdminLink={!adminActive} />
       </main>
       <CustomerSheet product={selectedProduct} onClose={() => setSelectedId(null)} onShare={handleShareProduct} />
     </div>
@@ -2015,6 +2039,25 @@ export default function App() {
               onClearPreview={handleClearCsvPreview}
             />
             <AccountCard userEmail={userEmail} onSignOut={handleSignOut} />
+            <section className="panel-card admin-card settings-card">
+              <div className="section-head">
+                <div>
+                  <p className="eyebrow">Preview</p>
+                  <h3>Customer View</h3>
+                </div>
+              </div>
+              <p className="support-copy">See the storefront exactly as a customer sees it without signing out.</p>
+              <button
+                type="button"
+                className="ghost-button settings-button"
+                onClick={() => {
+                  setPreviewCustomerView(true);
+                  setSelectedId(null);
+                }}
+              >
+                Customer View
+              </button>
+            </section>
             <AppInfoCard lastSyncLabel={lastSyncLabel} />
           </section>
         ) : null}
