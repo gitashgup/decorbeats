@@ -19,6 +19,44 @@ const emptyForm = {
   imageUrl: ""
 };
 
+function GridIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function WarningIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 3 2.5 19.5A1.2 1.2 0 0 0 3.55 21h16.9a1.2 1.2 0 0 0 1.05-1.5L12 3Zm-1 6h2v5h-2V9Zm0 7h2v2h-2v-2Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="m19.14 12.94.04-.94-.04-.94 2.02-1.58a.7.7 0 0 0 .17-.9l-1.91-3.3a.7.7 0 0 0-.85-.3l-2.39.96a7.65 7.65 0 0 0-1.62-.94L14.2 2.4a.7.7 0 0 0-.69-.56h-3.02a.7.7 0 0 0-.69.56L9.44 5a7.65 7.65 0 0 0-1.62.94l-2.39-.96a.7.7 0 0 0-.85.3L2.67 8.58a.7.7 0 0 0 .17.9l2.02 1.58-.04.94.04.94-2.02 1.58a.7.7 0 0 0-.17.9l1.91 3.3a.7.7 0 0 0 .85.3l2.39-.96c.5.38 1.05.7 1.62.94l.36 2.6a.7.7 0 0 0 .69.56h3.02a.7.7 0 0 0 .69-.56l.36-2.6c.57-.24 1.12-.56 1.62-.94l2.39.96a.7.7 0 0 0 .85-.3l1.91-3.3a.7.7 0 0 0-.17-.9l-2.02-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 function parseNumber(value) {
   const cleaned = String(value ?? "")
     .replace(/[^0-9.]/g, "")
@@ -187,98 +225,63 @@ function ProductImage({ product, compact = false }) {
   );
 }
 
-function BrandHeader({ customerMode, setCustomerMode, userEmail }) {
+function LandingView({ onAdmin, onCustomer }) {
   return (
-    <header className="brand-header">
-      <div className="brand-lockup welcome-lockup">
-        <img src={brandLogo} alt="Decorbeats" className="brand-logo" />
-        <div>
-          <p className="eyebrow">Decorbeats</p>
-          <h1>Welcome to the World of Gifting</h1>
-          <p className="welcome-subcopy">
-            Discover a cleaner Decorbeats experience designed to feel elegant for customers and effortless for your team, especially on mobile.
-          </p>
-        </div>
-      </div>
-      <div className="brand-actions">
-        <div className="mode-switch" role="tablist" aria-label="View mode">
-          <button type="button" className={!customerMode ? "mode-pill active" : "mode-pill"} onClick={() => setCustomerMode(false)}>
+    <section className="landing-shell">
+      <div className="landing-card">
+        <img src={brandLogo} alt="Decorbeats" className="landing-logo" />
+        <h1>Welcome to the World of Gifting</h1>
+        <p className="landing-tagline">Inventory, product sharing, and gifting collections in one clean mobile workspace.</p>
+        <div className="landing-actions">
+          <button type="button" className="primary-button" onClick={onAdmin}>
             Admin
           </button>
-          <button type="button" className={customerMode ? "mode-pill active" : "mode-pill"} onClick={() => setCustomerMode(true)}>
+          <button type="button" className="ghost-button" onClick={onCustomer}>
             Customer
           </button>
         </div>
-        <div className="user-badge">{userEmail ? `Signed in: ${userEmail}` : "Admin sign-in available"}</div>
       </div>
+    </section>
+  );
+}
+
+function ScreenHeader({ eyebrow, title, subtitle, action }) {
+  return (
+    <header className="screen-header">
+      <div className="brand-lockup compact-lockup">
+        <img src={brandLogo} alt="Decorbeats" className="brand-logo small" />
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h2>{title}</h2>
+          {subtitle ? <p className="screen-subtitle">{subtitle}</p> : null}
+        </div>
+      </div>
+      {action ? <div className="screen-header-action">{action}</div> : null}
     </header>
   );
 }
 
-function HeroPanel({ customerMode, selectedProduct, stats, statusMessage }) {
+function StatusStrip({ statusMessage, items = [] }) {
   return (
-    <section className="hero-panel">
-      <div className="hero-copy">
-        <p className="eyebrow">{customerMode ? "Customer Entrance" : "Admin Entrance"}</p>
-        <h2>{customerMode ? "A polished catalogue for sharing with customers." : "A refined workspace to manage products and gifting collections."}</h2>
-        <p>{customerMode ? "Browse products with less clutter and more focus on the collection itself." : "Import stock, update products, and manage imagery without losing the premium Decorbeats feel."}</p>
-        <div className="hero-status">{statusMessage}</div>
-      </div>
-
-      <div className="hero-focus">
-        <div className="stats-strip">
-          <article>
-            <span>Products</span>
-            <strong>{stats.totalProducts}</strong>
-          </article>
-          <article>
-            <span>Total units</span>
-            <strong>{stats.totalUnits}</strong>
-          </article>
-          <article>
-            <span>Low stock</span>
-            <strong>{stats.lowStock}</strong>
-          </article>
-          <article>
-            <span>With photos</span>
-            <strong>{stats.withImages}</strong>
-          </article>
+    <section className="status-strip panel-card">
+      <p className="status-copy">{statusMessage}</p>
+      {items.length ? (
+        <div className="mini-stats">
+          {items.map((item) => (
+            <article key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </article>
+          ))}
         </div>
-
-        {selectedProduct ? (
-          <div className="focus-card">
-            <ProductImage product={selectedProduct} compact />
-            <div className="focus-copy">
-              <span className={`stock-pill ${selectedProduct.stockStatus !== "In stock" ? "warn" : ""}`}>{customerMode ? "Featured Now" : selectedProduct.stockStatus}</span>
-              <h3>{selectedProduct.name}</h3>
-              <p>
-                {selectedProduct.category} · {selectedProduct.material}
-              </p>
-              <div className="focus-meta">
-                <div>
-                  <span>SKU</span>
-                  <strong>{selectedProduct.sku}</strong>
-                </div>
-                <div>
-                  <span>MRP</span>
-                  <strong>{formatCurrency(selectedProduct.pricing.mrp)}</strong>
-                </div>
-                <div>
-                  <span>Qty</span>
-                  <strong>{selectedProduct.quantity}</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
+      ) : null}
     </section>
   );
 }
 
 function ControlBar({ search, setSearch, categoryFilter, setCategoryFilter, categories }) {
   return (
-    <section className="control-bar">
+    <section className="panel-card control-bar">
       <input
         className="search-input"
         type="search"
@@ -317,7 +320,7 @@ function AuthPanel({ email, setEmail, authBusy, userEmail, onSignIn, onSignOut }
         ) : null}
       </div>
       {userEmail ? (
-        <p className="support-copy">You can now import stock, edit products, and upload images.</p>
+        <p className="support-copy">You can now add products, update stock, archive items, and upload images.</p>
       ) : (
         <div className="auth-row">
           <input
@@ -345,7 +348,7 @@ function ImportPanel({ importBusy, onFileChange }) {
           <h3>Refresh inventory from CSV</h3>
         </div>
       </div>
-      <p className="support-copy">Use the same spreadsheet format to create new products or refresh matching SKUs in one go.</p>
+      <p className="support-copy">Use the same spreadsheet format to refresh stock and update matching SKUs in one pass.</p>
       <label className="upload-button">
         {importBusy ? "Importing..." : "Choose inventory CSV"}
         <input type="file" accept=".csv,text/csv" onChange={onFileChange} disabled={importBusy} />
@@ -443,7 +446,7 @@ function ArchivePanel({ product, onArchive, onRestore, archiveBusy }) {
       <p className="support-copy">
         {product.archivedAt
           ? "This product is hidden from the live catalog but can be restored at any time."
-          : "Archive removes the product from normal admin and customer views without deleting its data."}
+          : "Archive removes the product from normal views without deleting its data."}
       </p>
       <button
         type="button"
@@ -457,13 +460,15 @@ function ArchivePanel({ product, onArchive, onRestore, archiveBusy }) {
   );
 }
 
-function ProductCard({ product, customerMode, onSelect }) {
+function ProductCard({ product, customerMode, onSelect, archivedVisible = false }) {
   return (
-    <article className="product-card" onClick={() => onSelect(product)}>
+    <article className={`product-card ${product.archivedAt ? "archived" : ""}`} onClick={() => onSelect(product)}>
       <ProductImage product={product} compact />
       <div className="product-card-body">
         <div className="product-card-top">
-          <span className={`stock-pill ${product.stockStatus !== "In stock" ? "warn" : ""}`}>{product.stockStatus}</span>
+          <span className={`stock-pill ${product.stockStatus !== "In stock" ? "warn" : ""}`}>
+            {product.archivedAt && archivedVisible ? "Archived" : product.stockStatus}
+          </span>
           <span className="sku-chip">{product.sku}</span>
         </div>
         <h3>{product.name}</h3>
@@ -494,7 +499,7 @@ function ProductCard({ product, customerMode, onSelect }) {
 function DetailPanel({ product, customerMode }) {
   if (!product) {
     return (
-      <aside className="detail-panel">
+      <aside className="detail-panel panel-card">
         <div className="detail-empty">
           <p className="eyebrow">Selection</p>
           <h3>Choose a product to see full details.</h3>
@@ -504,7 +509,7 @@ function DetailPanel({ product, customerMode }) {
   }
 
   return (
-    <aside className="detail-panel">
+    <aside className="detail-panel panel-card">
       <ProductImage product={product} />
       <div className="section-head">
         <div>
@@ -558,8 +563,96 @@ function DetailPanel({ product, customerMode }) {
   );
 }
 
+function CatalogSection({ products, customerMode, onSelect, selectedProduct, search, setSearch, categoryFilter, setCategoryFilter, categories, archivedVisible = false }) {
+  return (
+    <>
+      <ControlBar
+        search={search}
+        setSearch={setSearch}
+        categoryFilter={categoryFilter}
+        setCategoryFilter={setCategoryFilter}
+        categories={categories}
+      />
+      <main className="content-grid">
+        <section className="catalog-grid">
+          {products.length ? (
+            products.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                customerMode={customerMode}
+                onSelect={onSelect}
+                archivedVisible={archivedVisible}
+              />
+            ))
+          ) : (
+            <div className="panel-card empty-state">
+              <p className="eyebrow">Nothing here</p>
+              <h3>No products match this view.</h3>
+            </div>
+          )}
+        </section>
+        <DetailPanel product={selectedProduct} customerMode={customerMode} />
+      </main>
+    </>
+  );
+}
+
+function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
+  const items = [
+    { id: "products", label: "Products", icon: <GridIcon /> },
+    { id: "low-stock", label: "Low Stock", icon: <WarningIcon />, badge: lowStockCount },
+    { id: "settings", label: "Settings", icon: <GearIcon /> }
+  ];
+
+  return (
+    <nav className="bottom-nav" aria-label="Primary">
+      <button
+        type="button"
+        className={activeTab === "products" ? "nav-item active" : "nav-item"}
+        onClick={() => setActiveTab("products")}
+      >
+        <span className="nav-icon">{items[0].icon}</span>
+        <span>Products</span>
+      </button>
+
+      <button
+        type="button"
+        className={activeTab === "low-stock" ? "nav-item active" : "nav-item"}
+        onClick={() => setActiveTab("low-stock")}
+      >
+        <span className="nav-icon nav-icon-alert">
+          {items[1].icon}
+          {lowStockCount ? <small>{lowStockCount}</small> : null}
+        </span>
+        <span>Low Stock</span>
+      </button>
+
+      <button
+        type="button"
+        className={activeTab === "settings" ? "nav-item active" : "nav-item"}
+        onClick={() => setActiveTab("settings")}
+      >
+        <span className="nav-icon">{items[2].icon}</span>
+        <span>Settings</span>
+      </button>
+
+      <button
+        type="button"
+        className={activeTab === "add" ? "nav-item nav-item-add active" : "nav-item nav-item-add"}
+        onClick={() => setActiveTab("add")}
+        aria-label="Add"
+      >
+        <span className="nav-fab">
+          <PlusIcon />
+        </span>
+        <span>Add</span>
+      </button>
+    </nav>
+  );
+}
+
 export default function App() {
-  const [customerMode, setCustomerMode] = useState(false);
   const [products, setProducts] = useState(seedProducts.map(toProduct));
   const [selectedId, setSelectedId] = useState(seedProducts[0]?.id ?? null);
   const [search, setSearch] = useState("");
@@ -578,6 +671,8 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [session, setSession] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [publicScreen, setPublicScreen] = useState("landing");
+  const [activeTab, setActiveTab] = useState("products");
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -629,46 +724,66 @@ export default function App() {
 
   const userEmail = session?.user?.email ?? "";
   const canManage = Boolean(userEmail) || !isSupabaseConfigured;
+  const adminActive = Boolean(userEmail) || !isSupabaseConfigured;
+
+  useEffect(() => {
+    if (adminActive) {
+      setPublicScreen("landing");
+      setActiveTab("products");
+    }
+  }, [adminActive]);
+
+  const customerCatalog = useMemo(() => products.filter((product) => !product.archivedAt), [products]);
+  const adminCatalog = useMemo(() => products.filter((product) => showArchived || !product.archivedAt), [products, showArchived]);
+  const lowStockCatalog = useMemo(() => adminCatalog.filter((product) => product.quantity <= 10), [adminCatalog]);
+
+  const currentCatalog = useMemo(() => {
+    if (!adminActive) {
+      return customerCatalog;
+    }
+    if (activeTab === "low-stock") {
+      return lowStockCatalog;
+    }
+    return adminCatalog;
+  }, [activeTab, adminActive, adminCatalog, customerCatalog, lowStockCatalog]);
 
   const categories = useMemo(() => {
     return [
       "All",
       ...new Set(
-        products
-          .filter((product) => showArchived || !product.archivedAt)
+        currentCatalog
           .map((product) => product.category)
           .filter(Boolean)
           .sort((left, right) => left.localeCompare(right))
       )
     ];
-  }, [products, showArchived]);
+  }, [currentCatalog]);
 
   const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      const matchesArchive = showArchived ? true : !product.archivedAt;
+    return currentCatalog.filter((product) => {
       const haystack = [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase();
       const matchesSearch = haystack.includes(search.toLowerCase());
       const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
-      return matchesArchive && matchesSearch && matchesCategory;
+      return matchesSearch && matchesCategory;
     });
-  }, [categoryFilter, products, search, showArchived]);
+  }, [categoryFilter, currentCatalog, search]);
 
   const selectedProduct =
     filteredProducts.find((product) => product.id === selectedId) ||
+    currentCatalog.find((product) => product.id === selectedId) ||
     products.find((product) => product.id === selectedId) ||
     null;
 
   const stats = useMemo(() => {
     return {
-      totalProducts: products.length,
-      totalUnits: products.reduce((sum, product) => sum + Number(product.quantity || 0), 0),
-      lowStock: products.filter((product) => product.stockStatus === "Low stock").length,
-      withImages: products.filter((product) => product.imageUrl).length
+      totalProducts: products.filter((product) => !product.archivedAt).length,
+      totalUnits: products.filter((product) => !product.archivedAt).reduce((sum, product) => sum + Number(product.quantity || 0), 0),
+      lowStock: products.filter((product) => !product.archivedAt && product.stockStatus === "Low stock").length,
+      withImages: products.filter((product) => !product.archivedAt && product.imageUrl).length
     };
   }, [products]);
 
-  function startEdit(product) {
-    setSelectedId(product.id);
+  function populateForm(product) {
     setForm({
       id: product.id,
       sku: product.sku,
@@ -683,6 +798,13 @@ export default function App() {
       driveUrl: product.driveUrl ?? "",
       imageUrl: product.imageUrl ?? ""
     });
+  }
+
+  function handleProductSelect(product) {
+    setSelectedId(product.id);
+    if (adminActive) {
+      populateForm(product);
+    }
   }
 
   async function handleSignIn() {
@@ -715,7 +837,8 @@ export default function App() {
     }
     await supabase.auth.signOut();
     setForm(emptyForm);
-    setStatusMessage("Signed out. Customer browsing stays open, while editing is locked.");
+    setPublicScreen("landing");
+    setStatusMessage("Signed out. Customer browsing stays available, while editing is locked.");
   }
 
   async function handleSubmit(event) {
@@ -774,6 +897,7 @@ export default function App() {
       }
 
       setForm(emptyForm);
+      setActiveTab("products");
     } catch (error) {
       setStatusMessage(error.message || "Could not save the product.");
     } finally {
@@ -909,27 +1033,41 @@ export default function App() {
     }
   }
 
-  return (
-    <div className="app-shell">
-      <BrandHeader customerMode={customerMode} setCustomerMode={setCustomerMode} userEmail={userEmail} />
-      <HeroPanel customerMode={customerMode} selectedProduct={selectedProduct} stats={stats} statusMessage={statusMessage} />
-      <ControlBar
-        search={search}
-        setSearch={setSearch}
-        categoryFilter={categoryFilter}
-        setCategoryFilter={setCategoryFilter}
-        categories={categories}
-      />
-      {!customerMode ? (
-        <section className="control-bar archive-toggle-bar">
-          <button type="button" className={showArchived ? "filter-pill active" : "filter-pill"} onClick={() => setShowArchived((value) => !value)}>
-            {showArchived ? "Hide archived products" : "Show archived products"}
-          </button>
-        </section>
-      ) : null}
+  useEffect(() => {
+    setCategoryFilter("All");
+    setSearch("");
+  }, [activeTab, publicScreen]);
 
-      {!customerMode ? (
-        <section className="admin-grid">
+  const statsItems = [
+    { label: "Products", value: stats.totalProducts },
+    { label: "Units", value: stats.totalUnits },
+    { label: "Low stock", value: stats.lowStock },
+    { label: "With photos", value: stats.withImages }
+  ];
+
+  if (!adminActive && publicScreen === "landing") {
+    return (
+      <div className="app-shell">
+        <LandingView onAdmin={() => setPublicScreen("admin-auth")} onCustomer={() => setPublicScreen("customer")} />
+      </div>
+    );
+  }
+
+  if (!adminActive && publicScreen === "admin-auth") {
+    return (
+      <div className="app-shell">
+        <div className="screen-shell">
+          <ScreenHeader
+            eyebrow="Decorbeats"
+            title="Admin sign in"
+            subtitle="Use your approved admin email to unlock inventory management."
+            action={
+              <button type="button" className="ghost-button" onClick={() => setPublicScreen("landing")}>
+                Back
+              </button>
+            }
+          />
+          <StatusStrip statusMessage={statusMessage} />
           <AuthPanel
             email={authEmail}
             setEmail={setAuthEmail}
@@ -938,37 +1076,164 @@ export default function App() {
             onSignIn={handleSignIn}
             onSignOut={handleSignOut}
           />
-          {canManage ? (
-            <>
-              <ImportPanel importBusy={importBusy} onFileChange={handleCsvImport} />
-              <ProductForm
-                form={form}
-                setForm={setForm}
-                onSubmit={handleSubmit}
-                onReset={() => setForm(emptyForm)}
-                uploadBusy={uploadBusy}
-                saveBusy={saveBusy}
-                onFileChange={handleFileChange}
-              />
-              <ArchivePanel
-                product={selectedProduct}
-                archiveBusy={archiveBusy}
-                onArchive={(product) => handleArchiveToggle(product, true)}
-                onRestore={(product) => handleArchiveToggle(product, false)}
-              />
-            </>
-          ) : null}
-        </section>
-      ) : null}
+        </div>
+      </div>
+    );
+  }
 
-      <main className="content-grid">
-        <section className="catalog-grid">
-          {filteredProducts.map((product) => (
-            <ProductCard key={product.id} product={product} customerMode={customerMode} onSelect={startEdit} />
-          ))}
-        </section>
-        <DetailPanel product={selectedProduct} customerMode={customerMode} />
-      </main>
+  if (!adminActive && publicScreen === "customer") {
+    return (
+      <div className="app-shell">
+        <div className="screen-shell">
+          <ScreenHeader
+            eyebrow="Decorbeats Catalogue"
+            title="Customer products"
+            subtitle="Browse the current collection."
+            action={
+              <button type="button" className="ghost-button" onClick={() => setPublicScreen("landing")}>
+                Back
+              </button>
+            }
+          />
+          <CatalogSection
+            products={filteredProducts}
+            customerMode
+            onSelect={(product) => setSelectedId(product.id)}
+            selectedProduct={selectedProduct}
+            search={search}
+            setSearch={setSearch}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            categories={categories}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app-shell app-shell-admin">
+      <div className="screen-shell admin-shell">
+        <ScreenHeader
+          eyebrow="Decorbeats Admin"
+          title={
+            activeTab === "products"
+              ? "Products"
+              : activeTab === "add"
+                ? "Add or edit"
+                : activeTab === "low-stock"
+                  ? "Low stock"
+                  : "Settings"
+          }
+          subtitle={
+            activeTab === "products"
+              ? "Browse and edit the full catalog."
+              : activeTab === "add"
+                ? "Create products, update details, and add imagery."
+                : activeTab === "low-stock"
+                  ? "Focus on products that need replenishment."
+                  : "Import stock, manage archive visibility, and control access."
+          }
+          action={<div className="user-badge">{userEmail ? `Signed in: ${userEmail}` : "Local admin mode"}</div>}
+        />
+
+        {activeTab === "products" ? (
+          <>
+            <StatusStrip statusMessage={statusMessage} items={statsItems} />
+            <CatalogSection
+              products={filteredProducts}
+              customerMode={false}
+              onSelect={handleProductSelect}
+              selectedProduct={selectedProduct}
+              search={search}
+              setSearch={setSearch}
+              categoryFilter={categoryFilter}
+              setCategoryFilter={setCategoryFilter}
+              categories={categories}
+              archivedVisible={showArchived}
+            />
+          </>
+        ) : null}
+
+        {activeTab === "add" ? (
+          <section className="stack-grid">
+            <StatusStrip statusMessage={statusMessage} />
+            <ProductForm
+              form={form}
+              setForm={setForm}
+              onSubmit={handleSubmit}
+              onReset={() => setForm(emptyForm)}
+              uploadBusy={uploadBusy}
+              saveBusy={saveBusy}
+              onFileChange={handleFileChange}
+            />
+            <ArchivePanel
+              product={selectedProduct}
+              archiveBusy={archiveBusy}
+              onArchive={(product) => handleArchiveToggle(product, true)}
+              onRestore={(product) => handleArchiveToggle(product, false)}
+            />
+            <DetailPanel product={selectedProduct} customerMode={false} />
+          </section>
+        ) : null}
+
+        {activeTab === "low-stock" ? (
+          <>
+            <StatusStrip
+              statusMessage={statusMessage}
+              items={[
+                { label: "Low stock items", value: lowStockCatalog.filter((product) => !product.archivedAt || showArchived).length },
+                { label: "Archived shown", value: showArchived ? "Yes" : "No" }
+              ]}
+            />
+            <CatalogSection
+              products={filteredProducts}
+              customerMode={false}
+              onSelect={handleProductSelect}
+              selectedProduct={selectedProduct}
+              search={search}
+              setSearch={setSearch}
+              categoryFilter={categoryFilter}
+              setCategoryFilter={setCategoryFilter}
+              categories={categories}
+              archivedVisible={showArchived}
+            />
+          </>
+        ) : null}
+
+        {activeTab === "settings" ? (
+          <section className="stack-grid">
+            <StatusStrip statusMessage={statusMessage} items={statsItems} />
+            <AuthPanel
+              email={authEmail}
+              setEmail={setAuthEmail}
+              authBusy={authBusy}
+              userEmail={userEmail}
+              onSignIn={handleSignIn}
+              onSignOut={handleSignOut}
+            />
+            <ImportPanel importBusy={importBusy} onFileChange={handleCsvImport} />
+            <section className="panel-card admin-card settings-card">
+              <div className="section-head">
+                <div>
+                  <p className="eyebrow">Archive Visibility</p>
+                  <h3>Show archived products in admin lists</h3>
+                </div>
+              </div>
+              <p className="support-copy">Keep archived items hidden by default, or reveal them while restoring older products.</p>
+              <button
+                type="button"
+                className={showArchived ? "filter-pill active" : "filter-pill"}
+                onClick={() => setShowArchived((value) => !value)}
+              >
+                {showArchived ? "Hide archived products" : "Show archived products"}
+              </button>
+            </section>
+          </section>
+        ) : null}
+      </div>
+
+      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} lowStockCount={stats.lowStock} />
     </div>
   );
 }
