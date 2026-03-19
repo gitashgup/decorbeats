@@ -3,6 +3,7 @@ import { products as seedProducts } from "./data/products";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 const brandLogo = "/assets/brand/decorbeats-logo.svg";
+const WHATSAPP_NUMBER = "919XXXXXXXXX";
 
 const emptyForm = {
   id: "",
@@ -51,6 +52,17 @@ function GearIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path
         d="m19.14 12.94.04-.94-.04-.94 2.02-1.58a.7.7 0 0 0 .17-.9l-1.91-3.3a.7.7 0 0 0-.85-.3l-2.39.96a7.65 7.65 0 0 0-1.62-.94L14.2 2.4a.7.7 0 0 0-.69-.56h-3.02a.7.7 0 0 0-.69.56L9.44 5a7.65 7.65 0 0 0-1.62.94l-2.39-.96a.7.7 0 0 0-.85.3L2.67 8.58a.7.7 0 0 0 .17.9l2.02 1.58-.04.94.04.94-2.02 1.58a.7.7 0 0 0-.17.9l1.91 3.3a.7.7 0 0 0 .85.3l2.39-.96c.5.38 1.05.7 1.62.94l.36 2.6a.7.7 0 0 0 .69.56h3.02a.7.7 0 0 0 .69-.56l.36-2.6c.57-.24 1.12-.56 1.62-.94l2.39.96a.7.7 0 0 0 .85-.3l1.91-3.3a.7.7 0 0 0-.17-.9l-2.02-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M10.5 4a6.5 6.5 0 1 0 4.06 11.58l4.43 4.42 1.41-1.41-4.42-4.43A6.5 6.5 0 0 0 10.5 4Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"
         fill="currentColor"
       />
     </svg>
@@ -127,6 +139,17 @@ function CameraIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path
         d="M9 4.5 7.8 6H5.5A2.5 2.5 0 0 0 3 8.5v9A2.5 2.5 0 0 0 5.5 20h13a2.5 2.5 0 0 0 2.5-2.5v-9A2.5 2.5 0 0 0 18.5 6h-2.3L15 4.5H9Zm3 12.2a4.2 4.2 0 1 1 0-8.4 4.2 4.2 0 0 1 0 8.4Zm0-1.8a2.4 2.4 0 1 0 0-4.8 2.4 2.4 0 0 0 0 4.8Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function WhatsAppIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12.04 3.5a8.47 8.47 0 0 0-7.28 12.8L3.5 20.5l4.33-1.23A8.47 8.47 0 1 0 12.04 3.5Zm0 1.9a6.57 6.57 0 0 1 5.64 9.93l-.18.29.74 2.56-2.63-.7-.28.17a6.57 6.57 0 1 1-3.29-12.15Zm-3.1 3.43c-.17 0-.43.06-.66.31-.23.25-.88.86-.88 2.1 0 1.23.9 2.42 1.02 2.59.12.17 1.76 2.82 4.35 3.84 2.14.84 2.6.67 3.06.6.46-.08 1.48-.6 1.69-1.18.21-.58.21-1.08.15-1.18-.06-.1-.23-.17-.48-.29-.25-.12-1.48-.73-1.71-.81-.23-.08-.39-.12-.56.12-.17.25-.65.81-.8.98-.15.17-.29.19-.54.06-.25-.12-1.06-.39-2.03-1.26-.75-.67-1.26-1.5-1.4-1.75-.15-.25-.02-.39.1-.52.11-.11.25-.29.37-.44.12-.15.17-.25.25-.42.08-.17.04-.31-.02-.44-.06-.12-.56-1.35-.77-1.85-.2-.47-.4-.4-.56-.4h-.48Z"
         fill="currentColor"
       />
     </svg>
@@ -542,6 +565,140 @@ function AppInfoCard({ lastSyncLabel }) {
       </div>
       <p className="support-copy">Last sync: {lastSyncLabel}</p>
     </section>
+  );
+}
+
+function CustomerHeader({ scrolled, onSearchTap }) {
+  return (
+    <header className={scrolled ? "customer-header scrolled" : "customer-header"}>
+      <img src={brandLogo} alt="Decorbeats" className="customer-header-logo" />
+      <button type="button" className="customer-header-search" aria-label="Search products" onClick={onSearchTap}>
+        <SearchIcon />
+      </button>
+    </header>
+  );
+}
+
+function CustomerHero({ featuredProduct, onShop }) {
+  return (
+    <section
+      className="customer-hero"
+      style={
+        featuredProduct?.imageUrl
+          ? {
+              backgroundImage: `linear-gradient(180deg, rgba(245, 237, 227, 0.72), rgba(236, 224, 210, 0.92)), url(${featuredProduct.imageUrl})`
+            }
+          : undefined
+      }
+    >
+      <div className="customer-hero-copy">
+        <p className="eyebrow">Decorbeats</p>
+        <h1>Handcrafted gifts for every celebration.</h1>
+        <p>Brass, metal & artisanal decor - made to be gifted.</p>
+        <button type="button" className="primary-button customer-hero-cta" onClick={onShop}>
+          Shop the Collection
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function CustomerCategoryBar({ categories, categoryFilter, setCategoryFilter }) {
+  return (
+    <section className="customer-category-row" aria-label="Browse categories">
+      {categories.map((category) => (
+        <button
+          key={category}
+          type="button"
+          className={category === categoryFilter ? "customer-category-chip active" : "customer-category-chip"}
+          onClick={() => setCategoryFilter(category)}
+        >
+          {category}
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function CustomerProductCard({ product, onSelect }) {
+  const showLowStock = product.quantity > 0 && product.quantity <= 5;
+  return (
+    <button type="button" className="customer-product-card" onClick={() => onSelect(product)}>
+      <div className="customer-product-image-wrap">
+        {product.imageUrl ? (
+          <img className="customer-product-image" src={product.imageUrl} alt={product.name} loading="lazy" />
+        ) : (
+          <div className="customer-product-image customer-product-fallback">
+            <span>{product.category}</span>
+          </div>
+        )}
+      </div>
+      <div className="customer-product-copy">
+        <h3>{product.name}</h3>
+        {hasDisplayValue(product.pricing.mrp) ? <p className="customer-price">{formatCurrency(product.pricing.mrp)}</p> : null}
+        {showLowStock ? <span className="customer-low-stock">Low stock</span> : null}
+      </div>
+    </button>
+  );
+}
+
+function CustomerSheet({ product, onClose, onShare }) {
+  if (!product) {
+    return (
+      <div className="customer-sheet-overlay" aria-hidden="true">
+        <aside className="customer-sheet" />
+      </div>
+    );
+  }
+
+  const whatsappMessage = encodeURIComponent(
+    `Hi, I'm interested in ${product.name} (SKU: ${product.sku}). Is it available?`
+  );
+  const whatsappLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${whatsappMessage}`;
+  const showDescription = product.notes && product.notes.trim() !== product.name.trim();
+
+  return (
+    <div className="customer-sheet-overlay open" onClick={onClose}>
+      <aside className="customer-sheet open" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="customer-sheet-handle" aria-label="Close product details" onClick={onClose} />
+        <div className="customer-sheet-image-wrap">
+          {product.imageUrl ? (
+            <img className="customer-sheet-image" src={product.imageUrl} alt={product.name} loading="lazy" />
+          ) : (
+            <div className="customer-sheet-image customer-product-fallback">
+              <span>{product.category}</span>
+            </div>
+          )}
+        </div>
+        <div className="customer-sheet-copy">
+          <h2>{product.name}</h2>
+          <p className="customer-sheet-meta">
+            {product.category} · {product.material}
+          </p>
+          {hasDisplayValue(product.pricing.mrp) ? <p className="customer-sheet-price">{formatCurrency(product.pricing.mrp)}</p> : null}
+          {showDescription ? <p className="customer-sheet-description">{product.notes}</p> : null}
+          <a className="customer-whatsapp-button" href={whatsappLink} target="_blank" rel="noreferrer">
+            <WhatsAppIcon />
+            <span>Enquire on WhatsApp</span>
+          </a>
+          <button type="button" className="customer-share-link" onClick={() => onShare(product)}>
+            Share
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function CustomerFooter({ onAdmin }) {
+  return (
+    <footer className="customer-footer">
+      <img src={brandLogo} alt="Decorbeats" className="customer-footer-logo" />
+      <p>Artisanal decor, gifted with love.</p>
+      <button type="button" className="customer-admin-link" onClick={onAdmin}>
+        Are you the owner? Sign in →
+      </button>
+    </footer>
   );
 }
 
@@ -1093,12 +1250,15 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [session, setSession] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
-  const [publicScreen, setPublicScreen] = useState("landing");
+  const [publicScreen, setPublicScreen] = useState("customer");
   const [activeTab, setActiveTab] = useState("products");
   const [lastSyncAt, setLastSyncAt] = useState(null);
   const [csvPreviewRows, setCsvPreviewRows] = useState([]);
   const [csvPreviewPayload, setCsvPreviewPayload] = useState([]);
   const [csvPreviewFileName, setCsvPreviewFileName] = useState("");
+  const [customerHeaderElevated, setCustomerHeaderElevated] = useState(false);
+  const productGridRef = useRef(null);
+  const customerSearchRef = useRef(null);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -1156,9 +1316,23 @@ export default function App() {
 
   useEffect(() => {
     if (adminActive) {
-      setPublicScreen("landing");
+      setPublicScreen("customer");
       setActiveTab("products");
     }
+  }, [adminActive]);
+
+  useEffect(() => {
+    if (adminActive) {
+      return undefined;
+    }
+
+    function handleScroll() {
+      setCustomerHeaderElevated(window.scrollY > 8);
+    }
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, [adminActive]);
 
   const customerCatalog = useMemo(() => products.filter((product) => !product.archivedAt), [products]);
@@ -1238,6 +1412,15 @@ export default function App() {
   function handleEditProduct(product) {
     handleProductSelect(product);
     setActiveTab("add");
+  }
+
+  function handleScrollToCollection() {
+    productGridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function handleFocusCustomerSearch() {
+    customerSearchRef.current?.focus();
+    customerSearchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
   async function handleDetailEdit(product, draft) {
@@ -1404,7 +1587,8 @@ export default function App() {
     }
     await supabase.auth.signOut();
     setForm(emptyForm);
-    setPublicScreen("landing");
+    setPublicScreen("customer");
+    setSelectedId(null);
     setStatusMessage("Signed out. Customer browsing stays available, while editing is locked.");
   }
 
@@ -1649,11 +1833,9 @@ export default function App() {
       }).format(new Date(lastSyncAt))
     : "Not synced yet";
 
-  const rootElement = !adminActive && publicScreen === "landing" ? (
-    <div className="app-shell">
-      <LandingView onAdmin={() => setPublicScreen("admin-auth")} onCustomer={() => setPublicScreen("customer")} />
-    </div>
-  ) : !adminActive && publicScreen === "admin-auth" ? (
+  const featuredCustomerProduct = customerCatalog.find((product) => product.imageUrl) || customerCatalog[0] || null;
+
+  const rootElement = !adminActive && publicScreen === "admin-auth" ? (
     <div className="app-shell">
       <div className="screen-shell">
         <ScreenHeader
@@ -1661,7 +1843,7 @@ export default function App() {
           title="Admin sign in"
           subtitle="Use your approved admin email to unlock inventory management."
           action={
-            <button type="button" className="ghost-button" onClick={() => setPublicScreen("landing")}>
+            <button type="button" className="ghost-button" onClick={() => setPublicScreen("customer")}>
               Back
             </button>
           }
@@ -1677,38 +1859,32 @@ export default function App() {
         />
       </div>
     </div>
-  ) : !adminActive && publicScreen === "customer" ? (
-    <div className="app-shell">
-      <div className="screen-shell">
-        <ScreenHeader
-          eyebrow="Decorbeats Catalogue"
-          title="Customer products"
-          subtitle="Browse the current collection."
-          action={
-            <button type="button" className="ghost-button" onClick={() => setPublicScreen("landing")}>
-              Back
-            </button>
-          }
-        />
-        <CatalogSection
-          products={filteredProducts}
-          customerMode
-          onSelect={handleProductSelect}
-          selectedId={selectedId}
-          canManage={false}
-          onEdit={() => {}}
-          onShare={handleShareProduct}
-          onArchiveToggle={() => {}}
-          onInlineEdit={() => {}}
-          onInlineImageReplace={() => {}}
-          imageBusy={false}
-          search={search}
-          setSearch={setSearch}
-          categoryFilter={categoryFilter}
-          setCategoryFilter={setCategoryFilter}
-          categories={categories}
-        />
-      </div>
+  ) : !adminActive ? (
+    <div className="customer-page">
+      <CustomerHeader scrolled={customerHeaderElevated} onSearchTap={handleFocusCustomerSearch} />
+      <main className="customer-main">
+        <CustomerHero featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
+        <section className="customer-catalog-shell" ref={productGridRef}>
+          <CustomerCategoryBar categories={categories} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} />
+          <div className="customer-search-row">
+            <input
+              ref={customerSearchRef}
+              className="customer-search-input"
+              type="search"
+              placeholder="Search the collection"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          <section className="customer-product-grid">
+            {filteredProducts.map((product) => (
+              <CustomerProductCard key={product.id} product={product} onSelect={handleProductSelect} />
+            ))}
+          </section>
+        </section>
+        <CustomerFooter onAdmin={() => setPublicScreen("admin-auth")} />
+      </main>
+      <CustomerSheet product={selectedProduct} onClose={() => setSelectedId(null)} onShare={handleShareProduct} />
     </div>
   ) : (
     <div className="app-shell app-shell-admin">
