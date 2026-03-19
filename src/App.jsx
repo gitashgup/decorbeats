@@ -714,7 +714,6 @@ function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImag
         <div>
           <h3>{product.name}</h3>
         </div>
-        <span className={`stock-pill ${product.stockStatus !== "In stock" ? "warn" : ""}`}>{product.stockStatus}</span>
       </div>
       {!editing ? (
         <>
@@ -757,8 +756,8 @@ function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImag
               </div>
             ) : null}
           </div>
-          {product.notes ? <p className="detail-note">{product.notes}</p> : null}
-            {canManage && !customerMode ? (
+          {product.notes && product.notes.trim() !== product.name.trim() ? <p className="detail-note">{product.notes}</p> : null}
+          {canManage && !customerMode ? (
             <div className="detail-actions detail-actions-inline">
               <button type="button" className="ghost-button detail-action-button" onClick={() => setEditing(true)}>
                 Edit Product
@@ -834,18 +833,6 @@ function DetailPanel({ product, customerMode, canManage, onEdit, onShare, onImag
           </div>
         </form>
       ) : null}
-      <div className="detail-links">
-        {product.imageUrl ? (
-          <a className="ghost-button" href={product.imageUrl} target="_blank" rel="noreferrer">
-            Open image
-          </a>
-        ) : null}
-        {product.driveUrl ? (
-          <a className="ghost-button" href={product.driveUrl} target="_blank" rel="noreferrer">
-            Open Drive folder
-          </a>
-        ) : null}
-      </div>
     </aside>
   );
 }
