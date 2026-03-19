@@ -180,6 +180,23 @@ h3 {
   border-color: var(--line);
 }
 
+.danger-button {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #b14f30, #8f2f17);
+  color: #fff7ef;
+  padding: 0.8rem 1rem;
+  box-shadow: 0 10px 30px rgba(143, 47, 23, 0.18);
+}
+
+.danger-button:disabled,
+.ghost-button:disabled,
+.primary-button:disabled,
+.upload-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .upload-button {
   position: relative;
   overflow: hidden;
@@ -299,6 +316,12 @@ h3 {
 .control-bar {
   padding: 1rem;
   margin-bottom: 1rem;
+}
+
+.archive-toggle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .search-input,
@@ -533,6 +556,14 @@ h3 {
   .filter-pills {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .archive-toggle-bar {
+    justify-content: stretch;
+  }
+
+  .archive-toggle-bar .filter-pill {
+    width: 100%;
   }
 
   .hero-panel,

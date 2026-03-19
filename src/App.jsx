@@ -75,6 +75,7 @@ function toProduct(raw, index = 0) {
     driveUrl: raw.driveUrl ?? raw.drive_url ?? "",
     imageUrl: raw.imageUrl ?? raw.image_url ?? "",
     notes: raw.notes ?? "",
+    archivedAt: raw.archivedAt ?? raw.archived_at ?? null,
     pricing: {
       unitCost: raw.pricing?.unitCost ?? raw.unit_cost ?? null,
       mrp: raw.pricing?.mrp ?? raw.mrp ?? null,
@@ -426,6 +427,36 @@ function ProductForm({ form, setForm, onSubmit, onReset, uploadBusy, saveBusy, o
   );
 }
 
+function ArchivePanel({ product, onArchive, onRestore, archiveBusy }) {
+  if (!product) {
+    return null;
+  }
+
+  return (
+    <section className="panel-card admin-card">
+      <div className="section-head">
+        <div>
+          <p className="eyebrow">Product Status</p>
+          <h3>{product.archivedAt ? "Archived product" : "Archive this product"}</h3>
+        </div>
+      </div>
+      <p className="support-copy">
+        {product.archivedAt
+          ? "This product is hidden from the live catalog but can be restored at any time."
+          : "Archive removes the product from normal admin and customer views without deleting its data."}
+      </p>
+      <button
+        type="button"
+        className={product.archivedAt ? "ghost-button" : "danger-button"}
+        disabled={archiveBusy}
+        onClick={() => (product.archivedAt ? onRestore(product) : onArchive(product))}
+      >
+        {archiveBusy ? "Updating..." : product.archivedAt ? "Restore product" : "Archive product"}
+      </button>
+    </section>
+  );
+}
+
 function ProductCard({ product, customerMode, onSelect }) {
   return (
     <article className="product-card" onClick={() => onSelect(product)}>
@@ -543,8 +574,10 @@ export default function App() {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
+  const [archiveBusy, setArchiveBusy] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [session, setSession] = useState(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -598,17 +631,27 @@ export default function App() {
   const canManage = Boolean(userEmail) || !isSupabaseConfigured;
 
   const categories = useMemo(() => {
-    return ["All", ...new Set(products.map((product) => product.category).filter(Boolean).sort((left, right) => left.localeCompare(right)))];
-  }, [products]);
+    return [
+      "All",
+      ...new Set(
+        products
+          .filter((product) => showArchived || !product.archivedAt)
+          .map((product) => product.category)
+          .filter(Boolean)
+          .sort((left, right) => left.localeCompare(right))
+      )
+    ];
+  }, [products, showArchived]);
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
+      const matchesArchive = showArchived ? true : !product.archivedAt;
       const haystack = [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase();
       const matchesSearch = haystack.includes(search.toLowerCase());
       const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
-      return matchesSearch && matchesCategory;
+      return matchesArchive && matchesSearch && matchesCategory;
     });
-  }, [categoryFilter, products, search]);
+  }, [categoryFilter, products, search, showArchived]);
 
   const selectedProduct =
     filteredProducts.find((product) => product.id === selectedId) ||
@@ -828,6 +871,44 @@ export default function App() {
     }
   }
 
+  async function handleArchiveToggle(product, archived) {
+    if (!canManage) {
+      setStatusMessage("Sign in first to archive or restore products.");
+      return;
+    }
+
+    setArchiveBusy(true);
+    try {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("products")
+          .update({ archived_at: archived ? new Date().toISOString() : null })
+          .eq("id", product.id)
+          .select()
+          .single();
+        if (error) {
+          throw error;
+        }
+
+        const normalized = toProduct(data);
+        setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+        setSelectedId(normalized.id);
+        setStatusMessage(archived ? `${product.name} archived.` : `${product.name} restored.`);
+      } else {
+        setProducts((current) =>
+          current.map((item) =>
+            item.id === product.id ? { ...item, archivedAt: archived ? new Date().toISOString() : null } : item
+          )
+        );
+        setStatusMessage(archived ? `${product.name} archived locally.` : `${product.name} restored locally.`);
+      }
+    } catch (error) {
+      setStatusMessage(error.message || "Could not update archive status.");
+    } finally {
+      setArchiveBusy(false);
+    }
+  }
+
   return (
     <div className="app-shell">
       <BrandHeader customerMode={customerMode} setCustomerMode={setCustomerMode} userEmail={userEmail} />
@@ -839,6 +920,13 @@ export default function App() {
         setCategoryFilter={setCategoryFilter}
         categories={categories}
       />
+      {!customerMode ? (
+        <section className="control-bar archive-toggle-bar">
+          <button type="button" className={showArchived ? "filter-pill active" : "filter-pill"} onClick={() => setShowArchived((value) => !value)}>
+            {showArchived ? "Hide archived products" : "Show archived products"}
+          </button>
+        </section>
+      ) : null}
 
       {!customerMode ? (
         <section className="admin-grid">
@@ -861,6 +949,12 @@ export default function App() {
                 uploadBusy={uploadBusy}
                 saveBusy={saveBusy}
                 onFileChange={handleFileChange}
+              />
+              <ArchivePanel
+                product={selectedProduct}
+                archiveBusy={archiveBusy}
+                onArchive={(product) => handleArchiveToggle(product, true)}
+                onRestore={(product) => handleArchiveToggle(product, false)}
               />
             </>
           ) : null}
