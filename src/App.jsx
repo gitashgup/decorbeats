@@ -701,6 +701,19 @@ function CustomerProductCard({ product, onSelect }) {
 }
 
 function CustomerSheet({ product, onClose, onShare }) {
+  const [closing, setClosing] = useState(false);
+  const closeTimerRef = useRef(null);
+  const dragStartRef = useRef(null);
+
+  useEffect(() => {
+    setClosing(false);
+    return () => {
+      if (closeTimerRef.current) {
+        window.clearTimeout(closeTimerRef.current);
+      }
+    };
+  }, [product?.id]);
+
   if (!product) {
     return (
       <div className="customer-sheet-overlay" aria-hidden="true">
@@ -715,11 +728,45 @@ function CustomerSheet({ product, onClose, onShare }) {
   const whatsappLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${whatsappMessage}`;
   const showDescription = product.notes && product.notes.trim() !== product.name.trim();
   const occasionLine = showDescription ? product.notes.trim() : "";
+  const dismissSheet = () => {
+    if (closing) {
+      return;
+    }
+    setClosing(true);
+    closeTimerRef.current = window.setTimeout(() => {
+      onClose();
+    }, 300);
+  };
 
   return (
-    <div className="customer-sheet-overlay open" onClick={onClose}>
-      <aside className="customer-sheet open" onClick={(event) => event.stopPropagation()}>
-        <button type="button" className="customer-sheet-handle" aria-label="Close product details" onClick={onClose} />
+    <div className={closing ? "customer-sheet-overlay open closing" : "customer-sheet-overlay open"} onClick={dismissSheet}>
+      <aside
+        className={closing ? "customer-sheet open closing" : "customer-sheet open"}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button
+          type="button"
+          className="customer-sheet-handle"
+          aria-label="Close product details"
+          onClick={dismissSheet}
+          onTouchStart={(event) => {
+            const touch = event.touches[0];
+            dragStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+          }}
+          onTouchEnd={(event) => {
+            const start = dragStartRef.current;
+            const touch = event.changedTouches[0];
+            dragStartRef.current = null;
+            if (!start || !touch) {
+              return;
+            }
+            const deltaX = touch.clientX - start.x;
+            const deltaY = touch.clientY - start.y;
+            if (deltaY > 80 && Math.abs(deltaY) > Math.abs(deltaX)) {
+              dismissSheet();
+            }
+          }}
+        />
         <CustomerImageCarousel product={product} />
         <div className="customer-sheet-copy">
           <h2>{product.name}</h2>

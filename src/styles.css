@@ -372,6 +372,10 @@ h3 {
   pointer-events: auto;
 }
 
+.customer-sheet-overlay.closing {
+  background: rgba(44, 24, 16, 0);
+}
+
 .customer-sheet {
   position: absolute;
   left: 0;
@@ -389,6 +393,10 @@ h3 {
 
 .customer-sheet.open {
   transform: translateY(0);
+}
+
+.customer-sheet.closing {
+  transform: translateY(100%);
 }
 
 .customer-carousel {
@@ -416,6 +424,9 @@ h3 {
   background: rgba(44, 24, 16, 0.18);
   margin: 0 auto 0.85rem;
   display: block;
+  appearance: none;
+  cursor: grab;
+  touch-action: none;
 }
 
 .customer-sheet-image-wrap {
