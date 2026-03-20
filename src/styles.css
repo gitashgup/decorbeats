@@ -435,8 +435,8 @@ h3 {
 
 @media (min-width: 768px) {
   .desktop-reveal {
-    opacity: 0;
-    transform: translateY(20px);
+    opacity: 1;
+    transform: none;
     transition:
       opacity 500ms ease,
       transform 500ms ease;
