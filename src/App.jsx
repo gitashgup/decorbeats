@@ -649,7 +649,7 @@ function ControlBar({ search, setSearch, categoryFilter, setCategoryFilter, cate
   );
 }
 
-function AuthPanel({ email, setEmail, authBusy, userEmail, onSignIn, onSignOut }) {
+function AuthPanel({ email, setEmail, password, setPassword, authBusy, userEmail, onSignIn, onSignOut }) {
   return (
     <section className="panel-card admin-card">
       <div className="section-head">
@@ -674,8 +674,15 @@ function AuthPanel({ email, setEmail, authBusy, userEmail, onSignIn, onSignOut }
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
+          <input
+            className="search-input"
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
           <button type="button" className="primary-button" disabled={authBusy} onClick={onSignIn}>
-            {authBusy ? "Sending..." : "Send magic link"}
+            {authBusy ? "Signing in..." : "Sign In"}
           </button>
         </div>
       )}
@@ -2090,7 +2097,9 @@ export default function App() {
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [inquiryBusy, setInquiryBusy] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [showArchived, setShowArchived] = useState(false);
   const [publicScreen, setPublicScreen] = useState("customer");
   const [activeTab, setActiveTab] = useState("products");
@@ -2120,16 +2129,24 @@ export default function App() {
 
     let cancelled = false;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!cancelled) {
-        setSession(data.session ?? null);
-      }
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (!cancelled) {
+          setSession(data.session ?? null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAuthReady(true);
+        }
+      });
 
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession ?? null);
+      setAuthReady(true);
     });
 
     async function loadProducts() {
@@ -2739,24 +2756,23 @@ export default function App() {
   }
 
   async function handleSignIn() {
-    if (!isSupabaseConfigured || !authEmail) {
+    if (!isSupabaseConfigured || !authEmail || !authPassword) {
       return;
     }
 
     setAuthBusy(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
+      const { error } = await supabase.auth.signInWithPassword({
         email: authEmail,
-        options: {
-          emailRedirectTo: window.location.origin
-        }
+        password: authPassword
       });
       if (error) {
         throw error;
       }
-      setStatusMessage(`Magic link sent to ${authEmail}. Use the newest email to sign in on this device.`);
+      setStatusMessage(`Signed in as ${authEmail}.`);
+      setAuthPassword("");
     } catch (error) {
-      setStatusMessage(error.message || "Could not send sign-in link.");
+      setStatusMessage(error.message || "Could not sign in.");
     } finally {
       setAuthBusy(false);
     }
@@ -3046,13 +3062,23 @@ export default function App() {
 
   const featuredCustomerProduct = customerCatalog.find((product) => getProductImages(product).length) || customerCatalog[0] || null;
 
+  if (!authReady) {
+    return (
+      <div className="app-shell">
+        <div className="screen-shell">
+          <StatusStrip statusMessage="Restoring your session..." />
+        </div>
+      </div>
+    );
+  }
+
   const rootElement = !adminActive && publicScreen === "admin-auth" ? (
     <div className="app-shell">
       <div className="screen-shell">
         <ScreenHeader
           eyebrow="Decorbeats"
           title="Admin sign in"
-          subtitle="Use your approved admin email to unlock inventory management."
+          subtitle="Sign in with your admin email and password to unlock inventory management."
           action={
             <button type="button" className="ghost-button" onClick={() => setPublicScreen("customer")}>
               Back
@@ -3063,6 +3089,8 @@ export default function App() {
         <AuthPanel
           email={authEmail}
           setEmail={setAuthEmail}
+          password={authPassword}
+          setPassword={setAuthPassword}
           authBusy={authBusy}
           userEmail={userEmail}
           onSignIn={handleSignIn}

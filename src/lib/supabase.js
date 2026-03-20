@@ -9,7 +9,10 @@ export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
-        autoRefreshToken: true
+        storageKey: "decorbeats-auth",
+        storage: typeof window !== "undefined" ? window.localStorage : undefined,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
       }
     })
   : null;
