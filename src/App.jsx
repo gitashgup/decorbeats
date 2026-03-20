@@ -5,6 +5,7 @@ import { isSupabaseConfigured, supabase } from "./lib/supabase";
 const brandLogo = "/assets/brand/decorbeats-logo.svg";
 const WHATSAPP_NUMBER = "919XXXXXXXXX";
 const PRODUCT_STORAGE_BUCKET = "products";
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 const ANNOUNCEMENTS = [
   "✦ Summer Sale — Up to 30% off selected items",
   "✦ Bulk orders welcome · 50 to 400+ units",
@@ -12,6 +13,26 @@ const ANNOUNCEMENTS = [
   "✦ WhatsApp us for custom gifting solutions",
   "✦ New arrivals added weekly"
 ];
+const INQUIRY_SYSTEM_PROMPT = `You are a data extraction assistant for Decorbeats, an Indian gifting and decor business. Extract structured information from this sales inquiry transcript. Return ONLY a valid JSON object, no explanation, no markdown.
+
+Fields to extract:
+{
+  "customer_name": string or null,
+  "customer_phone": string or null,
+  "source": "phone" | "whatsapp" | "walkin",
+  "occasion": string or null,
+  "required_by_date": string or null,
+  "budget_per_unit": number or null,
+  "total_budget": number or null,
+  "notes": string or null,
+  "products": [
+    {
+      "product_name": string,
+      "quantity_requested": number or null,
+      "quoted_price": number or null
+    }
+  ]
+}`;
 
 const emptyForm = {
   id: "",
@@ -26,6 +47,18 @@ const emptyForm = {
   notes: "",
   driveUrl: "",
   imageUrl: ""
+};
+
+const emptyInquiryDraft = {
+  customer_name: "",
+  customer_phone: "",
+  source: "phone",
+  occasion: "",
+  required_by_date: "",
+  budget_per_unit: "",
+  total_budget: "",
+  notes: "",
+  products: [{ product_name: "", matched_sku: "", quantity_requested: "", quoted_price: "" }]
 };
 
 const inquiryStatusOrder = ["new", "quoted", "converted", "lost"];
@@ -59,6 +92,80 @@ function toInquiry(raw) {
 function formatInquiryStatus(status) {
   const normalized = safeText(status, "new").toLowerCase();
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function createEmptyInquiryDraft() {
+  return JSON.parse(JSON.stringify(emptyInquiryDraft));
+}
+
+function normalizeInquiryDraft(payload, products = []) {
+  const normalizedProducts = Array.isArray(payload?.products) && payload.products.length ? payload.products : emptyInquiryDraft.products;
+  return {
+    customer_name: safeText(payload?.customer_name),
+    customer_phone: safeText(payload?.customer_phone),
+    source: ["phone", "whatsapp", "walkin"].includes(safeText(payload?.source).toLowerCase())
+      ? safeText(payload?.source).toLowerCase()
+      : "phone",
+    occasion: safeText(payload?.occasion),
+    required_by_date: safeText(payload?.required_by_date),
+    budget_per_unit: payload?.budget_per_unit ?? "",
+    total_budget: payload?.total_budget ?? "",
+    notes: safeText(payload?.notes),
+    products: normalizedProducts.map((item) => {
+      const productName = safeText(item?.product_name);
+      const matched = findMatchingProduct(products, productName);
+      return {
+        product_name: productName,
+        matched_sku: matched?.sku ?? "",
+        quantity_requested: item?.quantity_requested ?? "",
+        quoted_price: item?.quoted_price ?? ""
+      };
+    })
+  };
+}
+
+function scoreProductMatch(product, query) {
+  if (!query) {
+    return 0;
+  }
+  const normalizedQuery = query.toLowerCase();
+  const name = safeText(product.name).toLowerCase();
+  const sku = safeText(product.sku).toLowerCase();
+  if (name === normalizedQuery || sku === normalizedQuery) {
+    return 100;
+  }
+  let score = 0;
+  if (name.includes(normalizedQuery)) {
+    score += 70;
+  }
+  if (normalizedQuery.includes(name) && name) {
+    score += 35;
+  }
+  if (sku.includes(normalizedQuery) || normalizedQuery.includes(sku)) {
+    score += 45;
+  }
+  normalizedQuery.split(/\s+/).forEach((token) => {
+    if (token && name.includes(token)) {
+      score += 8;
+    }
+  });
+  return score;
+}
+
+function findMatchingProduct(products, query) {
+  if (!query) {
+    return null;
+  }
+  let best = null;
+  let bestScore = 0;
+  products.forEach((product) => {
+    const score = scoreProductMatch(product, query);
+    if (score > bestScore) {
+      best = product;
+      bestScore = score;
+    }
+  });
+  return bestScore >= 40 ? best : null;
 }
 
 function GridIcon() {
@@ -811,6 +918,247 @@ function InquiriesScreen({
         )}
       </section>
     </section>
+  );
+}
+
+function InquiryRecorderModal({
+  open,
+  supportsSpeechRecognition,
+  products,
+  isListening,
+  transcript,
+  manualTranscript,
+  setManualTranscript,
+  step,
+  draft,
+  setDraft,
+  errorMessage,
+  busy,
+  onStartListening,
+  onStopAndProcess,
+  onCancel,
+  onBack,
+  onSave,
+  onProductNameChange,
+  onProductFieldChange,
+  onAddProductRow,
+  onRemoveProductRow
+}) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="inquiry-modal-overlay" onClick={onCancel}>
+      <div className="inquiry-modal" onClick={(event) => event.stopPropagation()}>
+        {step === "record" ? (
+          <div className="inquiry-modal-body">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">New Inquiry</p>
+                <h3>Capture inquiry details</h3>
+              </div>
+            </div>
+            {supportsSpeechRecognition ? (
+              <>
+                <button
+                  type="button"
+                  className={isListening ? "mic-record-button active" : "mic-record-button"}
+                  onClick={onStartListening}
+                >
+                  <MicIcon />
+                </button>
+                <p className="support-copy inquiry-recorder-copy">
+                  {isListening ? "Listening in English (India)..." : "Tap the mic to start recording."}
+                </p>
+                <div className="transcript-box">{transcript || "Live transcript will appear here as you speak."}</div>
+              </>
+            ) : (
+              <>
+                <label className="inquiry-textarea-label">
+                  Type your inquiry here
+                  <textarea
+                    rows="9"
+                    value={manualTranscript}
+                    onChange={(event) => setManualTranscript(event.target.value)}
+                    placeholder="Capture the customer inquiry details here..."
+                  />
+                </label>
+              </>
+            )}
+            {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
+            <div className="detail-edit-actions">
+              <button type="button" className="primary-button detail-save-button" disabled={busy} onClick={onStopAndProcess}>
+                Done
+              </button>
+              <button type="button" className="detail-cancel-link" onClick={onCancel}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {step === "extracting" ? (
+          <div className="inquiry-modal-body inquiry-loading-state">
+            <div className="spinner-ring" />
+            <p>Extracting details...</p>
+          </div>
+        ) : null}
+
+        {step === "confirm" ? (
+          <form
+            className="inquiry-modal-body inquiry-confirm-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSave();
+            }}
+          >
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Confirm Inquiry</p>
+                <h3>Review before saving</h3>
+              </div>
+            </div>
+            {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
+            <label>
+              Customer name
+              <input
+                value={draft.customer_name}
+                onChange={(event) => setDraft((current) => ({ ...current, customer_name: event.target.value }))}
+              />
+            </label>
+            <label>
+              Customer phone
+              <input
+                value={draft.customer_phone}
+                onChange={(event) => setDraft((current) => ({ ...current, customer_phone: event.target.value }))}
+              />
+            </label>
+            <label>
+              Source
+              <select
+                value={draft.source}
+                onChange={(event) => setDraft((current) => ({ ...current, source: event.target.value }))}
+              >
+                <option value="phone">Phone</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="walkin">Walk-in</option>
+              </select>
+            </label>
+            <label>
+              Occasion
+              <input
+                value={draft.occasion}
+                onChange={(event) => setDraft((current) => ({ ...current, occasion: event.target.value }))}
+              />
+            </label>
+            <label>
+              Required by date
+              <input
+                value={draft.required_by_date}
+                onChange={(event) => setDraft((current) => ({ ...current, required_by_date: event.target.value }))}
+              />
+            </label>
+            <label>
+              Budget per unit
+              <div className="rupee-field">
+                <span>₹</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={draft.budget_per_unit}
+                  onChange={(event) => setDraft((current) => ({ ...current, budget_per_unit: event.target.value }))}
+                />
+              </div>
+            </label>
+            <label>
+              Total budget
+              <div className="rupee-field">
+                <span>₹</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={draft.total_budget}
+                  onChange={(event) => setDraft((current) => ({ ...current, total_budget: event.target.value }))}
+                />
+              </div>
+            </label>
+            <label className="span-2">
+              Notes
+              <textarea
+                rows="4"
+                value={draft.notes}
+                onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+              />
+            </label>
+            <div className="inquiry-products-editor span-2">
+              <div className="section-head">
+                <div>
+                  <p className="eyebrow">Products</p>
+                  <h3>Items requested</h3>
+                </div>
+                <button type="button" className="ghost-button" onClick={onAddProductRow}>
+                  Add item
+                </button>
+              </div>
+              <div className="inquiry-product-editor-list">
+                {draft.products.map((item, index) => (
+                  <div key={`draft-item-${index}`} className="inquiry-product-editor-card">
+                    <label>
+                      Product name
+                      <input
+                        value={item.product_name}
+                        onChange={(event) => onProductNameChange(index, event.target.value)}
+                      />
+                    </label>
+                    {item.matched_sku ? <span className="matched-sku-badge">{item.matched_sku}</span> : null}
+                    <div className="inquiry-inline-fields">
+                      <label>
+                        Quantity
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={item.quantity_requested}
+                          onChange={(event) => onProductFieldChange(index, "quantity_requested", event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Quoted price
+                        <div className="rupee-field">
+                          <span>₹</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={item.quoted_price}
+                            onChange={(event) => onProductFieldChange(index, "quoted_price", event.target.value)}
+                          />
+                        </div>
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      className="detail-cancel-link"
+                      onClick={() => onRemoveProductRow(index)}
+                      disabled={draft.products.length === 1}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="detail-edit-actions">
+              <button type="submit" className="primary-button detail-save-button" disabled={busy}>
+                {busy ? "Saving..." : "Save Inquiry"}
+              </button>
+              <button type="button" className="detail-cancel-link" onClick={onBack}>
+                Back
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -1752,8 +2100,18 @@ export default function App() {
   const [csvPreviewFileName, setCsvPreviewFileName] = useState("");
   const [customerHeaderElevated, setCustomerHeaderElevated] = useState(false);
   const [previewCustomerView, setPreviewCustomerView] = useState(false);
+  const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
+  const [inquiryModalStep, setInquiryModalStep] = useState("record");
+  const [inquiryTranscript, setInquiryTranscript] = useState("");
+  const [manualInquiryTranscript, setManualInquiryTranscript] = useState("");
+  const [inquiryDraft, setInquiryDraft] = useState(createEmptyInquiryDraft());
+  const [inquiryModalError, setInquiryModalError] = useState("");
+  const [isListening, setIsListening] = useState(false);
   const productGridRef = useRef(null);
   const customerSearchRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const speechSupported =
+    typeof window !== "undefined" && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -1940,7 +2298,250 @@ export default function App() {
   }
 
   function handleNewInquiry() {
-    setStatusMessage("Inquiry logging form is coming next. You can review and update inquiry statuses here already.");
+    setInquiryModalOpen(true);
+    setInquiryModalStep("record");
+    setInquiryTranscript("");
+    setManualInquiryTranscript("");
+    setInquiryDraft(createEmptyInquiryDraft());
+    setInquiryModalError("");
+    setIsListening(false);
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+  }
+
+  function syncInquiryProductMatch(index, nextName) {
+    const matched = findMatchingProduct(products, nextName);
+    setInquiryDraft((current) => {
+      const nextProducts = [...current.products];
+      nextProducts[index] = {
+        ...nextProducts[index],
+        product_name: nextName,
+        matched_sku: matched?.sku ?? ""
+      };
+      return { ...current, products: nextProducts };
+    });
+  }
+
+  function updateInquiryProductField(index, field, value) {
+    setInquiryDraft((current) => {
+      const nextProducts = [...current.products];
+      nextProducts[index] = { ...nextProducts[index], [field]: value };
+      return { ...current, products: nextProducts };
+    });
+  }
+
+  function addInquiryProductRow() {
+    setInquiryDraft((current) => ({
+      ...current,
+      products: [...current.products, { product_name: "", matched_sku: "", quantity_requested: "", quoted_price: "" }]
+    }));
+  }
+
+  function removeInquiryProductRow(index) {
+    setInquiryDraft((current) => ({
+      ...current,
+      products:
+        current.products.length > 1 ? current.products.filter((_, currentIndex) => currentIndex !== index) : current.products
+    }));
+  }
+
+  function resetInquiryModal() {
+    setInquiryModalOpen(false);
+    setInquiryModalStep("record");
+    setInquiryTranscript("");
+    setManualInquiryTranscript("");
+    setInquiryDraft(createEmptyInquiryDraft());
+    setInquiryModalError("");
+    setIsListening(false);
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+  }
+
+  function startInquiryListening() {
+    if (!speechSupported) {
+      return;
+    }
+
+    const RecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!RecognitionCtor) {
+      return;
+    }
+
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+
+    const recognition = new RecognitionCtor();
+    recognition.lang = "en-IN";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = (event) => {
+      let finalText = "";
+      let interimText = "";
+      for (let index = 0; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const text = result[0]?.transcript ?? "";
+        if (result.isFinal) {
+          finalText += text;
+        } else {
+          interimText += text;
+        }
+      }
+      setInquiryTranscript(`${finalText} ${interimText}`.trim());
+    };
+    recognition.onerror = (event) => {
+      console.log("Speech recognition failed:", event);
+      setInquiryModalError("Voice capture stopped. You can continue by typing the inquiry.");
+      setIsListening(false);
+    };
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+    recognitionRef.current = recognition;
+    setInquiryModalError("");
+    setIsListening(true);
+  }
+
+  async function extractInquiryWithOpenAI(transcriptText) {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: INQUIRY_SYSTEM_PROMPT },
+          { role: "user", content: transcriptText }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null);
+      throw new Error(errorPayload?.error?.message || "OpenAI request failed.");
+    }
+
+    const payload = await response.json();
+    const content = payload?.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new Error("OpenAI returned an empty response.");
+    }
+    return JSON.parse(content);
+  }
+
+  async function processInquiryTranscript() {
+    const rawTranscript = speechSupported ? inquiryTranscript.trim() : manualInquiryTranscript.trim();
+    if (!rawTranscript) {
+      setInquiryModalError("Add a transcript before continuing.");
+      return;
+    }
+
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+    setInquiryModalStep("extracting");
+    setInquiryModalError("");
+
+    try {
+      if (!OPENAI_API_KEY) {
+        throw new Error("Missing OpenAI API key.");
+      }
+      const extracted = await extractInquiryWithOpenAI(rawTranscript);
+      setInquiryDraft(normalizeInquiryDraft(extracted, products));
+      setInquiryModalStep("confirm");
+    } catch (error) {
+      console.log("Inquiry extraction failed:", error);
+      setInquiryModalError("Could not process automatically. Please fill in details manually.");
+      setInquiryDraft(createEmptyInquiryDraft());
+      setInquiryModalStep("confirm");
+    }
+  }
+
+  async function saveInquiry() {
+    const transcriptText = speechSupported ? inquiryTranscript.trim() : manualInquiryTranscript.trim();
+    setInquiryBusy(true);
+    setInquiryModalError("");
+    try {
+      const inquiryPayload = {
+        customer_name: safeText(inquiryDraft.customer_name) || null,
+        customer_phone: safeText(inquiryDraft.customer_phone) || null,
+        source: safeText(inquiryDraft.source, "phone"),
+        occasion: safeText(inquiryDraft.occasion) || null,
+        required_by_date: safeText(inquiryDraft.required_by_date) || null,
+        budget_per_unit: inquiryDraft.budget_per_unit === "" ? null : Number(inquiryDraft.budget_per_unit),
+        total_budget: inquiryDraft.total_budget === "" ? null : Number(inquiryDraft.total_budget),
+        notes: safeText(inquiryDraft.notes) || null,
+        raw_transcript: transcriptText || null,
+        status: "new"
+      };
+
+      let savedInquiry;
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase.from("inquiries").insert(inquiryPayload).select().single();
+        if (error) {
+          throw error;
+        }
+
+        const itemsPayload = inquiryDraft.products
+          .filter((item) => safeText(item.product_name))
+          .map((item) => ({
+            inquiry_id: data.id,
+            product_sku: safeText(item.matched_sku) || null,
+            product_name: safeText(item.product_name),
+            quantity_requested: item.quantity_requested === "" ? null : Number(item.quantity_requested),
+            quoted_price: item.quoted_price === "" ? null : Number(item.quoted_price)
+          }));
+
+        let items = [];
+        if (itemsPayload.length) {
+          const { data: insertedItems, error: itemsError } = await supabase.from("inquiry_items").insert(itemsPayload).select();
+          if (itemsError) {
+            throw itemsError;
+          }
+          items = insertedItems ?? [];
+        }
+
+        savedInquiry = toInquiry({ ...data, inquiry_items: items });
+      } else {
+        savedInquiry = toInquiry({
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
+          ...inquiryPayload,
+          inquiry_items: inquiryDraft.products
+            .filter((item) => safeText(item.product_name))
+            .map((item) => ({
+              id: crypto.randomUUID(),
+              product_sku: safeText(item.matched_sku) || null,
+              product_name: safeText(item.product_name),
+              quantity_requested: item.quantity_requested === "" ? null : Number(item.quantity_requested),
+              quoted_price: item.quoted_price === "" ? null : Number(item.quoted_price)
+            }))
+        });
+      }
+
+      setInquiries((current) => [savedInquiry, ...current]);
+      setExpandedInquiryId(savedInquiry.id);
+      setStatusMessage("Inquiry saved ✓");
+      resetInquiryModal();
+    } catch (error) {
+      console.log("Inquiry save failed:", error);
+      setInquiryModalError(error?.message || "Could not save this inquiry.");
+      setInquiryModalStep("confirm");
+    } finally {
+      setInquiryBusy(false);
+    }
   }
 
   function handleScrollToCollection() {
@@ -2699,6 +3300,29 @@ export default function App() {
       </div>
 
       <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} lowStockCount={stats.lowStock} />
+      <InquiryRecorderModal
+        open={inquiryModalOpen}
+        supportsSpeechRecognition={speechSupported}
+        products={products}
+        isListening={isListening}
+        transcript={inquiryTranscript}
+        manualTranscript={manualInquiryTranscript}
+        setManualTranscript={setManualInquiryTranscript}
+        step={inquiryModalStep}
+        draft={inquiryDraft}
+        setDraft={setInquiryDraft}
+        errorMessage={inquiryModalError}
+        busy={inquiryBusy}
+        onStartListening={startInquiryListening}
+        onStopAndProcess={processInquiryTranscript}
+        onCancel={resetInquiryModal}
+        onBack={() => setInquiryModalStep("record")}
+        onSave={saveInquiry}
+        onProductNameChange={syncInquiryProductMatch}
+        onProductFieldChange={updateInquiryProductField}
+        onAddProductRow={addInquiryProductRow}
+        onRemoveProductRow={removeInquiryProductRow}
+      />
     </div>
   );
 
