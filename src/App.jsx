@@ -6,6 +6,9 @@ const brandLogo = "/assets/brand/decorbeats-logo.svg";
 const WHATSAPP_NUMBER = "919XXXXXXXXX";
 const PRODUCT_STORAGE_BUCKET = "products";
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+const BULK_WHATSAPP_LINK = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+  "Hi, I would like to enquire about a bulk gifting order for Decorbeats."
+)}`;
 const ANNOUNCEMENTS = [
   "✦ Summer Sale — Up to 30% off selected items",
   "✦ Bulk orders welcome · 50 to 400+ units",
@@ -1252,7 +1255,7 @@ function CustomerHero({ featuredProduct, onShop }) {
   const heroImage = getPrimaryImage(featuredProduct);
   return (
     <section
-      className="customer-hero"
+      className="customer-hero desktop-reveal"
       style={
         heroImage
           ? {
@@ -1263,14 +1266,105 @@ function CustomerHero({ featuredProduct, onShop }) {
     >
       <div className="customer-hero-copy">
         <p className="eyebrow">Decorbeats</p>
-        <h1>Handcrafted gifts for every celebration.</h1>
-        <p>Brass, metal & artisanal decor - made to be gifted.</p>
-        <button type="button" className="primary-button customer-hero-cta" onClick={onShop}>
-          Shop the Collection
-        </button>
+        <h1>
+          <span>Handcrafted</span>
+          <span>for every celebration.</span>
+        </h1>
+        <p>Brass, metal & artisanal decor - made in India, gifted with love.</p>
+        <div className="customer-hero-actions">
+          <button type="button" className="primary-button customer-hero-cta" onClick={onShop}>
+            Shop the Collection
+          </button>
+          <a className="customer-hero-link" href={BULK_WHATSAPP_LINK} target="_blank" rel="noreferrer">
+            Enquire for bulk orders →
+          </a>
+        </div>
       </div>
       <div className="customer-hero-media" aria-hidden="true">
         {heroImage ? <img src={heroImage} alt={featuredProduct?.name || "Decorbeats collection"} loading="lazy" /> : null}
+      </div>
+      <div className="customer-scroll-indicator" aria-hidden="true">
+        <span />
+      </div>
+    </section>
+  );
+}
+
+function TrustStrip({ productCount }) {
+  const items = [
+    "Handcrafted in India",
+    "Bulk orders welcome",
+    `${productCount}+ products`,
+    "WhatsApp enquiry in minutes"
+  ];
+
+  return (
+    <section className="trust-strip desktop-reveal" aria-label="Decorbeats trust markers">
+      {items.map((item) => (
+        <span key={item}>{item}</span>
+      ))}
+    </section>
+  );
+}
+
+function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
+  const featuredCategories = ["Bowl", "Diya", "Wall Decor", "Box"];
+  const tiles = featuredCategories
+    .map((category) => {
+      const match = products.find((product) => product.category === category && getPrimaryImage(product));
+      return {
+        category,
+        image: match ? getPrimaryImage(match) : "",
+        label: category
+      };
+    })
+    .filter((item) => item.image);
+
+  if (!tiles.length) {
+    return null;
+  }
+
+  return (
+    <section className="featured-categories desktop-reveal">
+      {tiles.map((tile) => (
+        <button
+          key={tile.category}
+          type="button"
+          className="featured-category-tile"
+          onClick={() => {
+            onSelectCategory(tile.category);
+            onShop();
+          }}
+        >
+          <img src={tile.image} alt={tile.label} loading="lazy" />
+          <span>{tile.label}</span>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function EditorialSection({ product }) {
+  const image = getPrimaryImage(product);
+  if (!image) {
+    return null;
+  }
+
+  return (
+    <section className="editorial-section desktop-reveal">
+      <div className="editorial-media">
+        <img src={image} alt={product?.name || "Decorbeats product"} loading="lazy" />
+      </div>
+      <div className="editorial-copy">
+        <p className="eyebrow">Decorbeats Studio</p>
+        <h2>Gifting, reimagined.</h2>
+        <p>Thoughtfully crafted brass, metal and artisanal decor pieces for celebrations, events and elevated gifting.</p>
+        <p>Designed to feel personal, finished by hand, and ready for meaningful moments across homes and occasions.</p>
+        <p>From intimate gifting to large-format corporate orders, each piece is made to carry warmth and story.</p>
+        <a className="customer-whatsapp-button editorial-whatsapp" href={BULK_WHATSAPP_LINK} target="_blank" rel="noreferrer">
+          <WhatsAppIcon />
+          <span>Enquire on WhatsApp</span>
+        </a>
       </div>
     </section>
   );
@@ -1297,7 +1391,7 @@ function CustomerProductCard({ product, onSelect }) {
   const showLowStock = product.quantity > 0 && product.quantity <= 5;
   const primaryImage = getPrimaryImage(product);
   return (
-    <button type="button" className="customer-product-card" onClick={() => onSelect(product)}>
+    <button type="button" className="customer-product-card desktop-reveal" onClick={() => onSelect(product)}>
       <div className="customer-product-image-wrap">
         {primaryImage ? (
           <img className="customer-product-image" src={primaryImage} alt={product.name} loading="lazy" />
@@ -1306,9 +1400,11 @@ function CustomerProductCard({ product, onSelect }) {
             <img src={brandLogo} alt="Decorbeats" className="customer-placeholder-logo" loading="lazy" />
           </div>
         )}
+        <span className="customer-card-hover-text">View Details</span>
       </div>
       <div className="customer-product-copy">
         <h3>{product.name}</h3>
+        <p className="customer-product-category">{product.category}</p>
         {hasDisplayValue(product.pricing.mrp) ? <p className="customer-price">{formatCurrency(product.pricing.mrp)}</p> : null}
         {showLowStock ? <span className="customer-low-stock">Low stock</span> : null}
       </div>
@@ -1441,13 +1537,27 @@ function CustomerSheet({ product, onClose, onShare }) {
 function CustomerFooter({ onAdmin, showAdminLink = true }) {
   return (
     <footer className="customer-footer">
-      <img src={brandLogo} alt="Decorbeats" className="customer-footer-logo" />
-      <p>Artisanal decor, gifted with love.</p>
-      {showAdminLink ? (
-        <button type="button" className="customer-admin-link" onClick={onAdmin}>
-          Are you the owner? Sign in →
-        </button>
-      ) : null}
+      <div className="customer-footer-main">
+        <div className="customer-footer-brand">
+          <img src={brandLogo} alt="Decorbeats" className="customer-footer-logo" />
+          <p>Artisanal decor, gifted with love.</p>
+        </div>
+        <div className="customer-footer-cta">
+          <p>For bulk orders of 50+ units, contact us on WhatsApp</p>
+          <a className="customer-whatsapp-button footer-whatsapp" href={BULK_WHATSAPP_LINK} target="_blank" rel="noreferrer">
+            <WhatsAppIcon />
+            <span>WhatsApp</span>
+          </a>
+        </div>
+        <div className="customer-footer-owner">
+          {showAdminLink ? (
+            <button type="button" className="customer-admin-link" onClick={onAdmin}>
+              Are you the owner? Sign in →
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div className="customer-footer-bottom">© 2025 Decorbeats. Artisanal décor, gifted with love.</div>
     </footer>
   );
 }
@@ -2292,6 +2402,32 @@ export default function App() {
       setPreviewCustomerView(false);
     }
   }, [adminActive]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || window.innerWidth < 768) {
+      return undefined;
+    }
+
+    const nodes = Array.from(document.querySelectorAll(".desktop-reveal"));
+    if (!nodes.length) {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.16 }
+    );
+
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [adminActive, previewCustomerView, filteredProducts.length, categoryFilter]);
 
   useEffect(() => {
     if (adminActive) {
@@ -3190,7 +3326,14 @@ export default function App() {
           setActiveTab("products");
         }} /> : null}
         <CustomerHero featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
+        <TrustStrip productCount={stats.totalProducts} />
         <section className="customer-catalog-shell" ref={productGridRef}>
+          <div className="customer-collections-head desktop-reveal">
+            <div>
+              <p className="eyebrow">Collections</p>
+              <h2>Browse the Collection</h2>
+            </div>
+          </div>
           <div className="customer-filter-bar">
             <CustomerCategoryBar categories={categories} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} />
             <div className="customer-search-row">
@@ -3204,6 +3347,12 @@ export default function App() {
               />
             </div>
           </div>
+          <FeaturedCategoriesRow
+            products={customerCatalog}
+            onSelectCategory={setCategoryFilter}
+            onShop={handleScrollToCollection}
+          />
+          <EditorialSection product={featuredCustomerProduct} />
           <section className="customer-product-grid">
             {filteredProducts.map((product) => (
               <CustomerProductCard key={product.id} product={product} onSelect={handleProductSelect} />
