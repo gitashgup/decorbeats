@@ -36,17 +36,43 @@ Fields to extract:
 
 const emptyForm = {
   id: "",
-  sku: "",
   name: "",
-  category: "",
-  material: "",
+  category: "Decor",
+  material: "Metal",
   quantity: 0,
-  unitCost: "",
   mrp: "",
   b2b: "",
   notes: "",
-  driveUrl: "",
   imageUrl: ""
+};
+
+const categoryOptions = ["Bell", "Bowl", "Box", "Decor", "Diya", "Jars", "Misc", "Planter", "Plate", "Tree", "Urli", "Wall Decor"];
+const materialOptions = ["Brass", "Metal", "Ceramic", "Wood", "Glass", "Clay", "Mixed", "Other"];
+
+const materialSkuCodes = {
+  Brass: "BR",
+  Metal: "MT",
+  Ceramic: "CR",
+  Wood: "WD",
+  Glass: "GL",
+  Clay: "CL",
+  Mixed: "MX",
+  Other: "OT"
+};
+
+const categorySkuCodes = {
+  Bell: "BELL",
+  Bowl: "BOWL",
+  Box: "BOX",
+  Decor: "DECOR",
+  Diya: "DIYA",
+  Jars: "JARS",
+  Misc: "MISC",
+  Planter: "PLANT",
+  Plate: "PLATE",
+  Tree: "TREE",
+  Urli: "URLI",
+  "Wall Decor": "WALL"
 };
 
 const emptyInquiryDraft = {
@@ -287,6 +313,21 @@ function getFileExtension(fileName) {
 
 function buildProductImagePath(sku, fileName) {
   return `${sanitizeStorageSegment(sku)}/${Date.now()}.${getFileExtension(fileName)}`;
+}
+
+function getNextSku(products, material, category) {
+  const materialCode = materialSkuCodes[material] || "OT";
+  const categoryCode = categorySkuCodes[category] || "MISC";
+  const prefix = `DB-${materialCode}-${categoryCode}-`;
+  const nextNumber =
+    products.reduce((highest, product) => {
+      if (!safeText(product.sku).startsWith(prefix)) {
+        return highest;
+      }
+      const parsed = Number.parseInt(product.sku.slice(prefix.length), 10);
+      return Number.isNaN(parsed) ? highest : Math.max(highest, parsed);
+    }, 0) + 1;
+  return `${prefix}${String(nextNumber).padStart(3, "0")}`;
 }
 
 function getProductImages(product) {
@@ -1543,7 +1584,7 @@ function CustomerImageCarousel({ product }) {
   );
 }
 
-function ProductForm({ form, setForm, onSubmit, onReset, uploadBusy, saveBusy, onFileChange }) {
+function ProductForm({ form, setForm, generatedSku, onSubmit, onReset, uploadBusy, saveBusy, onFileChange }) {
   return (
     <form className="panel-card admin-card" onSubmit={onSubmit}>
       <div className="section-head">
@@ -1556,62 +1597,95 @@ function ProductForm({ form, setForm, onSubmit, onReset, uploadBusy, saveBusy, o
         </button>
       </div>
 
+      <div className="sku-preview-badge">SKU will be: {generatedSku}</div>
+
+      <label className="product-photo-dropzone">
+        <CameraIcon />
+        <strong>{uploadBusy ? "Uploading..." : "Tap to add product photo"}</strong>
+        <span>{form.imageUrl ? "Photo added. You can tap again to replace it." : "Add the product photo first."}</span>
+        {form.imageUrl ? <img src={form.imageUrl} alt="Product preview" className="product-photo-preview" /> : null}
+        <input type="file" accept="image/*" onChange={onFileChange} disabled={uploadBusy} />
+      </label>
+
       <div className="form-grid">
-        <label>
-          SKU
-          <input value={form.sku} onChange={(event) => setForm((current) => ({ ...current, sku: event.target.value }))} required />
+        <label className="span-2">
+          What is it?
+          <input
+            value={form.name}
+            placeholder="e.g. 4 Metal Bowls with Tray Yellow"
+            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            required
+          />
         </label>
         <label>
-          Product name
-          <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
+          What type?
+          <select value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}>
+            {categoryOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
-          Category
-          <input value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} />
+          What material?
+          <select value={form.material} onChange={(event) => setForm((current) => ({ ...current, material: event.target.value }))}>
+            {materialOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
-          Material
-          <input value={form.material} onChange={(event) => setForm((current) => ({ ...current, material: event.target.value }))} />
+          How many do you have?
+          <input
+            type="number"
+            placeholder="How many in stock right now?"
+            value={form.quantity}
+            onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))}
+          />
         </label>
         <label>
-          Quantity
-          <input type="number" value={form.quantity} onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))} />
+          What's the selling price?
+          <div className="rupee-field">
+            <span>₹</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="Selling price per unit"
+              value={form.mrp}
+              onChange={(event) => setForm((current) => ({ ...current, mrp: event.target.value }))}
+            />
+          </div>
         </label>
         <label>
-          MRP
-          <input type="number" value={form.mrp} onChange={(event) => setForm((current) => ({ ...current, mrp: event.target.value }))} />
-        </label>
-        <label>
-          Unit cost
-          <input type="number" value={form.unitCost} onChange={(event) => setForm((current) => ({ ...current, unitCost: event.target.value }))} />
-        </label>
-        <label>
-          B2B price
-          <input type="number" value={form.b2b} onChange={(event) => setForm((current) => ({ ...current, b2b: event.target.value }))} />
+          Wholesale price?
+          <div className="rupee-field">
+            <span>₹</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="Wholesale price (optional)"
+              value={form.b2b}
+              onChange={(event) => setForm((current) => ({ ...current, b2b: event.target.value }))}
+            />
+          </div>
         </label>
         <label className="span-2">
-          Drive folder URL
-          <input value={form.driveUrl} onChange={(event) => setForm((current) => ({ ...current, driveUrl: event.target.value }))} />
-        </label>
-        <label className="span-2">
-          Image URL
-          <input value={form.imageUrl} onChange={(event) => setForm((current) => ({ ...current, imageUrl: event.target.value }))} />
-        </label>
-        <label className="span-2">
-          Notes
-          <textarea rows="4" value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} />
+          Any notes?
+          <textarea
+            rows="4"
+            placeholder="Any details customers should know?"
+            value={form.notes}
+            onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+          />
         </label>
       </div>
 
-      <div className="cta-row">
-        <label className="upload-button secondary">
-          {uploadBusy ? "Uploading..." : "Upload image"}
-          <input type="file" accept="image/*" onChange={onFileChange} disabled={uploadBusy} />
-        </label>
-        <button type="submit" className="primary-button" disabled={saveBusy}>
-          {saveBusy ? "Saving..." : form.id ? "Update product" : "Create product"}
-        </button>
-      </div>
+      <button type="submit" className="primary-button product-submit-button" disabled={saveBusy}>
+        {saveBusy ? "Saving..." : form.id ? "Update product" : "Add Product"}
+      </button>
     </form>
   );
 }
@@ -2288,16 +2362,13 @@ export default function App() {
   function populateForm(product) {
     setForm({
       id: product.id,
-      sku: product.sku,
       name: product.name,
       category: product.category,
       material: product.material,
       quantity: product.quantity,
-      unitCost: product.pricing.unitCost ?? "",
       mrp: product.pricing.mrp ?? "",
       b2b: product.pricing.b2b ?? "",
       notes: product.notes ?? "",
-      driveUrl: product.driveUrl ?? "",
       imageUrl: product.imageUrl ?? ""
     });
   }
@@ -2799,17 +2870,15 @@ export default function App() {
     setSaveBusy(true);
 
     const payload = {
-      sku: form.sku,
-      slug: slugify(`${form.sku}-${form.name}`),
+      sku: generatedSku,
+      slug: slugify(`${generatedSku}-${form.name}`),
       name: form.name,
       category: form.category || "Uncategorized",
       material: form.material || "Unspecified",
       quantity: Number(form.quantity || 0),
-      unit_cost: form.unitCost === "" ? null : Number(form.unitCost),
       mrp: form.mrp === "" ? null : Number(form.mrp),
       b2b_price: form.b2b === "" ? null : Number(form.b2b),
       notes: form.notes,
-      drive_url: form.driveUrl,
       image_url: form.imageUrl,
       image_urls: normalizeUrl(form.imageUrl) ? [normalizeUrl(form.imageUrl)] : []
     };
@@ -2817,7 +2886,12 @@ export default function App() {
     try {
       if (isSupabaseConfigured) {
         const query = form.id
-          ? supabase.from("products").update(payload).eq("id", form.id).select().single()
+          ? supabase
+              .from("products")
+              .update({ ...payload, sku: selectedProduct?.sku || generatedSku })
+              .eq("id", form.id)
+              .select()
+              .single()
           : supabase.from("products").insert(payload).select().single();
 
         const { data, error } = await query;
@@ -2832,21 +2906,24 @@ export default function App() {
         });
         setSelectedId(normalized.id);
         setLastSyncAt(new Date().toISOString());
-        setStatusMessage(`${normalized.name} saved to Supabase.`);
+        setStatusMessage(form.id ? `${normalized.name} updated.` : "Product added ✓");
       } else {
         const normalized = toProduct({
           id: form.id || Date.now(),
-          ...payload
+          ...(form.id ? { ...payload, sku: selectedProduct?.sku || generatedSku } : payload)
         });
         setProducts((current) => {
           const exists = current.some((product) => product.id === normalized.id);
           return exists ? current.map((product) => (product.id === normalized.id ? normalized : product)) : [normalized, ...current];
         });
         setSelectedId(normalized.id);
-        setStatusMessage(`${normalized.name} saved locally.`);
+        setStatusMessage(form.id ? `${normalized.name} updated locally.` : "Product added ✓");
       }
 
       setForm(emptyForm);
+      if (!form.id) {
+        setSelectedId(null);
+      }
       setActiveTab("products");
     } catch (error) {
       setStatusMessage(error.message || "Could not save the product.");
@@ -2874,7 +2951,7 @@ export default function App() {
     setUploadBusy(true);
     setUploadError("");
     try {
-      const path = buildProductImagePath(form.sku || "draft", file.name);
+      const path = buildProductImagePath(generatedSku || "draft", file.name);
       const { error: storageError } = await supabase.storage.from(PRODUCT_STORAGE_BUCKET).upload(path, file, { upsert: true });
       if (storageError) {
         throw storageError;
@@ -3061,6 +3138,7 @@ export default function App() {
     : "Not synced yet";
 
   const featuredCustomerProduct = customerCatalog.find((product) => getProductImages(product).length) || customerCatalog[0] || null;
+  const generatedSku = form.id ? selectedProduct?.sku || "" : getNextSku(products, form.material, form.category);
 
   if (!authReady) {
     return (
@@ -3215,6 +3293,7 @@ export default function App() {
             <ProductForm
               form={form}
               setForm={setForm}
+              generatedSku={generatedSku}
               onSubmit={handleSubmit}
               onReset={() => setForm(emptyForm)}
               uploadBusy={uploadBusy}
