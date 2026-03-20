@@ -2404,32 +2404,6 @@ export default function App() {
   }, [adminActive]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || window.innerWidth < 768) {
-      return undefined;
-    }
-
-    const nodes = Array.from(document.querySelectorAll(".desktop-reveal"));
-    if (!nodes.length) {
-      return undefined;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.16 }
-    );
-
-    nodes.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
-  }, [adminActive, previewCustomerView, filteredProducts.length, categoryFilter]);
-
-  useEffect(() => {
     if (adminActive) {
       return undefined;
     }
@@ -2483,6 +2457,32 @@ export default function App() {
       inquiryStatusFilter === "all" ? inquiries : inquiries.filter((inquiry) => inquiry.status === inquiryStatusFilter);
     return [...statusFiltered].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
   }, [inquiries, inquiryStatusFilter]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || window.innerWidth < 768) {
+      return undefined;
+    }
+
+    const nodes = Array.from(document.querySelectorAll(".desktop-reveal"));
+    if (!nodes.length) {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.16 }
+    );
+
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [adminActive, previewCustomerView, filteredProducts.length, categoryFilter]);
 
   const selectedProduct =
     filteredProducts.find((product) => product.id === selectedId) ||
