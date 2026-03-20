@@ -28,6 +28,39 @@ const emptyForm = {
   imageUrl: ""
 };
 
+const inquiryStatusOrder = ["new", "quoted", "converted", "lost"];
+
+function toInquiry(raw) {
+  return {
+    id: raw.id,
+    createdAt: raw.created_at,
+    customerName: safeText(raw.customer_name, "Unnamed inquiry"),
+    customerPhone: safeText(raw.customer_phone),
+    source: safeText(raw.source, "phone"),
+    occasion: safeText(raw.occasion),
+    requiredByDate: safeText(raw.required_by_date),
+    budgetPerUnit: raw.budget_per_unit,
+    totalBudget: raw.total_budget,
+    status: safeText(raw.status, "new").toLowerCase(),
+    rawTranscript: safeText(raw.raw_transcript),
+    notes: safeText(raw.notes),
+    items: Array.isArray(raw.inquiry_items)
+      ? raw.inquiry_items.map((item) => ({
+          id: item.id,
+          productSku: safeText(item.product_sku),
+          productName: safeText(item.product_name),
+          quantityRequested: Number(item.quantity_requested ?? 0),
+          quotedPrice: item.quoted_price
+        }))
+      : []
+  };
+}
+
+function formatInquiryStatus(status) {
+  const normalized = safeText(status, "new").toLowerCase();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 function GridIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -40,6 +73,28 @@ function PlusIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ChatIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M5.5 5A3.5 3.5 0 0 0 2 8.5v6A3.5 3.5 0 0 0 5.5 18H7v3l3.18-3H18.5A3.5 3.5 0 0 0 22 14.5v-6A3.5 3.5 0 0 0 18.5 5h-13Zm2.5 5h8v2H8v-2Zm0-3h6v2H8V7Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a1 1 0 1 1 2 0 7 7 0 0 1-6 6.93V22h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-3.07A7 7 0 0 1 5 12a1 1 0 1 1 2 0 5 5 0 1 0 10 0Z"
+        fill="currentColor"
+      />
     </svg>
   );
 }
@@ -617,6 +672,144 @@ function AppInfoCard({ lastSyncLabel }) {
         </div>
       </div>
       <p className="support-copy">Last sync: {lastSyncLabel}</p>
+    </section>
+  );
+}
+
+function InquiryStatusFilters({ activeStatus, onChange }) {
+  const filters = ["all", ...inquiryStatusOrder];
+
+  return (
+    <div className="inquiry-status-row" aria-label="Filter inquiries by status">
+      {filters.map((status) => (
+        <button
+          key={status}
+          type="button"
+          className={activeStatus === status ? "inquiry-status-pill active" : "inquiry-status-pill"}
+          onClick={() => onChange(status)}
+        >
+          {status === "all" ? "All" : formatInquiryStatus(status)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function InquiryCard({ inquiry, expanded, onToggle, onStatusUpdate, busy }) {
+  const requestedUnits = inquiry.items.reduce((sum, item) => sum + Number(item.quantityRequested || 0), 0);
+  const productsMentioned = inquiry.items.map((item) => item.productName || item.productSku).filter(Boolean).join(", ");
+  const nextStatus = inquiryStatusOrder[inquiryStatusOrder.indexOf(inquiry.status) + 1] ?? null;
+
+  return (
+    <article className={expanded ? "inquiry-card expanded" : "inquiry-card"}>
+      <button type="button" className="inquiry-card-main" onClick={() => onToggle(inquiry.id)}>
+        <div className="inquiry-card-top">
+          <div>
+            <p className="inquiry-customer-name">{inquiry.customerName}</p>
+            <p className="inquiry-products-line">{productsMentioned || "No products added yet"}</p>
+          </div>
+          <span className={`inquiry-status-badge ${inquiry.status}`}>{formatInquiryStatus(inquiry.status)}</span>
+        </div>
+        <div className="inquiry-card-meta">
+          <span>{requestedUnits ? `${requestedUnits} units` : "Quantity not set"}</span>
+          {inquiry.occasion ? <span>{inquiry.occasion}</span> : null}
+          {inquiry.requiredByDate ? <span>{inquiry.requiredByDate}</span> : null}
+        </div>
+      </button>
+
+      {expanded ? (
+        <div className="inquiry-card-detail">
+          <div className="inquiry-detail-grid">
+            <div>
+              <span>Customer</span>
+              <strong>{inquiry.customerName}</strong>
+            </div>
+            {inquiry.customerPhone ? (
+              <div>
+                <span>Phone</span>
+                <strong>{inquiry.customerPhone}</strong>
+              </div>
+            ) : null}
+            <div>
+              <span>Source</span>
+              <strong>{inquiry.source}</strong>
+            </div>
+            {inquiry.occasion ? (
+              <div>
+                <span>Occasion</span>
+                <strong>{inquiry.occasion}</strong>
+              </div>
+            ) : null}
+            {inquiry.requiredByDate ? (
+              <div>
+                <span>Required by</span>
+                <strong>{inquiry.requiredByDate}</strong>
+              </div>
+            ) : null}
+          </div>
+          {inquiry.items.length ? (
+            <ul className="inquiry-item-list">
+              {inquiry.items.map((item) => (
+                <li key={item.id || `${item.productSku}-${item.productName}`}>
+                  <strong>{item.productName || item.productSku || "Product"}</strong>
+                  <span>{item.quantityRequested || 0} requested</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {inquiry.notes ? <p className="detail-note">{inquiry.notes}</p> : null}
+          <div className="inquiry-card-actions">
+            <button
+              type="button"
+              className="ghost-button"
+              disabled={busy || !nextStatus}
+              onClick={() => nextStatus && onStatusUpdate(inquiry, nextStatus)}
+            >
+              {nextStatus ? `Mark as ${formatInquiryStatus(nextStatus)}` : "Status complete"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function InquiriesScreen({
+  inquiries,
+  statusFilter,
+  setStatusFilter,
+  expandedInquiryId,
+  onToggleInquiry,
+  onStatusUpdate,
+  onNewInquiry,
+  busy
+}) {
+  return (
+    <section className="stack-grid">
+      <button type="button" className="primary-button inquiry-log-button" onClick={onNewInquiry}>
+        <MicIcon />
+        <span>Log New Inquiry</span>
+      </button>
+      <InquiryStatusFilters activeStatus={statusFilter} onChange={setStatusFilter} />
+      <section className="inquiry-list">
+        {inquiries.length ? (
+          inquiries.map((inquiry) => (
+            <InquiryCard
+              key={inquiry.id}
+              inquiry={inquiry}
+              expanded={expandedInquiryId === inquiry.id}
+              onToggle={onToggleInquiry}
+              onStatusUpdate={onStatusUpdate}
+              busy={busy}
+            />
+          ))
+        ) : (
+          <div className="panel-card empty-state">
+            <p className="eyebrow">No inquiries yet</p>
+            <h3>Your customer requests will appear here.</h3>
+          </div>
+        )}
+      </section>
     </section>
   );
 }
@@ -1476,6 +1669,7 @@ function CatalogSection({
 function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
   const items = [
     { id: "products", label: "Products", icon: <GridIcon /> },
+    { id: "inquiries", label: "Inquiries", icon: <ChatIcon /> },
     { id: "low-stock", label: "Low Stock", icon: <WarningIcon />, badge: lowStockCount },
     { id: "settings", label: "Settings", icon: <GearIcon /> }
   ];
@@ -1493,11 +1687,22 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
 
       <button
         type="button"
+        className={activeTab === "inquiries" ? "nav-item active" : "nav-item"}
+        onClick={() => setActiveTab("inquiries")}
+      >
+        <span className="nav-icon">
+          {items[1].icon}
+        </span>
+        <span>Inquiries</span>
+      </button>
+
+      <button
+        type="button"
         className={activeTab === "low-stock" ? "nav-item active" : "nav-item"}
         onClick={() => setActiveTab("low-stock")}
       >
         <span className="nav-icon nav-icon-alert">
-          {items[1].icon}
+          {items[2].icon}
           {lowStockCount ? <small>{lowStockCount}</small> : null}
         </span>
         <span>Low Stock</span>
@@ -1508,20 +1713,8 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
         className={activeTab === "settings" ? "nav-item active" : "nav-item"}
         onClick={() => setActiveTab("settings")}
       >
-        <span className="nav-icon">{items[2].icon}</span>
+        <span className="nav-icon">{items[3].icon}</span>
         <span>Settings</span>
-      </button>
-
-      <button
-        type="button"
-        className={activeTab === "add" ? "nav-item nav-item-add active" : "nav-item nav-item-add"}
-        onClick={() => setActiveTab("add")}
-        aria-label="Add"
-      >
-        <span className="nav-fab">
-          <PlusIcon />
-        </span>
-        <span>Add</span>
       </button>
     </nav>
   );
@@ -1529,9 +1722,12 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
 
 export default function App() {
   const [products, setProducts] = useState(seedProducts.map(toProduct));
+  const [inquiries, setInquiries] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
+  const [expandedInquiryId, setExpandedInquiryId] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
+  const [inquiryStatusFilter, setInquiryStatusFilter] = useState("all");
   const [statusMessage, setStatusMessage] = useState(
     isSupabaseConfigured
       ? "Supabase is connected. Sign in to manage products, import stock, and upload imagery."
@@ -1544,6 +1740,7 @@ export default function App() {
   const [importBusy, setImportBusy] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
+  const [inquiryBusy, setInquiryBusy] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [session, setSession] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -1600,7 +1797,21 @@ export default function App() {
       }
     }
 
+    async function loadInquiries() {
+      const { data, error } = await supabase
+        .from("inquiries")
+        .select("*, inquiry_items(*)")
+        .order("created_at", { ascending: false });
+
+      if (cancelled || error) {
+        return;
+      }
+
+      setInquiries((data ?? []).map(toInquiry));
+    }
+
     loadProducts();
+    loadInquiries();
 
     return () => {
       cancelled = true;
@@ -1678,6 +1889,12 @@ export default function App() {
     });
   }, [categoryFilter, currentCatalog, search]);
 
+  const filteredInquiries = useMemo(() => {
+    const statusFiltered =
+      inquiryStatusFilter === "all" ? inquiries : inquiries.filter((inquiry) => inquiry.status === inquiryStatusFilter);
+    return [...statusFiltered].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+  }, [inquiries, inquiryStatusFilter]);
+
   const selectedProduct =
     filteredProducts.find((product) => product.id === selectedId) ||
     currentCatalog.find((product) => product.id === selectedId) ||
@@ -1720,6 +1937,10 @@ export default function App() {
   function handleEditProduct(product) {
     handleProductSelect(product);
     setActiveTab("add");
+  }
+
+  function handleNewInquiry() {
+    setStatusMessage("Inquiry logging form is coming next. You can review and update inquiry statuses here already.");
   }
 
   function handleScrollToCollection() {
@@ -2177,6 +2398,32 @@ export default function App() {
     }
   }
 
+  async function handleInquiryStatusUpdate(inquiry, nextStatus) {
+    setInquiryBusy(true);
+    try {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("inquiries")
+          .update({ status: nextStatus })
+          .eq("id", inquiry.id)
+          .select("*, inquiry_items(*)")
+          .single();
+        if (error) {
+          throw error;
+        }
+        const normalized = toInquiry(data);
+        setInquiries((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+      } else {
+        setInquiries((current) => current.map((item) => (item.id === inquiry.id ? { ...item, status: nextStatus } : item)));
+      }
+      setStatusMessage(`${inquiry.customerName} moved to ${formatInquiryStatus(nextStatus)}.`);
+    } catch (error) {
+      setStatusMessage(error.message || "Could not update inquiry status.");
+    } finally {
+      setInquiryBusy(false);
+    }
+  }
+
   useEffect(() => {
     setCategoryFilter("All");
     setSearch("");
@@ -2262,6 +2509,8 @@ export default function App() {
           title={
             activeTab === "products"
               ? "Products"
+              : activeTab === "inquiries"
+                ? "Inquiries"
               : activeTab === "add"
                 ? "Add or edit"
                 : activeTab === "low-stock"
@@ -2271,6 +2520,8 @@ export default function App() {
           subtitle={
             activeTab === "products"
               ? "Browse and edit the full catalog."
+              : activeTab === "inquiries"
+                ? "Track customer requests, quotes, and conversions."
               : activeTab === "add"
                 ? "Create products, update details, and add imagery."
                 : activeTab === "low-stock"
@@ -2282,6 +2533,9 @@ export default function App() {
 
         {activeTab === "products" ? (
           <>
+            <button type="button" className="primary-button quick-add-button" onClick={() => setActiveTab("add")}>
+              Add Product
+            </button>
             <StatusStrip statusMessage={statusMessage} />
             <StatStrip items={statsItems} />
             <CatalogSection
@@ -2306,6 +2560,22 @@ export default function App() {
               setCategoryFilter={setCategoryFilter}
               categories={categories}
               archivedVisible={showArchived}
+            />
+          </>
+        ) : null}
+
+        {activeTab === "inquiries" ? (
+          <>
+            <StatusStrip statusMessage={statusMessage} />
+            <InquiriesScreen
+              inquiries={filteredInquiries}
+              statusFilter={inquiryStatusFilter}
+              setStatusFilter={setInquiryStatusFilter}
+              expandedInquiryId={expandedInquiryId}
+              onToggleInquiry={(id) => setExpandedInquiryId((current) => (current === id ? null : id))}
+              onStatusUpdate={handleInquiryStatusUpdate}
+              onNewInquiry={handleNewInquiry}
+              busy={inquiryBusy}
             />
           </>
         ) : null}
@@ -2382,6 +2652,18 @@ export default function App() {
         {activeTab === "settings" ? (
           <section className="stack-grid">
             <StatusStrip statusMessage={statusMessage} />
+            <section className="panel-card admin-card settings-card">
+              <div className="section-head">
+                <div>
+                  <p className="eyebrow">Catalog</p>
+                  <h3>Add Product</h3>
+                </div>
+              </div>
+              <p className="support-copy">Jump into the product editor to create a new SKU or update an existing one.</p>
+              <button type="button" className="primary-button settings-button" onClick={() => setActiveTab("add")}>
+                Open Product Studio
+              </button>
+            </section>
             <ImportPanel
               importBusy={importBusy}
               previewRows={csvPreviewRows}

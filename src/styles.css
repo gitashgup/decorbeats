@@ -1491,11 +1491,11 @@ h3 {
   bottom: 0.7rem;
   transform: translateX(-50%);
   width: min(100% - 1rem, 520px);
-  min-height: 84px;
-  padding: 0.8rem 0.7rem 0.95rem;
+  min-height: 80px;
+  padding: 0.75rem 0.7rem 0.85rem;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  align-items: end;
+  align-items: center;
   gap: 0.35rem;
   z-index: 20;
   backdrop-filter: blur(12px);
@@ -1518,10 +1518,14 @@ h3 {
 }
 
 .nav-item:nth-child(2) {
-  grid-column: 3;
+  grid-column: 2;
 }
 
 .nav-item:nth-child(3) {
+  grid-column: 3;
+}
+
+.nav-item:nth-child(4) {
   grid-column: 4;
 }
 
@@ -1560,27 +1564,176 @@ h3 {
   padding: 0 0.25rem;
 }
 
-.nav-item-add {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  transform: translate(-50%, -18%);
+.quick-add-button,
+.inquiry-log-button {
+  width: 100%;
 }
 
-.nav-fab {
-  width: 52px;
-  height: 52px;
+.inquiry-log-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.inquiry-status-row {
+  display: flex;
+  gap: 0.65rem;
+  overflow-x: auto;
+  padding-bottom: 0.1rem;
+}
+
+.inquiry-status-row::-webkit-scrollbar,
+.inquiry-list::-webkit-scrollbar {
+  display: none;
+}
+
+.inquiry-status-pill {
+  min-height: 40px;
   border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--accent), var(--accent-deep));
-  color: #fff8f2;
-  border: 4px solid var(--bg);
-  box-shadow: 0 14px 34px rgba(111, 53, 25, 0.22);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--muted);
+  padding: 0 0.95rem;
+  font-weight: 700;
 }
 
-.nav-item-add.active .nav-fab {
-  background: linear-gradient(135deg, #9a4f2c, #6f3519);
+.inquiry-status-pill.active {
+  background: rgba(139, 74, 42, 0.12);
+  border-color: rgba(139, 74, 42, 0.26);
+  color: var(--accent);
+}
+
+.inquiry-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.inquiry-card {
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+  overflow: hidden;
+  box-shadow: 0 14px 30px rgba(44, 24, 16, 0.06);
+}
+
+.inquiry-card-main {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.inquiry-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.inquiry-customer-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.inquiry-products-line,
+.inquiry-card-meta {
+  margin: 0;
+  color: var(--muted);
+}
+
+.inquiry-products-line {
+  line-height: 1.45;
+}
+
+.inquiry-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  font-size: 0.86rem;
+}
+
+.inquiry-status-badge {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.15rem 0.65rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.inquiry-status-badge.new {
+  background: rgba(214, 138, 57, 0.18);
+  color: #9c5a10;
+}
+
+.inquiry-status-badge.quoted {
+  background: rgba(79, 126, 191, 0.18);
+  color: #2f5f9f;
+}
+
+.inquiry-status-badge.converted {
+  background: rgba(61, 146, 81, 0.18);
+  color: #2f7f45;
+}
+
+.inquiry-status-badge.lost {
+  background: rgba(126, 116, 108, 0.18);
+  color: #655d57;
+}
+
+.inquiry-card-detail {
+  display: grid;
+  gap: 0.9rem;
+  padding: 0 1rem 1rem;
+}
+
+.inquiry-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.inquiry-detail-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.inquiry-item-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inquiry-item-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-radius: 18px;
+  background: rgba(245, 237, 227, 0.76);
+  padding: 0.75rem 0.85rem;
+}
+
+.inquiry-item-list li span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.inquiry-card-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 @media (min-width: 760px) {
