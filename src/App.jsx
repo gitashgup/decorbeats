@@ -1249,13 +1249,14 @@ function CustomerHeader({ scrolled, onSearchTap }) {
 }
 
 function CustomerHero({ featuredProduct, onShop }) {
+  const heroImage = getPrimaryImage(featuredProduct);
   return (
     <section
       className="customer-hero"
       style={
-        featuredProduct?.imageUrl
+        heroImage
           ? {
-              backgroundImage: `linear-gradient(180deg, rgba(245, 237, 227, 0.72), rgba(236, 224, 210, 0.92)), url(${featuredProduct.imageUrl})`
+              backgroundImage: `linear-gradient(180deg, rgba(245, 237, 227, 0.72), rgba(236, 224, 210, 0.92)), url(${heroImage})`
             }
           : undefined
       }
@@ -1267,6 +1268,9 @@ function CustomerHero({ featuredProduct, onShop }) {
         <button type="button" className="primary-button customer-hero-cta" onClick={onShop}>
           Shop the Collection
         </button>
+      </div>
+      <div className="customer-hero-media" aria-hidden="true">
+        {heroImage ? <img src={heroImage} alt={featuredProduct?.name || "Decorbeats collection"} loading="lazy" /> : null}
       </div>
     </section>
   );
@@ -3187,16 +3191,18 @@ export default function App() {
         }} /> : null}
         <CustomerHero featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
         <section className="customer-catalog-shell" ref={productGridRef}>
-          <CustomerCategoryBar categories={categories} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} />
-          <div className="customer-search-row">
-            <input
-              ref={customerSearchRef}
-              className="customer-search-input"
-              type="search"
-              placeholder="Search the collection"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
+          <div className="customer-filter-bar">
+            <CustomerCategoryBar categories={categories} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} />
+            <div className="customer-search-row">
+              <input
+                ref={customerSearchRef}
+                className="customer-search-input"
+                type="search"
+                placeholder="Search the collection"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
           </div>
           <section className="customer-product-grid">
             {filteredProducts.map((product) => (
