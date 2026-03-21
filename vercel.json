@@ -1,4 +1,10 @@
 {
+  "rewrites": [
+    {
+      "source": "/admin",
+      "destination": "/"
+    }
+  ],
   "redirects": [
     {
       "source": "/product/:path*",

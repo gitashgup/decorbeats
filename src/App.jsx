@@ -89,6 +89,14 @@ const categorySkuCodes = {
   "Wall Decor": "WALL"
 };
 
+function getInitialPublicScreen() {
+  if (typeof window === "undefined") {
+    return "customer";
+  }
+
+  return window.location.pathname === "/admin" ? "admin-auth" : "customer";
+}
+
 const emptyInquiryDraft = {
   customer_name: "",
   customer_phone: "",
@@ -2348,7 +2356,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [showArchived, setShowArchived] = useState(false);
-  const [publicScreen, setPublicScreen] = useState("customer");
+  const [publicScreen, setPublicScreen] = useState(getInitialPublicScreen);
   const [activeTab, setActiveTab] = useState("products");
   const [lastSyncAt, setLastSyncAt] = useState(null);
   const [csvPreviewRows, setCsvPreviewRows] = useState([]);
@@ -2453,6 +2461,19 @@ export default function App() {
       setActiveTab("products");
     }
   }, [adminActive]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    function syncPublicScreenFromPath() {
+      setPublicScreen(window.location.pathname === "/admin" ? "admin-auth" : "customer");
+    }
+
+    window.addEventListener("popstate", syncPublicScreenFromPath);
+    return () => window.removeEventListener("popstate", syncPublicScreenFromPath);
+  }, []);
 
   useEffect(() => {
     setUploadError("");
