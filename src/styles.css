@@ -190,6 +190,7 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
   padding: 0.9rem 1rem;
   background: #f5ede3;
   backdrop-filter: blur(12px);
@@ -234,6 +235,10 @@ h3 {
 .customer-header-search svg {
   width: 21px;
   height: 21px;
+}
+
+.customer-header-ticker {
+  display: none;
 }
 
 .customer-hero {
@@ -477,6 +482,10 @@ h3 {
     border-bottom: 0;
   }
 
+  .customer-header.scrolled {
+    box-shadow: 0 10px 30px rgba(44, 24, 16, 0.08);
+  }
+
   .customer-header-logo,
   .customer-footer-logo {
     width: 72px;
@@ -503,6 +512,32 @@ h3 {
   .customer-header-search {
     width: 56px;
     height: 56px;
+  }
+
+  .customer-header-ticker {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    color: rgba(44, 24, 16, 0.72);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity 260ms ease;
+    pointer-events: none;
+  }
+
+  .customer-header-ticker.visible {
+    opacity: 1;
+  }
+
+  .customer-header-ticker span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .customer-hero {

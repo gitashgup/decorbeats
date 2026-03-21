@@ -16,6 +16,14 @@ const ANNOUNCEMENTS = [
   "✦ WhatsApp us for custom gifting solutions",
   "✦ New arrivals added weekly"
 ];
+const HEADER_TICKERS = [
+  "Same-day delivery across Bangalore",
+  "Overnight shipping - Mumbai, Chennai, Pune, Hyderabad via Amazon",
+  "Sand-blasted finish - each piece individually treated",
+  "Bulk gifting from 50 to 400+ units - WhatsApp us",
+  "Handcrafted in India · Brass, Metal & Artisanal Decor",
+  "Custom corporate gifting available - enquire now"
+];
 const INQUIRY_SYSTEM_PROMPT = `You are a data extraction assistant for Decorbeats, an Indian gifting and decor business. Extract structured information from this sales inquiry transcript. Return ONLY a valid JSON object, no explanation, no markdown.
 
 Fields to extract:
@@ -1240,10 +1248,13 @@ function AnnouncementBar() {
   );
 }
 
-function CustomerHeader({ scrolled, onSearchTap }) {
+function CustomerHeader({ scrolled, tickerMessage, tickerVisible, onSearchTap }) {
   return (
     <header className={scrolled ? "customer-header scrolled" : "customer-header"}>
       <img src={brandLogo} alt="Decorbeats" className="customer-header-logo" />
+      <div className={scrolled && tickerVisible ? "customer-header-ticker visible" : "customer-header-ticker"} aria-hidden={!scrolled}>
+        <span>{tickerMessage}</span>
+      </div>
       <button type="button" className="customer-header-search" aria-label="Search products" onClick={onSearchTap}>
         <SearchIcon />
       </button>
@@ -2293,6 +2304,8 @@ export default function App() {
   const [csvPreviewPayload, setCsvPreviewPayload] = useState([]);
   const [csvPreviewFileName, setCsvPreviewFileName] = useState("");
   const [customerHeaderElevated, setCustomerHeaderElevated] = useState(false);
+  const [headerTickerIndex, setHeaderTickerIndex] = useState(0);
+  const [headerTickerVisible, setHeaderTickerVisible] = useState(true);
   const [previewCustomerView, setPreviewCustomerView] = useState(false);
   const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
   const [inquiryModalStep, setInquiryModalStep] = useState("record");
@@ -2406,13 +2419,45 @@ export default function App() {
     }
 
     function handleScroll() {
+      if (window.innerWidth >= 768) {
+        const hero = document.querySelector(".customer-hero");
+        const header = document.querySelector(".customer-header");
+        if (hero && header) {
+          const heroBottom = hero.getBoundingClientRect().bottom;
+          const headerHeight = header.offsetHeight;
+          setCustomerHeaderElevated(heroBottom <= headerHeight + 12);
+          return;
+        }
+      }
+
       setCustomerHeaderElevated(window.scrollY > 8);
     }
 
     handleScroll();
     window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener("resize", handleScroll);
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
   }, [adminActive]);
+
+  useEffect(() => {
+    if (adminActive || !customerHeaderElevated) {
+      setHeaderTickerVisible(true);
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setHeaderTickerVisible(false);
+      window.setTimeout(() => {
+        setHeaderTickerIndex((current) => (current + 1) % HEADER_TICKERS.length);
+        setHeaderTickerVisible(true);
+      }, 220);
+    }, 4000);
+
+    return () => window.clearInterval(intervalId);
+  }, [adminActive, customerHeaderElevated]);
 
   const customerCatalog = useMemo(() => products.filter((product) => !product.archivedAt), [products]);
   const adminCatalog = useMemo(() => products.filter((product) => showArchived || !product.archivedAt), [products, showArchived]);
@@ -3316,7 +3361,12 @@ export default function App() {
   ) : !adminActive || previewCustomerView ? (
     <div className="customer-page">
       <AnnouncementBar />
-      <CustomerHeader scrolled={customerHeaderElevated} onSearchTap={handleFocusCustomerSearch} />
+      <CustomerHeader
+        scrolled={customerHeaderElevated}
+        tickerMessage={HEADER_TICKERS[headerTickerIndex]}
+        tickerVisible={headerTickerVisible}
+        onSearchTap={handleFocusCustomerSearch}
+      />
       <main className="customer-main">
         {adminActive && previewCustomerView ? <CustomerPreviewBanner onBack={() => {
           setPreviewCustomerView(false);
