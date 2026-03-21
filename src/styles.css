@@ -210,6 +210,16 @@ h3 {
   background: #fff;
 }
 
+.customer-header-logo {
+  mix-blend-mode: multiply;
+  background: transparent;
+}
+
+.customer-footer-logo {
+  mix-blend-mode: screen;
+  background: transparent;
+}
+
 .customer-header-search {
   width: 48px;
   height: 48px;
