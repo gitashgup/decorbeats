@@ -1540,7 +1540,7 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
           <p>Artisanal decor, gifted with love.</p>
         </div>
         <div className="customer-footer-cta">
-          <p>For bulk orders of 50+ units, contact us on WhatsApp</p>
+          <p>For bulk orders of 50+ units, contact us directly on WhatsApp</p>
           <a className="customer-whatsapp-button footer-whatsapp" href={BULK_WHATSAPP_LINK} target="_blank" rel="noreferrer">
             <WhatsAppIcon />
             <span>WhatsApp</span>
