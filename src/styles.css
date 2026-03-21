@@ -219,6 +219,9 @@ h3 {
 .customer-footer-logo {
   mix-blend-mode: screen;
   background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
 }
 
 .customer-header-search {
@@ -1044,7 +1047,7 @@ h3 {
 
   .customer-footer-brand p,
   .customer-footer-cta p {
-    color: rgba(245, 237, 227, 0.62);
+    color: rgba(255, 255, 255, 0.65);
     font-size: 13px;
     line-height: 1.6;
   }
@@ -1060,7 +1063,7 @@ h3 {
   }
 
   .customer-admin-link {
-    color: rgba(245, 237, 227, 0.62);
+    color: rgba(255, 255, 255, 0.65);
     text-align: right;
     font-size: 12px;
     letter-spacing: 0.1em;
@@ -1074,7 +1077,7 @@ h3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: center;
     padding: 20px 80px;
-    color: rgba(245, 237, 227, 0.56);
+    color: rgba(255, 255, 255, 0.65);
     font-size: 12px;
     text-align: left;
   }
