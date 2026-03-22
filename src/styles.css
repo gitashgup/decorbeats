@@ -1156,6 +1156,112 @@ header img {
   box-shadow: none !important;
 }
 
+@media (max-width: 767px) {
+  .customer-hero-copy h1 {
+    word-break: normal;
+    overflow-wrap: break-word;
+  }
+
+  .customer-hero-copy h1 span {
+    display: block;
+  }
+
+  .customer-header {
+    background: #f5ede3;
+  }
+
+  .customer-header-logo,
+  header .customer-header-logo,
+  header img.customer-header-logo {
+    mix-blend-mode: multiply !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  .customer-footer {
+    background: #1a0e08 !important;
+    color: #e8d5b7 !important;
+    text-align: center;
+  }
+
+  .customer-footer-contact,
+  .customer-footer-main,
+  .customer-footer-bottom {
+    width: 100%;
+    grid-template-columns: 1fr;
+    padding: 1.5rem 1.25rem;
+  }
+
+  .customer-footer-contact {
+    gap: 1.25rem;
+  }
+
+  .customer-footer-contact-item {
+    padding: 0;
+  }
+
+  .customer-footer-contact-item + .customer-footer-contact-item {
+    border-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 1.25rem;
+  }
+
+  .customer-footer-divider {
+    width: calc(100% - 2.5rem);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .customer-footer-brand,
+  .customer-footer-cta,
+  .customer-footer-owner {
+    justify-items: center;
+    text-align: center;
+  }
+
+  .customer-footer-logo,
+  footer .customer-footer-logo,
+  footer img.customer-footer-logo {
+    width: 64px;
+    height: 64px;
+    mix-blend-mode: screen !important;
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  .footer-whatsapp {
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .customer-footer .customer-whatsapp-button {
+    width: 100%;
+  }
+
+  .customer-admin-link {
+    text-align: center;
+  }
+
+  .customer-footer-bottom {
+    gap: 0.6rem;
+    text-align: center;
+  }
+
+  .customer-footer-bottom span,
+  .customer-footer-bottom span:last-child {
+    text-align: center;
+  }
+
+  .customer-footer-bottom-tagline {
+    color: #c4885a !important;
+  }
+}
+
 @keyframes customer-scroll-cue {
   0%,
   100% {
