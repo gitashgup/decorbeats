@@ -168,12 +168,17 @@ function formatFileSize(bytes) {
   return `${Math.round(bytes / 1024)}KB`;
 }
 
-function isNewArrival(product, windowDays = 60) {
-  const createdAt = product?.createdAt ? new Date(product.createdAt).getTime() : NaN;
-  if (!Number.isFinite(createdAt)) {
+function isNewArrival(createdAt) {
+  if (!createdAt) {
     return false;
   }
-  return Date.now() - createdAt < windowDays * 24 * 60 * 60 * 1000;
+  const parsedCreatedAt = new Date(createdAt);
+  if (Number.isNaN(parsedCreatedAt.getTime())) {
+    return false;
+  }
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  return parsedCreatedAt > sevenDaysAgo;
 }
 
 function toInquiry(raw) {
@@ -1489,7 +1494,7 @@ function CustomerCategoryBar({ categories, categoryFilter, setCategoryFilter }) 
 function CustomerProductCard({ product, onSelect }) {
   const showLowStock = product.quantity > 0 && product.quantity <= 5;
   const primaryImage = getPrimaryImage(product);
-  const isNewProduct = isNewArrival(product);
+  const isNewProduct = isNewArrival(product.createdAt);
   return (
     <button type="button" className="customer-product-card desktop-reveal" onClick={() => onSelect(product)}>
       <div className="customer-product-image-wrap">
@@ -1543,7 +1548,7 @@ function CustomerSheet({ product, onClose, onShare }) {
   const whatsappLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${whatsappMessage}`;
   const showDescription = product.notes && product.notes.trim() !== product.name.trim();
   const occasionLine = showDescription ? product.notes.trim() : "";
-  const isNewProduct = isNewArrival(product);
+  const isNewProduct = isNewArrival(product.createdAt);
   const dismissSheet = () => {
     if (closing) {
       return;
@@ -2482,7 +2487,7 @@ export default function App() {
     });
 
     async function loadProducts() {
-      const { data, error } = await supabase.from("products").select("*").order("name");
+      const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false });
       if (cancelled) {
         return;
       }
@@ -2626,7 +2631,14 @@ export default function App() {
   const customerCatalog = useMemo(() => {
     return [...products]
       .filter((product) => !product.archivedAt)
-      .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0));
+      .sort((left, right) => {
+        const rightCreatedAt = new Date(right.createdAt || 0).getTime();
+        const leftCreatedAt = new Date(left.createdAt || 0).getTime();
+        if (Number.isFinite(rightCreatedAt) && Number.isFinite(leftCreatedAt) && rightCreatedAt !== leftCreatedAt) {
+          return rightCreatedAt - leftCreatedAt;
+        }
+        return String(right.id ?? "").localeCompare(String(left.id ?? ""));
+      });
   }, [products]);
   const adminCatalog = useMemo(() => products.filter((product) => showArchived || !product.archivedAt), [products, showArchived]);
   const lowStockCatalog = useMemo(() => adminCatalog.filter((product) => product.quantity <= 10), [adminCatalog]);
@@ -3415,7 +3427,10 @@ export default function App() {
         throw error;
       }
 
-      const { data: refreshed, error: refreshError } = await supabase.from("products").select("*").order("name");
+      const { data: refreshed, error: refreshError } = await supabase
+        .from("products")
+        .select("*")
+        .order("created_at", { ascending: false });
       if (refreshError) {
         throw refreshError;
       }
