@@ -262,6 +262,19 @@ h3 {
   box-shadow: var(--shadow);
 }
 
+.customer-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(245, 237, 227, 0.3) 0%,
+    rgba(245, 237, 227, 0.7) 60%,
+    rgba(245, 237, 227, 0.9) 100%
+  );
+  pointer-events: none;
+}
+
 .customer-hero-copy {
   position: relative;
   display: grid;
@@ -380,13 +393,14 @@ h3 {
   position: relative;
   aspect-ratio: 1 / 1;
   background: rgba(255, 255, 255, 0.7);
+  overflow: visible;
 }
 
 .customer-new-badge {
   position: absolute;
   top: 0.7rem;
   left: 0.7rem;
-  z-index: 1;
+  z-index: 10;
   border-radius: 999px;
   background: #8b4a2a;
   color: #fff;
