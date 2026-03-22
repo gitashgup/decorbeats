@@ -111,6 +111,63 @@ const emptyInquiryDraft = {
 
 const inquiryStatusOrder = ["new", "quoted", "converted", "lost"];
 
+async function compressImage(file, maxWidthPx = 1200, qualityPercent = 0.82) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidthPx) {
+          height = Math.round((height * maxWidthPx) / width);
+          width = maxWidthPx;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+
+            resolve(
+              new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+                type: "image/jpeg"
+              })
+            );
+          },
+          "image/jpeg",
+          qualityPercent
+        );
+      };
+      img.src = event.target?.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 KB";
+  }
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
+  }
+  return `${Math.round(bytes / 1024)}KB`;
+}
+
 function toInquiry(raw) {
   return {
     id: raw.id,
@@ -1629,7 +1686,7 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
   );
 }
 
-function ProductMediaManager({ product, busy, errorMessage, onAddImages, onDeleteImage, onSetCoverImage }) {
+function ProductMediaManager({ product, busy, errorMessage, compressionMessage, onAddImages, onDeleteImage, onSetCoverImage }) {
   const fileInputRef = useRef(null);
   const images = getProductImages(product);
 
@@ -1684,6 +1741,7 @@ function ProductMediaManager({ product, busy, errorMessage, onAddImages, onDelet
           event.target.value = "";
         }}
       />
+      {compressionMessage ? <p className="compression-note">{compressionMessage}</p> : null}
       {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
     </div>
   );
@@ -1765,7 +1823,7 @@ function CustomerImageCarousel({ product }) {
   );
 }
 
-function ProductForm({ form, setForm, generatedSku, onSubmit, onReset, uploadBusy, saveBusy, onFileChange }) {
+function ProductForm({ form, setForm, generatedSku, onSubmit, onReset, uploadBusy, saveBusy, compressionMessage, onFileChange }) {
   return (
     <form className="panel-card admin-card" onSubmit={onSubmit}>
       <div className="section-head">
@@ -1787,6 +1845,7 @@ function ProductForm({ form, setForm, generatedSku, onSubmit, onReset, uploadBus
         {form.imageUrl ? <img src={form.imageUrl} alt="Product preview" className="product-photo-preview" /> : null}
         <input type="file" accept="image/*" onChange={onFileChange} disabled={uploadBusy} />
       </label>
+      {compressionMessage ? <p className="compression-note">{compressionMessage}</p> : null}
 
       <div className="form-grid">
         <label className="span-2">
@@ -2347,6 +2406,7 @@ export default function App() {
   const [saveBusy, setSaveBusy] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [compressionMessage, setCompressionMessage] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
@@ -2376,6 +2436,7 @@ export default function App() {
   const productGridRef = useRef(null);
   const customerSearchRef = useRef(null);
   const recognitionRef = useRef(null);
+  const compressionTimerRef = useRef(null);
   const speechSupported =
     typeof window !== "undefined" && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
 
@@ -2480,6 +2541,14 @@ export default function App() {
   }, [selectedId]);
 
   useEffect(() => {
+    return () => {
+      if (compressionTimerRef.current) {
+        window.clearTimeout(compressionTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!adminActive) {
       setPreviewCustomerView(false);
     }
@@ -2567,13 +2636,25 @@ export default function App() {
   }, [currentCatalog]);
 
   const filteredProducts = useMemo(() => {
-    return currentCatalog.filter((product) => {
+    const visibleProducts = currentCatalog.filter((product) => {
       const haystack = [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase();
       const matchesSearch = haystack.includes(search.toLowerCase());
       const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
       return matchesSearch && matchesCategory;
     });
-  }, [categoryFilter, currentCatalog, search]);
+
+    if (!adminActive) {
+      return visibleProducts;
+    }
+
+    return [...visibleProducts].sort((left, right) => {
+      const quantityDelta = Number(right.quantity || 0) - Number(left.quantity || 0);
+      if (quantityDelta !== 0) {
+        return quantityDelta;
+      }
+      return left.name.localeCompare(right.name);
+    });
+  }, [adminActive, categoryFilter, currentCatalog, search]);
 
   const filteredInquiries = useMemo(() => {
     const statusFiltered =
@@ -2710,6 +2791,23 @@ export default function App() {
       recognitionRef.current.stop();
       recognitionRef.current = null;
     }
+  }
+
+  function showCompressionFeedback(originalFile, optimizedFile) {
+    const nextMessage = `Optimised: ${formatFileSize(originalFile.size)} → ${formatFileSize(optimizedFile.size)}`;
+    setCompressionMessage(nextMessage);
+    if (compressionTimerRef.current) {
+      window.clearTimeout(compressionTimerRef.current);
+    }
+    compressionTimerRef.current = window.setTimeout(() => {
+      setCompressionMessage("");
+    }, 2000);
+  }
+
+  async function prepareUploadFile(file) {
+    const optimizedFile = await compressImage(file);
+    showCompressionFeedback(file, optimizedFile);
+    return optimizedFile;
   }
 
   function startInquiryListening() {
@@ -3027,8 +3125,11 @@ export default function App() {
       if (isSupabaseConfigured) {
         const uploadedUrls = [];
         for (const file of files) {
-          const path = buildProductImagePath(product.sku, file.name);
-          const { error: storageError } = await supabase.storage.from(PRODUCT_STORAGE_BUCKET).upload(path, file, { upsert: false });
+          const fileToUpload = await prepareUploadFile(file);
+          const path = buildProductImagePath(product.sku, fileToUpload.name);
+          const { error: storageError } = await supabase.storage
+            .from(PRODUCT_STORAGE_BUCKET)
+            .upload(path, fileToUpload, { upsert: false });
           if (storageError) {
             throw storageError;
           }
@@ -3038,7 +3139,11 @@ export default function App() {
         await persistProductImages(product, [...getProductImages(product), ...uploadedUrls]);
         setStatusMessage(uploadedUrls.length === 1 ? "Image added to gallery." : `${uploadedUrls.length} images added to gallery.`);
       } else {
-        const localUrls = files.map((file) => URL.createObjectURL(file));
+        const localUrls = [];
+        for (const file of files) {
+          const fileToUpload = await prepareUploadFile(file);
+          localUrls.push(URL.createObjectURL(fileToUpload));
+        }
         await persistProductImages(product, [...getProductImages(product), ...localUrls]);
         setStatusMessage(localUrls.length === 1 ? "Image added locally." : `${localUrls.length} images added locally.`);
       }
@@ -3214,8 +3319,11 @@ export default function App() {
     setUploadBusy(true);
     setUploadError("");
     try {
-      const path = buildProductImagePath(generatedSku || "draft", file.name);
-      const { error: storageError } = await supabase.storage.from(PRODUCT_STORAGE_BUCKET).upload(path, file, { upsert: true });
+      const fileToUpload = await prepareUploadFile(file);
+      const path = buildProductImagePath(generatedSku || "draft", fileToUpload.name);
+      const { error: storageError } = await supabase.storage
+        .from(PRODUCT_STORAGE_BUCKET)
+        .upload(path, fileToUpload, { upsert: true });
       if (storageError) {
         throw storageError;
       }
