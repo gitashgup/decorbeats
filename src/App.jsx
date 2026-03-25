@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import heic2any from "heic2any";
 import { products as seedProducts } from "./data/products";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
@@ -111,7 +112,41 @@ const emptyInquiryDraft = {
 
 const inquiryStatusOrder = ["new", "quoted", "converted", "lost"];
 
-async function compressImage(file, maxWidthPx = 1200, qualityPercent = 0.82) {
+function isHeicLikeFile(file) {
+  if (!file) {
+    return false;
+  }
+
+  const lowerName = file.name?.toLowerCase?.() ?? "";
+  return (
+    file.type === "image/heic" ||
+    file.type === "image/heif" ||
+    lowerName.endsWith(".heic") ||
+    lowerName.endsWith(".heif") ||
+    file.type === ""
+  );
+}
+
+async function compressImage(file, maxWidthPx = 1200, qualityPercent = 0.82, onStatusChange = () => {}) {
+  let processedFile = file;
+
+  if (isHeicLikeFile(file)) {
+    onStatusChange("Converting iPhone photo...");
+    try {
+      const convertedBlob = await heic2any({
+        blob: file,
+        toType: "image/jpeg",
+        quality: 0.9
+      });
+      const normalizedBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+      processedFile = new File([normalizedBlob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), {
+        type: "image/jpeg"
+      });
+    } catch (error) {
+      console.error("HEIC conversion failed:", error);
+    }
+  }
+
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -130,7 +165,7 @@ async function compressImage(file, maxWidthPx = 1200, qualityPercent = 0.82) {
         canvas.height = height;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          resolve(file);
+          resolve(processedFile);
           return;
         }
 
@@ -138,12 +173,12 @@ async function compressImage(file, maxWidthPx = 1200, qualityPercent = 0.82) {
         canvas.toBlob(
           (blob) => {
             if (!blob) {
-              resolve(file);
+              resolve(processedFile);
               return;
             }
 
             resolve(
-              new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+              new File([blob], processedFile.name.replace(/\.[^.]+$/, ".jpg"), {
                 type: "image/jpeg"
               })
             );
@@ -154,7 +189,7 @@ async function compressImage(file, maxWidthPx = 1200, qualityPercent = 0.82) {
       };
       img.src = event.target?.result;
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(processedFile);
   });
 }
 
@@ -1705,7 +1740,16 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
   );
 }
 
-function ProductMediaManager({ product, busy, errorMessage, compressionMessage, onAddImages, onDeleteImage, onSetCoverImage }) {
+function ProductMediaManager({
+  product,
+  busy,
+  errorMessage,
+  compressionMessage,
+  uploadStageMessage,
+  onAddImages,
+  onDeleteImage,
+  onSetCoverImage
+}) {
   const fileInputRef = useRef(null);
   const images = getProductImages(product);
 
@@ -1750,7 +1794,7 @@ function ProductMediaManager({ product, busy, errorMessage, compressionMessage, 
         ref={fileInputRef}
         className="visually-hidden"
         type="file"
-        accept="image/*"
+        accept="image/*,.heic,.heif"
         multiple
         onChange={(event) => {
           const files = Array.from(event.target.files ?? []);
@@ -1760,6 +1804,7 @@ function ProductMediaManager({ product, busy, errorMessage, compressionMessage, 
           event.target.value = "";
         }}
       />
+      {uploadStageMessage ? <p className="compression-note">{uploadStageMessage}</p> : null}
       {compressionMessage ? <p className="compression-note">{compressionMessage}</p> : null}
       {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
     </div>
@@ -1842,7 +1887,18 @@ function CustomerImageCarousel({ product }) {
   );
 }
 
-function ProductForm({ form, setForm, generatedSku, onSubmit, onReset, uploadBusy, saveBusy, compressionMessage, onFileChange }) {
+function ProductForm({
+  form,
+  setForm,
+  generatedSku,
+  onSubmit,
+  onReset,
+  uploadBusy,
+  saveBusy,
+  compressionMessage,
+  uploadStageMessage,
+  onFileChange
+}) {
   return (
     <form className="panel-card admin-card" onSubmit={onSubmit}>
       <div className="section-head">
@@ -1862,8 +1918,9 @@ function ProductForm({ form, setForm, generatedSku, onSubmit, onReset, uploadBus
         <strong>{uploadBusy ? "Uploading..." : "Tap to add product photo"}</strong>
         <span>{form.imageUrl ? "Photo added. You can tap again to replace it." : "Add the product photo first."}</span>
         {form.imageUrl ? <img src={form.imageUrl} alt="Product preview" className="product-photo-preview" /> : null}
-        <input type="file" accept="image/*" onChange={onFileChange} disabled={uploadBusy} />
+        <input type="file" accept="image/*,.heic,.heif" onChange={onFileChange} disabled={uploadBusy} />
       </label>
+      {uploadStageMessage ? <p className="compression-note">{uploadStageMessage}</p> : null}
       {compressionMessage ? <p className="compression-note">{compressionMessage}</p> : null}
 
       <div className="form-grid">
@@ -1994,6 +2051,8 @@ function ProductCard({
   onInlineSetCoverImage,
   imageBusy,
   uploadError,
+  compressionMessage,
+  uploadStageMessage,
   saveBusy,
   archivedVisible = false
 }) {
@@ -2086,6 +2145,8 @@ function ProductCard({
           onSetCoverImage={onInlineSetCoverImage}
           imageBusy={imageBusy}
           uploadError={uploadError}
+          compressionMessage={compressionMessage}
+          uploadStageMessage={uploadStageMessage}
           saveBusy={saveBusy}
           inline
         />
@@ -2105,6 +2166,8 @@ function DetailPanel({
   onSetCoverImage,
   imageBusy,
   uploadError,
+  compressionMessage,
+  uploadStageMessage,
   saveBusy,
   inline = false
 }) {
@@ -2152,6 +2215,8 @@ function DetailPanel({
               product={product}
               busy={imageBusy}
               errorMessage={uploadError}
+              compressionMessage={compressionMessage}
+              uploadStageMessage={uploadStageMessage}
               onAddImages={onAddImages}
               onDeleteImage={onDeleteImage}
               onSetCoverImage={onSetCoverImage}
@@ -2301,6 +2366,8 @@ function CatalogSection({
   onInlineSetCoverImage,
   imageBusy,
   uploadError,
+  compressionMessage,
+  uploadStageMessage,
   saveBusy,
   search,
   setSearch,
@@ -2338,6 +2405,8 @@ function CatalogSection({
                 onInlineSetCoverImage={onInlineSetCoverImage}
                 imageBusy={imageBusy}
                 uploadError={uploadError}
+                compressionMessage={compressionMessage}
+                uploadStageMessage={uploadStageMessage}
                 saveBusy={saveBusy}
                 archivedVisible={archivedVisible}
               />
@@ -2426,6 +2495,7 @@ export default function App() {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [compressionMessage, setCompressionMessage] = useState("");
+  const [uploadStageMessage, setUploadStageMessage] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
@@ -2835,7 +2905,8 @@ export default function App() {
   }
 
   async function prepareUploadFile(file) {
-    const optimizedFile = await compressImage(file);
+    const optimizedFile = await compressImage(file, 1200, 0.82, setUploadStageMessage);
+    setUploadStageMessage("");
     showCompressionFeedback(file, optimizedFile);
     return optimizedFile;
   }
@@ -3149,13 +3220,13 @@ export default function App() {
       return;
     }
 
-    setUploadBusy(true);
     setUploadError("");
     try {
       if (isSupabaseConfigured) {
         const uploadedUrls = [];
         for (const file of files) {
           const fileToUpload = await prepareUploadFile(file);
+          setUploadBusy(true);
           const path = buildProductImagePath(product.sku, fileToUpload.name);
           const { error: storageError } = await supabase.storage
             .from(PRODUCT_STORAGE_BUCKET)
@@ -3183,6 +3254,7 @@ export default function App() {
       setUploadError(`Upload failed: ${message}`);
       setStatusMessage(`Upload failed: ${message}`);
     } finally {
+      setUploadStageMessage("");
       setUploadBusy(false);
     }
   }
@@ -3346,10 +3418,10 @@ export default function App() {
       return;
     }
 
-    setUploadBusy(true);
     setUploadError("");
     try {
       const fileToUpload = await prepareUploadFile(file);
+      setUploadBusy(true);
       const path = buildProductImagePath(generatedSku || "draft", fileToUpload.name);
       const { error: storageError } = await supabase.storage
         .from(PRODUCT_STORAGE_BUCKET)
@@ -3367,6 +3439,7 @@ export default function App() {
       setUploadError(`Upload failed: ${message}`);
       setStatusMessage(`Upload failed: ${message}`);
     } finally {
+      setUploadStageMessage("");
       setUploadBusy(false);
       event.target.value = "";
     }
@@ -3705,6 +3778,8 @@ export default function App() {
               onInlineSetCoverImage={handleSetCoverImage}
               imageBusy={uploadBusy}
               uploadError={uploadError}
+              compressionMessage={compressionMessage}
+              uploadStageMessage={uploadStageMessage}
               saveBusy={saveBusy}
               search={search}
               setSearch={setSearch}
@@ -3743,6 +3818,8 @@ export default function App() {
               onReset={() => setForm(emptyForm)}
               uploadBusy={uploadBusy}
               saveBusy={saveBusy}
+              compressionMessage={compressionMessage}
+              uploadStageMessage={uploadStageMessage}
               onFileChange={handleFileChange}
             />
             <ArchivePanel
@@ -3762,6 +3839,8 @@ export default function App() {
               onSetCoverImage={handleSetCoverImage}
               imageBusy={uploadBusy}
               uploadError={uploadError}
+              compressionMessage={compressionMessage}
+              uploadStageMessage={uploadStageMessage}
               saveBusy={saveBusy}
             />
           </section>
@@ -3791,6 +3870,8 @@ export default function App() {
               onInlineSetCoverImage={handleSetCoverImage}
               imageBusy={uploadBusy}
               uploadError={uploadError}
+              compressionMessage={compressionMessage}
+              uploadStageMessage={uploadStageMessage}
               saveBusy={saveBusy}
               search={search}
               setSearch={setSearch}
