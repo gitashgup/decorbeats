@@ -252,6 +252,52 @@ function toInquiry(raw) {
   };
 }
 
+function toSale(raw) {
+  return {
+    id: raw.id,
+    createdAt: raw.created_at,
+    customerName: safeText(raw.customer_name, "Walk-in sale"),
+    paymentMethod: safeText(raw.payment_method, "upi").toLowerCase(),
+    notes: safeText(raw.notes),
+    totalAmount: Number(raw.total_amount ?? 0),
+    items: Array.isArray(raw.sale_items)
+      ? raw.sale_items.map((item) => ({
+          id: item.id,
+          productSku: safeText(item.product_sku),
+          productName: safeText(item.product_name),
+          quantitySold: Number(item.quantity_sold ?? 0),
+          sellingPrice: Number(item.selling_price ?? 0),
+          costPrice: item.cost_price == null ? null : Number(item.cost_price)
+        }))
+      : []
+  };
+}
+
+function createEmptySaleDraft() {
+  return {
+    customer_name: "",
+    payment_method: "upi",
+    notes: "",
+    items: []
+  };
+}
+
+function formatPaymentMethod(value) {
+  return safeText(value, "upi").toUpperCase();
+}
+
+function formatSaleDate(value) {
+  if (!value) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
 function formatInquiryStatus(status) {
   const normalized = safeText(status, "new").toLowerCase();
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
@@ -385,6 +431,17 @@ function GearIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path
         d="m19.14 12.94.04-.94-.04-.94 2.02-1.58a.7.7 0 0 0 .17-.9l-1.91-3.3a.7.7 0 0 0-.85-.3l-2.39.96a7.65 7.65 0 0 0-1.62-.94L14.2 2.4a.7.7 0 0 0-.69-.56h-3.02a.7.7 0 0 0-.69.56L9.44 5a7.65 7.65 0 0 0-1.62.94l-2.39-.96a.7.7 0 0 0-.85.3L2.67 8.58a.7.7 0 0 0 .17.9l2.02 1.58-.04.94.04.94-2.02 1.58a.7.7 0 0 0-.17.9l1.91 3.3a.7.7 0 0 0 .85.3l2.39-.96c.5.38 1.05.7 1.62.94l.36 2.6a.7.7 0 0 0 .69.56h3.02a.7.7 0 0 0 .69-.56l.36-2.6c.57-.24 1.12-.56 1.62-.94l2.39.96a.7.7 0 0 0 .85-.3l1.91-3.3a.7.7 0 0 0-.17-.9l-2.02-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function ReceiptIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M6 3.5h12a1.5 1.5 0 0 1 1.5 1.5v15.4l-2.6-1.6-2.3 1.6-2.1-1.6-2.1 1.6-2.3-1.6-2.6 1.6V5A1.5 1.5 0 0 1 6 3.5Zm1.5 4v1.8h9V7.5h-9Zm0 4v1.8h6.4v-1.8H7.5Zm0 4v1.8h9v-1.8h-9Z"
         fill="currentColor"
       />
     </svg>
@@ -813,7 +870,12 @@ function StatStrip({ items }) {
   return (
     <section className="stat-strip" aria-label="Inventory highlights">
       {items.map((item) => (
-        <article key={item.label} className={item.emphasis ? "stat-chip emphasis" : "stat-chip"}>
+        <article
+          key={item.label}
+          className={
+            item.emphasis ? `stat-chip emphasis${item.tone ? ` ${item.tone}` : ""}` : "stat-chip"
+          }
+        >
           <span>{item.label}</span>
           <strong>{item.value}</strong>
         </article>
@@ -1124,6 +1186,274 @@ function InquiriesScreen({
         )}
       </section>
     </section>
+  );
+}
+
+function SalesSummaryStrip({ items }) {
+  return <StatStrip items={items} />;
+}
+
+function SaleCard({ sale, expanded, onToggle }) {
+  const itemsSummary = sale.items.map((item) => `${item.quantitySold}× ${item.productName || item.productSku}`).join(" + ");
+  const badgeClass =
+    sale.paymentMethod === "upi" ? "sale-payment-badge upi" : sale.paymentMethod === "cash" ? "sale-payment-badge cash" : "sale-payment-badge";
+
+  return (
+    <article className={expanded ? "sale-card expanded" : "sale-card"}>
+      <button type="button" className="sale-card-main" onClick={() => onToggle(sale.id)}>
+        <div className="sale-card-top">
+          <div>
+            <p className="sale-card-date">{formatSaleDate(sale.createdAt)}</p>
+            <h3>{sale.customerName}</h3>
+          </div>
+          <span className={badgeClass}>{formatPaymentMethod(sale.paymentMethod)}</span>
+        </div>
+        <p className="sale-card-items">{itemsSummary || "No items recorded"}</p>
+        <div className="sale-card-meta">
+          <strong>{formatCurrency(sale.totalAmount)}</strong>
+        </div>
+      </button>
+      {expanded ? (
+        <div className="sale-card-detail">
+          <div className="sale-detail-grid">
+            <div>
+              <span>Customer</span>
+              <strong>{sale.customerName}</strong>
+            </div>
+            <div>
+              <span>Payment</span>
+              <strong>{formatPaymentMethod(sale.paymentMethod)}</strong>
+            </div>
+            <div>
+              <span>Time</span>
+              <strong>{formatSaleDate(sale.createdAt)}</strong>
+            </div>
+            <div>
+              <span>Total</span>
+              <strong>{formatCurrency(sale.totalAmount)}</strong>
+            </div>
+          </div>
+          <ul className="sale-item-list">
+            {sale.items.map((item) => (
+              <li key={item.id || `${item.productSku}-${item.productName}`}>
+                <div>
+                  <strong>{item.productName || item.productSku}</strong>
+                  <span>{item.productSku}</span>
+                </div>
+                <div>
+                  <strong>{item.quantitySold} × {formatCurrency(item.sellingPrice)}</strong>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {sale.notes ? <p className="detail-note">{sale.notes}</p> : null}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function SalesScreen({ sales, summaryItems, onRecordSale, expandedSaleId, onToggleSale }) {
+  return (
+    <section className="stack-grid">
+      <button type="button" className="primary-button inquiry-log-button" onClick={onRecordSale}>
+        <ReceiptIcon />
+        <span>Record Sale</span>
+      </button>
+      <SalesSummaryStrip items={summaryItems} />
+      <section className="inquiry-list">
+        {sales.length ? (
+          sales.map((sale) => (
+            <SaleCard key={sale.id} sale={sale} expanded={expandedSaleId === sale.id} onToggle={onToggleSale} />
+          ))
+        ) : (
+          <div className="panel-card empty-state">
+            <p className="eyebrow">No sales yet</p>
+            <h3>Your recorded sales will appear here.</h3>
+          </div>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function RecordSaleModal({
+  open,
+  draft,
+  setDraft,
+  products,
+  productSearch,
+  setProductSearch,
+  pickerOpen,
+  setPickerOpen,
+  busy,
+  errorMessage,
+  onClose,
+  onAddProduct,
+  onRemoveProduct,
+  onUpdateItem,
+  onSave
+}) {
+  if (!open) {
+    return null;
+  }
+
+  const matchingProducts = products.filter((product) => {
+    const query = productSearch.trim().toLowerCase();
+    if (!query) {
+      return product.quantity > 0;
+    }
+    return (
+      product.quantity > 0 &&
+      [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase().includes(query)
+    );
+  });
+
+  const total = draft.items.reduce(
+    (sum, item) => sum + (Number(item.quantity_sold || 0) * Number(item.selling_price || 0)),
+    0
+  );
+
+  return (
+    <div className="inquiry-modal-overlay" onClick={onClose}>
+      <div className="inquiry-modal sale-modal" onClick={(event) => event.stopPropagation()}>
+        <form
+          className="inquiry-modal-body inquiry-confirm-form sale-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSave();
+          }}
+        >
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Record Sale</p>
+              <h3>Complete a new sale</h3>
+            </div>
+          </div>
+          {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
+          <label>
+            Customer name
+            <input
+              value={draft.customer_name}
+              onChange={(event) => setDraft((current) => ({ ...current, customer_name: event.target.value }))}
+              placeholder="Optional"
+            />
+          </label>
+          <div className="sale-payment-toggle">
+            <button
+              type="button"
+              className={draft.payment_method === "cash" ? "payment-toggle active" : "payment-toggle"}
+              onClick={() => setDraft((current) => ({ ...current, payment_method: "cash" }))}
+            >
+              💵 Cash
+            </button>
+            <button
+              type="button"
+              className={draft.payment_method === "upi" ? "payment-toggle active" : "payment-toggle"}
+              onClick={() => setDraft((current) => ({ ...current, payment_method: "upi" }))}
+            >
+              📱 UPI
+            </button>
+          </div>
+          <div className="inquiry-products-editor span-2">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Products</p>
+                <h3>Sale items</h3>
+              </div>
+              <button type="button" className="ghost-button" onClick={() => setPickerOpen((value) => !value)}>
+                Add Product
+              </button>
+            </div>
+            {pickerOpen ? (
+              <div className="sale-picker">
+                <input
+                  className="search-input"
+                  type="search"
+                  value={productSearch}
+                  onChange={(event) => setProductSearch(event.target.value)}
+                  placeholder="Search products by name or SKU"
+                />
+                <div className="sale-picker-results">
+                  {matchingProducts.map((product) => (
+                    <button key={product.id} type="button" className="sale-picker-item" onClick={() => onAddProduct(product)}>
+                      <div>
+                        <strong>{product.name}</strong>
+                        <span>{product.sku}</span>
+                      </div>
+                      <small>{product.quantity} in stock</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="inquiry-product-editor-list">
+              {draft.items.length ? (
+                draft.items.map((item, index) => (
+                  <div key={`${item.product_sku}-${index}`} className="inquiry-product-editor-card sale-item-card">
+                    <div className="sale-item-head">
+                      <div>
+                        <strong>{item.product_name}</strong>
+                        <span>{item.product_sku}</span>
+                      </div>
+                      <button type="button" className="detail-cancel-link" onClick={() => onRemoveProduct(index)}>
+                        ×
+                      </button>
+                    </div>
+                    <div className="inquiry-inline-fields">
+                      <label>
+                        Quantity
+                        <input
+                          type="number"
+                          min="1"
+                          max={item.max_quantity}
+                          value={item.quantity_sold}
+                          onChange={(event) => onUpdateItem(index, "quantity_sold", event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Selling price
+                        <div className="rupee-field">
+                          <span>₹</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={item.selling_price}
+                            onChange={(event) => onUpdateItem(index, "selling_price", event.target.value)}
+                          />
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="support-copy">Add at least one product to record this sale.</p>
+              )}
+            </div>
+          </div>
+          <label className="span-2">
+            Notes
+            <textarea
+              rows="4"
+              value={draft.notes}
+              onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+            />
+          </label>
+          <div className="sale-total-card span-2">
+            <span>Order total</span>
+            <strong>{formatCurrency(total)}</strong>
+          </div>
+          <div className="detail-edit-actions">
+            <button type="submit" className="primary-button detail-save-button" disabled={busy || !draft.items.length}>
+              {busy ? "Saving..." : "Complete Sale"}
+            </button>
+            <button type="button" className="detail-cancel-link" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -2494,6 +2824,7 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
   const items = [
     { id: "products", label: "Products", icon: <GridIcon /> },
     { id: "inquiries", label: "Inquiries", icon: <ChatIcon /> },
+    { id: "sales", label: "Sales", icon: <ReceiptIcon /> },
     { id: "low-stock", label: "Low Stock", icon: <WarningIcon />, badge: lowStockCount },
     { id: "settings", label: "Settings", icon: <GearIcon /> }
   ];
@@ -2522,11 +2853,22 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
 
       <button
         type="button"
+        className={activeTab === "sales" ? "nav-item active" : "nav-item"}
+        onClick={() => setActiveTab("sales")}
+      >
+        <span className="nav-icon">
+          {items[2].icon}
+        </span>
+        <span>Sales</span>
+      </button>
+
+      <button
+        type="button"
         className={activeTab === "low-stock" ? "nav-item active" : "nav-item"}
         onClick={() => setActiveTab("low-stock")}
       >
         <span className="nav-icon nav-icon-alert">
-          {items[2].icon}
+          {items[3].icon}
           {lowStockCount ? <small>{lowStockCount}</small> : null}
         </span>
         <span>Low Stock</span>
@@ -2537,7 +2879,7 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
         className={activeTab === "settings" ? "nav-item active" : "nav-item"}
         onClick={() => setActiveTab("settings")}
       >
-        <span className="nav-icon">{items[3].icon}</span>
+        <span className="nav-icon">{items[4].icon}</span>
         <span>Settings</span>
       </button>
     </nav>
@@ -2547,8 +2889,10 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
 export default function App() {
   const [products, setProducts] = useState(seedProducts.map(toProduct));
   const [inquiries, setInquiries] = useState([]);
+  const [sales, setSales] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [expandedInquiryId, setExpandedInquiryId] = useState(null);
+  const [expandedSaleId, setExpandedSaleId] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [inquiryStatusFilter, setInquiryStatusFilter] = useState("all");
@@ -2567,6 +2911,7 @@ export default function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [inquiryBusy, setInquiryBusy] = useState(false);
+  const [salesBusy, setSalesBusy] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [session, setSession] = useState(null);
@@ -2589,6 +2934,11 @@ export default function App() {
   const [inquiryDraft, setInquiryDraft] = useState(createEmptyInquiryDraft());
   const [inquiryModalError, setInquiryModalError] = useState("");
   const [isListening, setIsListening] = useState(false);
+  const [saleModalOpen, setSaleModalOpen] = useState(false);
+  const [saleDraft, setSaleDraft] = useState(createEmptySaleDraft());
+  const [saleProductSearch, setSaleProductSearch] = useState("");
+  const [salePickerOpen, setSalePickerOpen] = useState(false);
+  const [saleModalError, setSaleModalError] = useState("");
   const productGridRef = useRef(null);
   const customerSearchRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -2659,8 +3009,22 @@ export default function App() {
       setInquiries((data ?? []).map(toInquiry));
     }
 
+    async function loadSales() {
+      const { data, error } = await supabase
+        .from("sales")
+        .select("*, sale_items(*)")
+        .order("created_at", { ascending: false });
+
+      if (cancelled || error) {
+        return;
+      }
+
+      setSales((data ?? []).map(toSale));
+    }
+
     loadProducts();
     loadInquiries();
+    loadSales();
 
     return () => {
       cancelled = true;
@@ -2828,6 +3192,7 @@ export default function App() {
       inquiryStatusFilter === "all" ? inquiries : inquiries.filter((inquiry) => inquiry.status === inquiryStatusFilter);
     return [...statusFiltered].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
   }, [inquiries, inquiryStatusFilter]);
+  const filteredSales = useMemo(() => [...sales].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)), [sales]);
 
   useEffect(() => {
     if (typeof window === "undefined" || window.innerWidth < 768) {
@@ -2869,6 +3234,28 @@ export default function App() {
       withImages: products.filter((product) => !product.archivedAt && getProductImages(product).length).length
     };
   }, [products]);
+  const todaysSalesSummary = useMemo(() => {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const todaysSales = sales.filter((sale) => new Date(sale.createdAt) >= startOfDay);
+    const revenue = todaysSales.reduce((sum, sale) => sum + Number(sale.totalAmount || 0), 0);
+    const productCounts = new Map();
+    todaysSales.forEach((sale) => {
+      sale.items.forEach((item) => {
+        const key = item.productName || item.productSku;
+        if (!key) {
+          return;
+        }
+        productCounts.set(key, (productCounts.get(key) || 0) + Number(item.quantitySold || 0));
+      });
+    });
+    const mostSold = Array.from(productCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "None yet";
+    return [
+      { label: "Today", value: formatCurrency(revenue), emphasis: revenue > 0, tone: "success" },
+      { label: "Sales", value: todaysSales.length },
+      { label: "Most sold", value: mostSold }
+    ];
+  }, [sales]);
 
   function populateForm(product) {
     setForm({
@@ -2958,6 +3345,196 @@ export default function App() {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
+    }
+  }
+
+  function resetSaleModal() {
+    setSaleModalOpen(false);
+    setSaleDraft(createEmptySaleDraft());
+    setSaleProductSearch("");
+    setSalePickerOpen(false);
+    setSaleModalError("");
+  }
+
+  function handleOpenSaleModal() {
+    setSaleModalOpen(true);
+    setSaleDraft(createEmptySaleDraft());
+    setSaleProductSearch("");
+    setSalePickerOpen(false);
+    setSaleModalError("");
+  }
+
+  function handleAddSaleProduct(product) {
+    setSaleDraft((current) => {
+      const existingIndex = current.items.findIndex((item) => item.product_sku === product.sku);
+      if (existingIndex >= 0) {
+        const nextItems = [...current.items];
+        const nextQuantity = Math.min(Number(nextItems[existingIndex].quantity_sold || 0) + 1, Number(product.quantity || 0));
+        nextItems[existingIndex] = { ...nextItems[existingIndex], quantity_sold: nextQuantity };
+        return { ...current, items: nextItems };
+      }
+
+      return {
+        ...current,
+        items: [
+          ...current.items,
+          {
+            product_id: product.id,
+            product_sku: product.sku,
+            product_name: product.name,
+            quantity_sold: 1,
+            selling_price: product.pricing.mrp ?? "",
+            cost_price: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
+            max_quantity: Number(product.quantity || 0)
+          }
+        ]
+      };
+    });
+    setSalePickerOpen(false);
+    setSaleProductSearch("");
+  }
+
+  function handleUpdateSaleItem(index, field, value) {
+    setSaleDraft((current) => {
+      const nextItems = [...current.items];
+      const currentItem = nextItems[index];
+      if (!currentItem) {
+        return current;
+      }
+      if (field === "quantity_sold") {
+        const nextQuantity = Math.max(1, Math.min(Number(value || 1), Number(currentItem.max_quantity || 1)));
+        nextItems[index] = { ...currentItem, quantity_sold: nextQuantity };
+      } else {
+        nextItems[index] = { ...currentItem, [field]: value };
+      }
+      return { ...current, items: nextItems };
+    });
+  }
+
+  function handleRemoveSaleProduct(index) {
+    setSaleDraft((current) => ({
+      ...current,
+      items: current.items.filter((_, itemIndex) => itemIndex !== index)
+    }));
+  }
+
+  async function handleSaveSale() {
+    if (!saleDraft.items.length) {
+      setSaleModalError("Add at least one product before saving.");
+      return;
+    }
+
+    const inventoryChanges = saleDraft.items.map((item) => {
+      const product = products.find((entry) => entry.sku === item.product_sku);
+      return {
+        item,
+        product,
+        nextQuantity: Math.max(0, Number(product?.quantity || 0) - Number(item.quantity_sold || 0))
+      };
+    });
+
+    const invalidStock = inventoryChanges.find(
+      ({ product, item }) => !product || Number(item.quantity_sold || 0) > Number(product.quantity || 0)
+    );
+    if (invalidStock) {
+      setSaleModalError(`Stock is not available for ${invalidStock.item.product_name || invalidStock.item.product_sku}.`);
+      return;
+    }
+
+    const total = saleDraft.items.reduce(
+      (sum, item) => sum + Number(item.quantity_sold || 0) * Number(item.selling_price || 0),
+      0
+    );
+
+    const confirmationLines = inventoryChanges.map(
+      ({ item, product, nextQuantity }) => `• ${item.product_name}: ${product.quantity} → ${nextQuantity}`
+    );
+    const shouldConfirm = window.confirm(
+      `Confirm Sale\n\nThis will reduce stock:\n${confirmationLines.join("\n")}\n\nTotal: ${formatCurrency(total)} (${formatPaymentMethod(
+        saleDraft.payment_method
+      )})`
+    );
+
+    if (!shouldConfirm) {
+      return;
+    }
+
+    setSalesBusy(true);
+    setSaleModalError("");
+    try {
+      const salePayload = {
+        customer_name: safeText(saleDraft.customer_name) || null,
+        payment_method: saleDraft.payment_method || "upi",
+        notes: safeText(saleDraft.notes) || null,
+        total_amount: total
+      };
+
+      let savedSale;
+      if (isSupabaseConfigured) {
+        const { data: saleData, error: saleError } = await supabase.from("sales").insert(salePayload).select().single();
+        if (saleError) {
+          throw saleError;
+        }
+
+        const saleItemsPayload = saleDraft.items.map((item) => ({
+          sale_id: saleData.id,
+          product_sku: item.product_sku,
+          product_name: item.product_name,
+          quantity_sold: Number(item.quantity_sold || 0),
+          selling_price: Number(item.selling_price || 0),
+          cost_price: item.cost_price === "" ? null : Number(item.cost_price)
+        }));
+
+        const { data: saleItemsData, error: itemsError } = await supabase.from("sale_items").insert(saleItemsPayload).select();
+        if (itemsError) {
+          throw itemsError;
+        }
+
+        const productUpdates = inventoryChanges.map(({ product, nextQuantity }) =>
+          supabase.from("products").update({ quantity: nextQuantity }).eq("id", product.id).select().single()
+        );
+        const productResults = await Promise.all(productUpdates);
+        const updateError = productResults.find((result) => result.error)?.error;
+        if (updateError) {
+          throw updateError;
+        }
+        const normalizedProducts = productResults.map((result) => toProduct(result.data));
+        setProducts((current) =>
+          current.map((product) => normalizedProducts.find((nextProduct) => nextProduct.id === product.id) || product)
+        );
+
+        savedSale = toSale({ ...saleData, sale_items: saleItemsData ?? [] });
+      } else {
+        setProducts((current) =>
+          current.map((product) => {
+            const change = inventoryChanges.find(({ product: currentProduct }) => currentProduct.id === product.id);
+            return change ? toProduct({ ...product, quantity: change.nextQuantity }) : product;
+          })
+        );
+        savedSale = toSale({
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
+          ...salePayload,
+          sale_items: saleDraft.items.map((item) => ({
+            id: crypto.randomUUID(),
+            product_sku: item.product_sku,
+            product_name: item.product_name,
+            quantity_sold: item.quantity_sold,
+            selling_price: item.selling_price,
+            cost_price: item.cost_price === "" ? null : Number(item.cost_price)
+          }))
+        });
+      }
+
+      setSales((current) => [savedSale, ...current]);
+      setExpandedSaleId(savedSale.id);
+      setStatusMessage("Sale recorded ✓");
+      resetSaleModal();
+    } catch (error) {
+      console.log("Sale save failed:", error);
+      setSaleModalError(error?.message || "Could not save this sale.");
+    } finally {
+      setSalesBusy(false);
     }
   }
 
@@ -3807,8 +4384,10 @@ export default function App() {
               ? "Products"
               : activeTab === "inquiries"
                 ? "Inquiries"
-              : activeTab === "add"
-                ? "Add or edit"
+                : activeTab === "sales"
+                  ? "Sales"
+                : activeTab === "add"
+                  ? "Add or edit"
                 : activeTab === "low-stock"
                   ? "Low stock"
                   : "Settings"
@@ -3818,8 +4397,10 @@ export default function App() {
               ? "Browse and edit the full catalog."
               : activeTab === "inquiries"
                 ? "Track customer requests, quotes, and conversions."
-              : activeTab === "add"
-                ? "Create products, update details, and add imagery."
+                : activeTab === "sales"
+                  ? "Record completed orders, watch today’s numbers, and keep stock accurate."
+                : activeTab === "add"
+                  ? "Create products, update details, and add imagery."
                 : activeTab === "low-stock"
                   ? "Focus on products that need replenishment."
                   : "Import stock, manage archive visibility, and control access."
@@ -3874,6 +4455,19 @@ export default function App() {
               onStatusUpdate={handleInquiryStatusUpdate}
               onNewInquiry={handleNewInquiry}
               busy={inquiryBusy}
+            />
+          </>
+        ) : null}
+
+        {activeTab === "sales" ? (
+          <>
+            <StatusStrip statusMessage={statusMessage} />
+            <SalesScreen
+              sales={filteredSales}
+              summaryItems={todaysSalesSummary}
+              onRecordSale={handleOpenSaleModal}
+              expandedSaleId={expandedSaleId}
+              onToggleSale={(saleId) => setExpandedSaleId((current) => (current === saleId ? null : saleId))}
             />
           </>
         ) : null}
@@ -4026,6 +4620,23 @@ export default function App() {
         onProductFieldChange={updateInquiryProductField}
         onAddProductRow={addInquiryProductRow}
         onRemoveProductRow={removeInquiryProductRow}
+      />
+      <RecordSaleModal
+        open={saleModalOpen}
+        draft={saleDraft}
+        setDraft={setSaleDraft}
+        products={products.filter((product) => !product.archivedAt)}
+        productSearch={saleProductSearch}
+        setProductSearch={setSaleProductSearch}
+        pickerOpen={salePickerOpen}
+        setPickerOpen={setSalePickerOpen}
+        busy={salesBusy}
+        errorMessage={saleModalError}
+        onClose={resetSaleModal}
+        onAddProduct={handleAddSaleProduct}
+        onRemoveProduct={handleRemoveSaleProduct}
+        onUpdateItem={handleUpdateSaleItem}
+        onSave={handleSaveSale}
       />
     </div>
   );
