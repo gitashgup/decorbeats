@@ -674,12 +674,15 @@ h3 {
   }
 
   .customer-hero-link {
+    border: 0;
+    background: transparent;
     display: inline-flex;
     align-items: center;
     min-height: 48px;
     color: var(--accent);
     font-size: 1rem;
     font-weight: 700;
+    cursor: pointer;
   }
 
   .customer-hero-media {
@@ -1479,6 +1482,7 @@ header img {
 }
 
 .customer-whatsapp-button {
+  border: 0;
   min-height: 52px;
   border-radius: 999px;
   background: #25d366;
@@ -1489,6 +1493,7 @@ header img {
   gap: 0.6rem;
   font-weight: 800;
   padding: 0.95rem 1.1rem;
+  cursor: pointer;
 }
 
 .customer-whatsapp-button svg {

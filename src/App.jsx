@@ -4,12 +4,9 @@ import { products as seedProducts } from "./data/products";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 const brandLogo = "/assets/brand/decorbeats-logo.svg";
-const WHATSAPP_NUMBER = "919XXXXXXXXX";
+const WHATSAPP_NUMBER = "919811133661";
 const PRODUCT_STORAGE_BUCKET = "products";
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
-const BULK_WHATSAPP_LINK = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-  "Hi, I would like to enquire about a bulk gifting order for Decorbeats."
-)}`;
 const ANNOUNCEMENTS = [
   "✦ Summer Sale — Up to 30% off selected items",
   "✦ Bulk orders welcome · 50 to 400+ units",
@@ -214,6 +211,25 @@ function isNewArrival(createdAt) {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   return parsedCreatedAt > sevenDaysAgo;
+}
+
+function openWhatsAppChat(message) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const encodedMessage = encodeURIComponent(message);
+  window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodedMessage}`, "_blank");
+}
+
+function openBulkWhatsApp() {
+  openWhatsAppChat("Hi, I would like to enquire about a bulk gifting order for Decorbeats.");
+}
+
+function handleWhatsAppEnquiry(product) {
+  const message = `Hi Decorbeats! 👋\n\nI'm interested in *${product.name}*\n\nSKU: ${product.sku}\nPrice: ${
+    hasDisplayValue(product?.pricing?.mrp) ? "₹" + product.pricing.mrp : "Please share price"
+  }\n\nCould you please share more details?\n\nThank you!`;
+  openWhatsAppChat(message);
 }
 
 function toInquiry(raw) {
@@ -1417,9 +1433,9 @@ function CustomerHero({ featuredProduct, onShop }) {
           <button type="button" className="primary-button customer-hero-cta" onClick={onShop}>
             Shop the Collection
           </button>
-          <a className="customer-hero-link" href={BULK_WHATSAPP_LINK} target="_blank" rel="noreferrer">
+          <button type="button" className="customer-hero-link" onClick={openBulkWhatsApp}>
             Enquire for bulk orders →
-          </a>
+          </button>
         </div>
       </div>
       <div className="customer-hero-media" aria-hidden="true">
@@ -1500,10 +1516,10 @@ function EditorialSection() {
         <p>Thoughtfully crafted brass, metal and artisanal decor pieces for celebrations, events and elevated gifting.</p>
         <p>Designed to feel personal, finished by hand, and ready for meaningful moments across homes and occasions.</p>
         <p>From intimate gifting to large-format corporate orders, each piece is made to carry warmth and story.</p>
-        <a className="customer-whatsapp-button editorial-whatsapp" href={BULK_WHATSAPP_LINK} target="_blank" rel="noreferrer">
+        <button type="button" className="customer-whatsapp-button editorial-whatsapp" onClick={openBulkWhatsApp}>
           <WhatsAppIcon />
           <span>Enquire on WhatsApp</span>
-        </a>
+        </button>
       </div>
     </section>
   );
@@ -1577,10 +1593,6 @@ function CustomerSheet({ product, onClose, onShare }) {
     );
   }
 
-  const whatsappMessage = encodeURIComponent(
-    `Hi, I'm interested in ${product.name} (SKU: ${product.sku}). Is it available?`
-  );
-  const whatsappLink = `https://wa.me/${WHATSAPP_NUMBER}?text=${whatsappMessage}`;
   const showDescription = product.notes && product.notes.trim() !== product.name.trim();
   const occasionLine = showDescription ? product.notes.trim() : "";
   const isNewProduct = isNewArrival(product.createdAt);
@@ -1666,10 +1678,10 @@ function CustomerSheet({ product, onClose, onShare }) {
           <p className="customer-sheet-meta">
             {product.category} · {product.material}
           </p>
-          <a className="customer-whatsapp-button" href={whatsappLink} target="_blank" rel="noreferrer">
+          <button type="button" className="customer-whatsapp-button" onClick={() => handleWhatsAppEnquiry(product)}>
             <WhatsAppIcon />
             <span>Enquire on WhatsApp</span>
-          </a>
+          </button>
           <button type="button" className="customer-share-link" onClick={() => onShare(product)}>
             Share
           </button>
@@ -1717,10 +1729,10 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
         </div>
         <div className="customer-footer-cta">
           <p>For bulk orders of 50+ units</p>
-          <a className="customer-whatsapp-button footer-whatsapp" href={BULK_WHATSAPP_LINK} target="_blank" rel="noreferrer">
+          <button type="button" className="customer-whatsapp-button footer-whatsapp" onClick={openBulkWhatsApp}>
             <WhatsAppIcon />
             <span>WhatsApp</span>
-          </a>
+          </button>
         </div>
         <div className="customer-footer-owner">
           {showAdminLink ? (
@@ -3623,8 +3635,8 @@ export default function App() {
       handleScrollToCollection();
       return;
     }
-    if (action === "whatsapp" && typeof window !== "undefined") {
-      window.open(BULK_WHATSAPP_LINK, "_blank", "noopener,noreferrer");
+    if (action === "whatsapp") {
+      openBulkWhatsApp();
     }
   }
 
