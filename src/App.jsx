@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import heic2any from "heic2any";
 import { products as seedProducts } from "./data/products";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
@@ -125,23 +124,8 @@ function isHeicLikeFile(file) {
 }
 
 async function compressImage(file, maxWidthPx = 1200, qualityPercent = 0.82, onStatusChange = () => {}) {
-  let processedFile = file;
-
   if (isHeicLikeFile(file)) {
     onStatusChange("Converting iPhone photo...");
-    try {
-      const convertedBlob = await heic2any({
-        blob: file,
-        toType: "image/jpeg",
-        quality: 0.9
-      });
-      const normalizedBlob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-      processedFile = new File([normalizedBlob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), {
-        type: "image/jpeg"
-      });
-    } catch (error) {
-      console.error("HEIC conversion failed:", error);
-    }
   }
 
   return new Promise((resolve) => {
@@ -162,20 +146,15 @@ async function compressImage(file, maxWidthPx = 1200, qualityPercent = 0.82, onS
         canvas.height = height;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          resolve(processedFile);
+          resolve(file);
           return;
         }
 
         ctx.drawImage(img, 0, 0, width, height);
         canvas.toBlob(
           (blob) => {
-            if (!blob) {
-              resolve(processedFile);
-              return;
-            }
-
             resolve(
-              new File([blob], processedFile.name.replace(/\.[^.]+$/, ".jpg"), {
+              new File([blob || file], file.name.replace(/\.[^.]+$/, ".jpg"), {
                 type: "image/jpeg"
               })
             );
@@ -184,9 +163,10 @@ async function compressImage(file, maxWidthPx = 1200, qualityPercent = 0.82, onS
           qualityPercent
         );
       };
+      img.onerror = () => resolve(file);
       img.src = event.target?.result;
     };
-    reader.readAsDataURL(processedFile);
+    reader.readAsDataURL(file);
   });
 }
 
