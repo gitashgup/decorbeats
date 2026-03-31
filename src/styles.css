@@ -1201,6 +1201,8 @@ header img {
 
   .customer-header {
     background: #f5ede3;
+    justify-content: flex-start;
+    gap: 0.65rem;
   }
 
   .customer-header-logo,
@@ -1212,6 +1214,27 @@ header img {
     border-radius: 0 !important;
     box-shadow: none !important;
     padding: 0 !important;
+  }
+
+  .customer-header-admin-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    margin-left: auto;
+    border: 0;
+    background: transparent;
+    color: rgba(139, 74, 42, 0.5);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+    padding: 0 0.15rem;
+  }
+
+  .customer-header-search {
+    margin-left: 0;
   }
 
   .customer-footer {
