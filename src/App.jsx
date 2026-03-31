@@ -586,6 +586,10 @@ function getMarginMeta(mrp, costPrice) {
   };
 }
 
+function handleNumericInputFocus(event) {
+  event.target.select();
+}
+
 function ShareIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1408,6 +1412,7 @@ function RecordSaleModal({
                           min="1"
                           max={item.max_quantity}
                           value={item.quantity_sold}
+                          onFocus={handleNumericInputFocus}
                           onChange={(event) => onUpdateItem(index, "quantity_sold", event.target.value)}
                         />
                       </label>
@@ -1419,6 +1424,7 @@ function RecordSaleModal({
                             type="number"
                             inputMode="decimal"
                             value={item.selling_price}
+                            onFocus={handleNumericInputFocus}
                             onChange={(event) => onUpdateItem(index, "selling_price", event.target.value)}
                           />
                         </div>
@@ -1603,6 +1609,7 @@ function InquiryRecorderModal({
                   type="number"
                   inputMode="decimal"
                   value={draft.budget_per_unit}
+                  onFocus={handleNumericInputFocus}
                   onChange={(event) => setDraft((current) => ({ ...current, budget_per_unit: event.target.value }))}
                 />
               </div>
@@ -1615,6 +1622,7 @@ function InquiryRecorderModal({
                   type="number"
                   inputMode="decimal"
                   value={draft.total_budget}
+                  onFocus={handleNumericInputFocus}
                   onChange={(event) => setDraft((current) => ({ ...current, total_budget: event.target.value }))}
                 />
               </div>
@@ -1655,6 +1663,7 @@ function InquiryRecorderModal({
                           type="number"
                           inputMode="numeric"
                           value={item.quantity_requested}
+                          onFocus={handleNumericInputFocus}
                           onChange={(event) => onProductFieldChange(index, "quantity_requested", event.target.value)}
                         />
                       </label>
@@ -1666,6 +1675,7 @@ function InquiryRecorderModal({
                             type="number"
                             inputMode="decimal"
                             value={item.quoted_price}
+                            onFocus={handleNumericInputFocus}
                             onChange={(event) => onProductFieldChange(index, "quoted_price", event.target.value)}
                           />
                         </div>
@@ -2321,6 +2331,7 @@ function ProductForm({
             type="number"
             placeholder="How many in stock right now?"
             value={form.quantity}
+            onFocus={handleNumericInputFocus}
             onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))}
           />
         </label>
@@ -2333,6 +2344,7 @@ function ProductForm({
               inputMode="decimal"
               placeholder="Selling price per unit"
               value={form.mrp}
+              onFocus={handleNumericInputFocus}
               onChange={(event) => setForm((current) => ({ ...current, mrp: event.target.value }))}
             />
           </div>
@@ -2346,6 +2358,7 @@ function ProductForm({
               inputMode="decimal"
               placeholder="What did this cost you?"
               value={form.costPrice}
+              onFocus={handleNumericInputFocus}
               onChange={(event) => setForm((current) => ({ ...current, costPrice: event.target.value }))}
             />
           </div>
@@ -2359,6 +2372,7 @@ function ProductForm({
               inputMode="decimal"
               placeholder="Wholesale price (optional)"
               value={form.b2b}
+              onFocus={handleNumericInputFocus}
               onChange={(event) => setForm((current) => ({ ...current, b2b: event.target.value }))}
             />
           </div>
@@ -2699,6 +2713,7 @@ function DetailPanel({
               type="number"
               inputMode="decimal"
               value={draft.mrp}
+              onFocus={handleNumericInputFocus}
               onChange={(event) => setDraft((current) => ({ ...current, mrp: event.target.value }))}
             />
           </div>
@@ -2709,6 +2724,7 @@ function DetailPanel({
               inputMode="decimal"
               placeholder="What did this cost you?"
               value={draft.costPrice}
+              onFocus={handleNumericInputFocus}
               onChange={(event) => setDraft((current) => ({ ...current, costPrice: event.target.value }))}
             />
           </div>
@@ -2718,6 +2734,7 @@ function DetailPanel({
               type="number"
               inputMode="decimal"
               value={draft.b2b}
+              onFocus={handleNumericInputFocus}
               onChange={(event) => setDraft((current) => ({ ...current, b2b: event.target.value }))}
             />
           </div>
@@ -2727,6 +2744,7 @@ function DetailPanel({
               type="number"
               inputMode="numeric"
               value={draft.quantity}
+              onFocus={handleNumericInputFocus}
               onChange={(event) => setDraft((current) => ({ ...current, quantity: event.target.value }))}
             />
           </label>
