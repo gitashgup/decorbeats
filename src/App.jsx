@@ -52,6 +52,7 @@ const emptyForm = {
   material: "Metal",
   quantity: 0,
   mrp: "",
+  costPrice: "",
   b2b: "",
   notes: "",
   imageUrl: ""
@@ -510,6 +511,24 @@ function hasDisplayValue(value) {
   return Number.isNaN(parsed) ? true : parsed !== 0;
 }
 
+function getMarginMeta(mrp, costPrice) {
+  if (!hasDisplayValue(mrp) || !hasDisplayValue(costPrice)) {
+    return null;
+  }
+
+  const mrpValue = Number(mrp);
+  const costValue = Number(costPrice);
+  if (!Number.isFinite(mrpValue) || !Number.isFinite(costValue) || mrpValue === 0) {
+    return null;
+  }
+
+  const percent = Math.round(((mrpValue - costValue) / mrpValue) * 100);
+  return {
+    label: `Margin: ${percent}%`,
+    tone: percent > 40 ? "good" : percent >= 20 ? "warn" : "bad"
+  };
+}
+
 function ShareIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -562,7 +581,8 @@ function toProduct(raw, index = 0) {
     notes: raw.notes ?? "",
     archivedAt: raw.archivedAt ?? raw.archived_at ?? null,
     pricing: {
-      unitCost: raw.pricing?.unitCost ?? raw.unit_cost ?? null,
+      unitCost: raw.pricing?.unitCost ?? raw.cost_price ?? raw.unit_cost ?? null,
+      costPrice: raw.pricing?.costPrice ?? raw.cost_price ?? raw.unit_cost ?? null,
       mrp: raw.pricing?.mrp ?? raw.mrp ?? null,
       b2b: raw.pricing?.b2b ?? raw.b2b_price ?? null
     }
@@ -647,6 +667,7 @@ function mapCsvRowToPayload(row) {
     category: safeText(row.Category, "Uncategorized"),
     material: safeText(row.Material, "Unspecified"),
     quantity: Math.trunc(parseNumber(row.Quantity) ?? 0),
+    cost_price: parseNumber(row["Cost Price"] ?? row["Cost Price (your cost)"] ?? row["Cost"] ?? row.cost_price),
     unit_cost: parseNumber(row["Unit Cost"]),
     mrp: parseNumber(row.MRP),
     b2b_price: parseNumber(row["B2B Price"]),
@@ -670,6 +691,7 @@ function mapSettingsCsvRowToPayload(row) {
     category: safeText(getCsvValue(row, "category"), "Uncategorized"),
     material: safeText(getCsvValue(row, "material"), "Unspecified"),
     quantity: Math.trunc(parseNumber(getCsvValue(row, "stock", "quantity")) ?? 0),
+    cost_price: parseNumber(getCsvValue(row, "cost_price", "cost", "unit_cost")),
     mrp: parseNumber(getCsvValue(row, "mrp")),
     b2b_price: parseNumber(getCsvValue(row, "b2b_price", "b2b")),
     notes: safeText(getCsvValue(row, "description", "notes"))
@@ -1986,6 +2008,19 @@ function ProductForm({
           </div>
         </label>
         <label>
+          Cost Price (your cost)
+          <div className="rupee-field">
+            <span>₹</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="What did this cost you?"
+              value={form.costPrice}
+              onChange={(event) => setForm((current) => ({ ...current, costPrice: event.target.value }))}
+            />
+          </div>
+        </label>
+        <label>
           Wholesale price?
           <div className="rupee-field">
             <span>₹</span>
@@ -2185,10 +2220,12 @@ function DetailPanel({
   const [draft, setDraft] = useState({
     name: "",
     mrp: "",
+    costPrice: "",
     b2b: "",
     quantity: "",
     notes: ""
   });
+  const marginMeta = getMarginMeta(product?.pricing?.mrp, product?.pricing?.costPrice ?? product?.pricing?.unitCost);
   useEffect(() => {
     if (!product) {
       return;
@@ -2196,6 +2233,7 @@ function DetailPanel({
     setDraft({
       name: product.name ?? "",
       mrp: product.pricing.mrp ?? "",
+      costPrice: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
       b2b: product.pricing.b2b ?? "",
       quantity: product.quantity ?? 0,
       notes: product.notes ?? ""
@@ -2267,10 +2305,19 @@ function DetailPanel({
                 </span>
               </div>
             </div>
+            {canManage && !customerMode && hasDisplayValue(product.pricing.costPrice ?? product.pricing.unitCost) ? (
+              <div>
+                <span>Cost Price</span>
+                <strong>{formatCurrency(product.pricing.costPrice ?? product.pricing.unitCost)}</strong>
+              </div>
+            ) : null}
             {hasDisplayValue(product.pricing.mrp) ? (
               <div>
                 <span>MRP</span>
                 <strong>{formatCurrency(product.pricing.mrp)}</strong>
+                {canManage && !customerMode && marginMeta ? (
+                  <small className={`detail-margin ${marginMeta.tone}`}>{marginMeta.label}</small>
+                ) : null}
               </div>
             ) : null}
             {hasDisplayValue(product.pricing.b2b) ? (
@@ -2323,6 +2370,16 @@ function DetailPanel({
               inputMode="decimal"
               value={draft.mrp}
               onChange={(event) => setDraft((current) => ({ ...current, mrp: event.target.value }))}
+            />
+          </div>
+          <div>
+            <span>Cost Price</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="What did this cost you?"
+              value={draft.costPrice}
+              onChange={(event) => setDraft((current) => ({ ...current, costPrice: event.target.value }))}
             />
           </div>
           <div>
@@ -2821,6 +2878,7 @@ export default function App() {
       material: product.material,
       quantity: product.quantity,
       mrp: product.pricing.mrp ?? "",
+      costPrice: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
       b2b: product.pricing.b2b ?? "",
       notes: product.notes ?? "",
       imageUrl: product.imageUrl ?? ""
@@ -3123,6 +3181,7 @@ export default function App() {
       name: draft.name,
       slug: slugify(`${product.sku}-${draft.name}`),
       quantity: Number(draft.quantity || 0),
+      cost_price: draft.costPrice === "" ? null : Number(draft.costPrice),
       mrp: draft.mrp === "" ? null : Number(draft.mrp),
       b2b_price: draft.b2b === "" ? null : Number(draft.b2b),
       notes: draft.notes
@@ -3148,6 +3207,7 @@ export default function App() {
               ? toProduct({
                   ...item,
                   ...payload,
+                  cost_price: payload.cost_price,
                   b2b_price: payload.b2b_price,
                   mrp: payload.mrp
                 })
@@ -3356,6 +3416,7 @@ export default function App() {
       category: form.category || "Uncategorized",
       material: form.material || "Unspecified",
       quantity: Number(form.quantity || 0),
+      cost_price: form.costPrice === "" ? null : Number(form.costPrice),
       mrp: form.mrp === "" ? null : Number(form.mrp),
       b2b_price: form.b2b === "" ? null : Number(form.b2b),
       notes: form.notes,

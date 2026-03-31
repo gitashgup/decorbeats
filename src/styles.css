@@ -2206,6 +2206,25 @@ header img {
   gap: 0.85rem;
 }
 
+.detail-margin {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.detail-margin.good {
+  color: #1f7a3d;
+}
+
+.detail-margin.warn {
+  color: #b7791f;
+}
+
+.detail-margin.bad {
+  color: #c44d3b;
+}
+
 .detail-links {
   flex-wrap: wrap;
 }
