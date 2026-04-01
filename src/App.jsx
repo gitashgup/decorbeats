@@ -586,8 +586,19 @@ function getMarginMeta(mrp, costPrice) {
   };
 }
 
-function handleNumericInputFocus(event) {
-  event.target.select();
+function handleNumericInputClick(event) {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) {
+    return;
+  }
+
+  try {
+    input.type = "text";
+    input.setSelectionRange(0, input.value.length);
+    input.type = "number";
+  } catch (_error) {
+    input.select?.();
+  }
 }
 
 function ShareIcon() {
@@ -1409,10 +1420,13 @@ function RecordSaleModal({
                         Quantity
                         <input
                           type="number"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           min="1"
                           max={item.max_quantity}
-                          value={item.quantity_sold}
-                          onFocus={handleNumericInputFocus}
+                          value={Number(item.quantity_sold || 0) === 0 ? "" : item.quantity_sold}
+                          placeholder="0"
+                          onClick={handleNumericInputClick}
                           onChange={(event) => onUpdateItem(index, "quantity_sold", event.target.value)}
                         />
                       </label>
@@ -1423,8 +1437,9 @@ function RecordSaleModal({
                           <input
                             type="number"
                             inputMode="decimal"
-                            value={item.selling_price}
-                            onFocus={handleNumericInputFocus}
+                            value={Number(item.selling_price || 0) === 0 ? "" : item.selling_price}
+                            placeholder="0"
+                            onClick={handleNumericInputClick}
                             onChange={(event) => onUpdateItem(index, "selling_price", event.target.value)}
                           />
                         </div>
@@ -1609,7 +1624,7 @@ function InquiryRecorderModal({
                   type="number"
                   inputMode="decimal"
                   value={draft.budget_per_unit}
-                  onFocus={handleNumericInputFocus}
+                  onClick={handleNumericInputClick}
                   onChange={(event) => setDraft((current) => ({ ...current, budget_per_unit: event.target.value }))}
                 />
               </div>
@@ -1622,7 +1637,7 @@ function InquiryRecorderModal({
                   type="number"
                   inputMode="decimal"
                   value={draft.total_budget}
-                  onFocus={handleNumericInputFocus}
+                  onClick={handleNumericInputClick}
                   onChange={(event) => setDraft((current) => ({ ...current, total_budget: event.target.value }))}
                 />
               </div>
@@ -1663,7 +1678,7 @@ function InquiryRecorderModal({
                           type="number"
                           inputMode="numeric"
                           value={item.quantity_requested}
-                          onFocus={handleNumericInputFocus}
+                          onClick={handleNumericInputClick}
                           onChange={(event) => onProductFieldChange(index, "quantity_requested", event.target.value)}
                         />
                       </label>
@@ -1675,7 +1690,7 @@ function InquiryRecorderModal({
                             type="number"
                             inputMode="decimal"
                             value={item.quoted_price}
-                            onFocus={handleNumericInputFocus}
+                            onClick={handleNumericInputClick}
                             onChange={(event) => onProductFieldChange(index, "quoted_price", event.target.value)}
                           />
                         </div>
@@ -2331,7 +2346,7 @@ function ProductForm({
             type="number"
             placeholder="How many in stock right now?"
             value={form.quantity}
-            onFocus={handleNumericInputFocus}
+            onClick={handleNumericInputClick}
             onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))}
           />
         </label>
@@ -2344,7 +2359,7 @@ function ProductForm({
               inputMode="decimal"
               placeholder="Selling price per unit"
               value={form.mrp}
-              onFocus={handleNumericInputFocus}
+              onClick={handleNumericInputClick}
               onChange={(event) => setForm((current) => ({ ...current, mrp: event.target.value }))}
             />
           </div>
@@ -2358,7 +2373,7 @@ function ProductForm({
               inputMode="decimal"
               placeholder="What did this cost you?"
               value={form.costPrice}
-              onFocus={handleNumericInputFocus}
+              onClick={handleNumericInputClick}
               onChange={(event) => setForm((current) => ({ ...current, costPrice: event.target.value }))}
             />
           </div>
@@ -2372,7 +2387,7 @@ function ProductForm({
               inputMode="decimal"
               placeholder="Wholesale price (optional)"
               value={form.b2b}
-              onFocus={handleNumericInputFocus}
+              onClick={handleNumericInputClick}
               onChange={(event) => setForm((current) => ({ ...current, b2b: event.target.value }))}
             />
           </div>
@@ -2713,7 +2728,7 @@ function DetailPanel({
               type="number"
               inputMode="decimal"
               value={draft.mrp}
-              onFocus={handleNumericInputFocus}
+              onClick={handleNumericInputClick}
               onChange={(event) => setDraft((current) => ({ ...current, mrp: event.target.value }))}
             />
           </div>
@@ -2724,7 +2739,7 @@ function DetailPanel({
               inputMode="decimal"
               placeholder="What did this cost you?"
               value={draft.costPrice}
-              onFocus={handleNumericInputFocus}
+              onClick={handleNumericInputClick}
               onChange={(event) => setDraft((current) => ({ ...current, costPrice: event.target.value }))}
             />
           </div>
@@ -2734,7 +2749,7 @@ function DetailPanel({
               type="number"
               inputMode="decimal"
               value={draft.b2b}
-              onFocus={handleNumericInputFocus}
+              onClick={handleNumericInputClick}
               onChange={(event) => setDraft((current) => ({ ...current, b2b: event.target.value }))}
             />
           </div>
@@ -2744,7 +2759,7 @@ function DetailPanel({
               type="number"
               inputMode="numeric"
               value={draft.quantity}
-              onFocus={handleNumericInputFocus}
+              onClick={handleNumericInputClick}
               onChange={(event) => setDraft((current) => ({ ...current, quantity: event.target.value }))}
             />
           </label>
@@ -3400,7 +3415,7 @@ export default function App() {
             product_id: product.id,
             product_sku: product.sku,
             product_name: product.name,
-            quantity_sold: 1,
+            quantity_sold: 0,
             selling_price: product.pricing.mrp ?? "",
             cost_price: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
             max_quantity: Number(product.quantity || 0)
@@ -3420,8 +3435,12 @@ export default function App() {
         return current;
       }
       if (field === "quantity_sold") {
-        const nextQuantity = Math.max(1, Math.min(Number(value || 1), Number(currentItem.max_quantity || 1)));
-        nextItems[index] = { ...currentItem, quantity_sold: nextQuantity };
+        if (value === "") {
+          nextItems[index] = { ...currentItem, quantity_sold: 0 };
+        } else {
+          const nextQuantity = Math.max(1, Math.min(Number(value || 0), Number(currentItem.max_quantity || 1)));
+          nextItems[index] = { ...currentItem, quantity_sold: nextQuantity };
+        }
       } else {
         nextItems[index] = { ...currentItem, [field]: value };
       }
@@ -3452,7 +3471,10 @@ export default function App() {
     });
 
     const invalidStock = inventoryChanges.find(
-      ({ product, item }) => !product || Number(item.quantity_sold || 0) > Number(product.quantity || 0)
+      ({ product, item }) =>
+        !product ||
+        Number(item.quantity_sold || 0) <= 0 ||
+        Number(item.quantity_sold || 0) > Number(product.quantity || 0)
     );
     if (invalidStock) {
       setSaleModalError(`Stock is not available for ${invalidStock.item.product_name || invalidStock.item.product_sku}.`);
