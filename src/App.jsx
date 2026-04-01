@@ -1334,6 +1334,7 @@ function RecordSaleModal({
       <div className="inquiry-modal sale-modal" onClick={(event) => event.stopPropagation()}>
         <form
           className="inquiry-modal-body inquiry-confirm-form sale-form"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault();
             onSave();
@@ -1422,7 +1423,6 @@ function RecordSaleModal({
                           type="number"
                           inputMode="numeric"
                           pattern="[0-9]*"
-                          min="1"
                           max={item.max_quantity}
                           value={Number(item.quantity_sold || 0) === 0 ? "" : item.quantity_sold}
                           placeholder="0"
@@ -1465,7 +1465,12 @@ function RecordSaleModal({
             <strong>{formatCurrency(total)}</strong>
           </div>
           <div className="detail-edit-actions">
-            <button type="submit" className="primary-button detail-save-button" disabled={busy || !draft.items.length}>
+            <button
+              type="button"
+              className="primary-button detail-save-button"
+              disabled={busy || !draft.items.length}
+              onClick={onSave}
+            >
               {busy ? "Saving..." : "Complete Sale"}
             </button>
             <button type="button" className="detail-cancel-link" onClick={onClose}>
@@ -3456,52 +3461,52 @@ export default function App() {
   }
 
   async function handleSaveSale() {
-    if (!saleDraft.items.length) {
-      setSaleModalError("Add at least one product before saving.");
-      return;
-    }
-
-    const inventoryChanges = saleDraft.items.map((item) => {
-      const product = products.find((entry) => entry.sku === item.product_sku);
-      return {
-        item,
-        product,
-        nextQuantity: Math.max(0, Number(product?.quantity || 0) - Number(item.quantity_sold || 0))
-      };
-    });
-
-    const invalidStock = inventoryChanges.find(
-      ({ product, item }) =>
-        !product ||
-        Number(item.quantity_sold || 0) <= 0 ||
-        Number(item.quantity_sold || 0) > Number(product.quantity || 0)
-    );
-    if (invalidStock) {
-      setSaleModalError(`Stock is not available for ${invalidStock.item.product_name || invalidStock.item.product_sku}.`);
-      return;
-    }
-
-    const total = saleDraft.items.reduce(
-      (sum, item) => sum + Number(item.quantity_sold || 0) * Number(item.selling_price || 0),
-      0
-    );
-
-    const confirmationLines = inventoryChanges.map(
-      ({ item, product, nextQuantity }) => `• ${item.product_name}: ${product.quantity} → ${nextQuantity}`
-    );
-    const shouldConfirm = window.confirm(
-      `Confirm Sale\n\nThis will reduce stock:\n${confirmationLines.join("\n")}\n\nTotal: ${formatCurrency(total)} (${formatPaymentMethod(
-        saleDraft.payment_method
-      )})`
-    );
-
-    if (!shouldConfirm) {
-      return;
-    }
-
-    setSalesBusy(true);
-    setSaleModalError("");
     try {
+      if (!saleDraft.items.length) {
+        setSaleModalError("Add at least one product before saving.");
+        return;
+      }
+
+      const inventoryChanges = saleDraft.items.map((item) => {
+        const product = products.find((entry) => entry.sku === item.product_sku);
+        return {
+          item,
+          product,
+          nextQuantity: Math.max(0, Number(product?.quantity || 0) - Number(item.quantity_sold || 0))
+        };
+      });
+
+      const invalidStock = inventoryChanges.find(
+        ({ product, item }) =>
+          !product ||
+          Number(item.quantity_sold || 0) <= 0 ||
+          Number(item.quantity_sold || 0) > Number(product.quantity || 0)
+      );
+      if (invalidStock) {
+        setSaleModalError(`Stock is not available for ${invalidStock.item.product_name || invalidStock.item.product_sku}.`);
+        return;
+      }
+
+      const total = saleDraft.items.reduce(
+        (sum, item) => sum + Number(item.quantity_sold || 0) * Number(item.selling_price || 0),
+        0
+      );
+
+      const confirmationLines = inventoryChanges.map(
+        ({ item, product, nextQuantity }) => `• ${item.product_name}: ${product.quantity} → ${nextQuantity}`
+      );
+      const shouldConfirm = window.confirm(
+        `Confirm Sale\n\nThis will reduce stock:\n${confirmationLines.join("\n")}\n\nTotal: ${formatCurrency(total)} (${formatPaymentMethod(
+          saleDraft.payment_method
+        )})`
+      );
+
+      if (!shouldConfirm) {
+        return;
+      }
+
+      setSalesBusy(true);
+      setSaleModalError("");
       const salePayload = {
         customer_name: safeText(saleDraft.customer_name) || null,
         payment_method: saleDraft.payment_method || "upi",
@@ -3570,11 +3575,12 @@ export default function App() {
       setExpandedSaleId(savedSale.id);
       setStatusMessage("Sale recorded ✓");
       resetSaleModal();
-    } catch (error) {
-      console.log("Sale save failed:", error);
-      setSaleModalError(error?.message || "Could not save this sale.");
-    } finally {
       setSalesBusy(false);
+    } catch (error) {
+      console.error("Sale error:", error);
+      setSaleModalError(error?.message || "Could not save this sale.");
+      setSalesBusy(false);
+      alert(`Error: ${error?.message || "Could not save this sale."}`);
     }
   }
 
