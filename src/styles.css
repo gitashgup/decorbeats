@@ -1692,6 +1692,11 @@ header img {
   border-color: rgba(61, 146, 81, 0.28);
 }
 
+.stat-chip.warn {
+  background: rgba(214, 138, 57, 0.16);
+  border-color: rgba(214, 138, 57, 0.28);
+}
+
 .mini-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2809,6 +2814,13 @@ header img {
   gap: 0.85rem;
 }
 
+.sale-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
 .sale-card-top h3,
 .sale-card-items,
 .sale-card-date,
@@ -2854,10 +2866,36 @@ header img {
   color: #9c5a10;
 }
 
+.sale-payment-status {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.15rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.sale-payment-status.paid {
+  background: rgba(61, 146, 81, 0.18);
+  color: #2f7f45;
+}
+
+.sale-payment-status.pending {
+  background: rgba(214, 138, 57, 0.18);
+  color: #9c5a10;
+}
+
 .sale-card-detail {
   display: grid;
   gap: 0.9rem;
   padding: 0 1rem 1rem;
+}
+
+.sale-card-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .sale-detail-grid {
@@ -2909,6 +2947,15 @@ header img {
   gap: 0.75rem;
 }
 
+.payment-status-block {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.payment-status-note {
+  margin: 0;
+}
+
 .payment-toggle {
   min-height: 52px;
   border-radius: 18px;
@@ -2922,6 +2969,18 @@ header img {
   border-color: rgba(139, 74, 42, 0.4);
   background: rgba(139, 74, 42, 0.12);
   color: var(--accent);
+}
+
+.payment-toggle-paid.active {
+  border-color: rgba(61, 146, 81, 0.4);
+  background: rgba(61, 146, 81, 0.12);
+  color: #2f7f45;
+}
+
+.payment-toggle-pending.active {
+  border-color: rgba(214, 138, 57, 0.4);
+  background: rgba(214, 138, 57, 0.12);
+  color: #9c5a10;
 }
 
 .sale-picker {

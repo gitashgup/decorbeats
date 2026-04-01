@@ -258,6 +258,7 @@ function toSale(raw) {
     createdAt: raw.created_at,
     customerName: safeText(raw.customer_name, "Walk-in sale"),
     paymentMethod: safeText(raw.payment_method, "upi").toLowerCase(),
+    paymentStatus: safeText(raw.payment_status, "paid").toLowerCase(),
     notes: safeText(raw.notes),
     totalAmount: Number(raw.total_amount ?? 0),
     items: Array.isArray(raw.sale_items)
@@ -277,6 +278,7 @@ function createEmptySaleDraft() {
   return {
     customer_name: "",
     payment_method: "upi",
+    payment_status: "paid",
     notes: "",
     items: []
   };
@@ -284,6 +286,11 @@ function createEmptySaleDraft() {
 
 function formatPaymentMethod(value) {
   return safeText(value, "upi").toUpperCase();
+}
+
+function formatPaymentStatus(value) {
+  const normalized = safeText(value, "paid").toLowerCase();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
 function formatSaleDate(value) {
@@ -1208,10 +1215,32 @@ function SalesSummaryStrip({ items }) {
   return <StatStrip items={items} />;
 }
 
-function SaleCard({ sale, expanded, onToggle }) {
+function SalesPaymentFilters({ activeStatus, onChange }) {
+  const filters = ["all", "pending", "paid"];
+
+  return (
+    <div className="inquiry-status-row" aria-label="Filter sales by payment status">
+      {filters.map((status) => (
+        <button
+          key={status}
+          type="button"
+          className={activeStatus === status ? "inquiry-status-pill active" : "inquiry-status-pill"}
+          onClick={() => onChange(status)}
+        >
+          {status === "all" ? "All" : formatPaymentStatus(status)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, markingPaidId }) {
   const itemsSummary = sale.items.map((item) => `${item.quantitySold}× ${item.productName || item.productSku}`).join(" + ");
   const badgeClass =
     sale.paymentMethod === "upi" ? "sale-payment-badge upi" : sale.paymentMethod === "cash" ? "sale-payment-badge cash" : "sale-payment-badge";
+  const paymentStatusClass = sale.paymentStatus === "pending" ? "sale-payment-status pending" : "sale-payment-status paid";
+  const isPending = sale.paymentStatus === "pending";
+  const isBusy = markingPaidId === sale.id;
 
   return (
     <article className={expanded ? "sale-card expanded" : "sale-card"}>
@@ -1221,7 +1250,10 @@ function SaleCard({ sale, expanded, onToggle }) {
             <p className="sale-card-date">{formatSaleDate(sale.createdAt)}</p>
             <h3>{sale.customerName}</h3>
           </div>
-          <span className={badgeClass}>{formatPaymentMethod(sale.paymentMethod)}</span>
+          <div className="sale-card-badges">
+            <span className={badgeClass}>{formatPaymentMethod(sale.paymentMethod)}</span>
+            <span className={paymentStatusClass}>{isPending ? "₹ PENDING" : "PAID"}</span>
+          </div>
         </div>
         <p className="sale-card-items">{itemsSummary || "No items recorded"}</p>
         <div className="sale-card-meta">
@@ -1238,6 +1270,10 @@ function SaleCard({ sale, expanded, onToggle }) {
             <div>
               <span>Payment</span>
               <strong>{formatPaymentMethod(sale.paymentMethod)}</strong>
+            </div>
+            <div>
+              <span>Status</span>
+              <strong>{formatPaymentStatus(sale.paymentStatus)}</strong>
             </div>
             <div>
               <span>Time</span>
@@ -1262,13 +1298,25 @@ function SaleCard({ sale, expanded, onToggle }) {
             ))}
           </ul>
           {sale.notes ? <p className="detail-note">{sale.notes}</p> : null}
+          {isPending ? (
+            <div className="sale-card-actions">
+              <button
+                type="button"
+                className="ghost-button"
+                disabled={isBusy}
+                onClick={() => onMarkAsPaid?.(sale)}
+              >
+                {isBusy ? "Updating..." : "Mark as Paid"}
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </article>
   );
 }
 
-function SalesScreen({ sales, summaryItems, onRecordSale, expandedSaleId, onToggleSale }) {
+function SalesScreen({ sales, summaryItems, onRecordSale, expandedSaleId, onToggleSale, paymentFilter, setPaymentFilter, onMarkAsPaid, markingPaidId }) {
   return (
     <section className="stack-grid">
       <button type="button" className="primary-button inquiry-log-button" onClick={onRecordSale}>
@@ -1276,10 +1324,18 @@ function SalesScreen({ sales, summaryItems, onRecordSale, expandedSaleId, onTogg
         <span>Record Sale</span>
       </button>
       <SalesSummaryStrip items={summaryItems} />
+      <SalesPaymentFilters activeStatus={paymentFilter} onChange={setPaymentFilter} />
       <section className="inquiry-list">
         {sales.length ? (
           sales.map((sale) => (
-            <SaleCard key={sale.id} sale={sale} expanded={expandedSaleId === sale.id} onToggle={onToggleSale} />
+            <SaleCard
+              key={sale.id}
+              sale={sale}
+              expanded={expandedSaleId === sale.id}
+              onToggle={onToggleSale}
+              onMarkAsPaid={onMarkAsPaid}
+              markingPaidId={markingPaidId}
+            />
           ))
         ) : (
           <div className="panel-card empty-state">
@@ -1370,6 +1426,30 @@ function RecordSaleModal({
             >
               📱 UPI
             </button>
+          </div>
+          <div className="payment-status-block">
+            <p className="eyebrow">Payment Status</p>
+            <div className="sale-payment-toggle payment-status-toggle">
+              <button
+                type="button"
+                className={draft.payment_status === "paid" ? "payment-toggle active payment-toggle-paid" : "payment-toggle"}
+                onClick={() => setDraft((current) => ({ ...current, payment_status: "paid" }))}
+              >
+                ✓ Paid
+              </button>
+              <button
+                type="button"
+                className={draft.payment_status === "pending" ? "payment-toggle active payment-toggle-pending" : "payment-toggle"}
+                onClick={() => setDraft((current) => ({ ...current, payment_status: "pending" }))}
+              >
+                ⏳ Pending
+              </button>
+            </div>
+            {draft.payment_status === "pending" ? (
+              <p className="support-copy payment-status-note">
+                Stock will still be reduced. Payment can be marked as received later.
+              </p>
+            ) : null}
           </div>
           <div className="inquiry-products-editor span-2">
             <div className="section-head">
@@ -2974,9 +3054,11 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [saleDraft, setSaleDraft] = useState(createEmptySaleDraft());
+  const [salePaymentStatusFilter, setSalePaymentStatusFilter] = useState("all");
   const [saleProductSearch, setSaleProductSearch] = useState("");
   const [salePickerOpen, setSalePickerOpen] = useState(false);
   const [saleModalError, setSaleModalError] = useState("");
+  const [markingSalePaidId, setMarkingSalePaidId] = useState("");
   const productGridRef = useRef(null);
   const customerSearchRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -3230,7 +3312,10 @@ export default function App() {
       inquiryStatusFilter === "all" ? inquiries : inquiries.filter((inquiry) => inquiry.status === inquiryStatusFilter);
     return [...statusFiltered].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
   }, [inquiries, inquiryStatusFilter]);
-  const filteredSales = useMemo(() => [...sales].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt)), [sales]);
+  const filteredSales = useMemo(() => {
+    const filtered = salePaymentStatusFilter === "all" ? sales : sales.filter((sale) => sale.paymentStatus === salePaymentStatusFilter);
+    return [...filtered].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+  }, [sales, salePaymentStatusFilter]);
 
   useEffect(() => {
     if (typeof window === "undefined" || window.innerWidth < 768) {
@@ -3276,7 +3361,10 @@ export default function App() {
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const todaysSales = sales.filter((sale) => new Date(sale.createdAt) >= startOfDay);
-    const revenue = todaysSales.reduce((sum, sale) => sum + Number(sale.totalAmount || 0), 0);
+    const paidSales = todaysSales.filter((sale) => sale.paymentStatus !== "pending");
+    const pendingSales = todaysSales.filter((sale) => sale.paymentStatus === "pending");
+    const collected = paidSales.reduce((sum, sale) => sum + Number(sale.totalAmount || 0), 0);
+    const pendingTotal = pendingSales.reduce((sum, sale) => sum + Number(sale.totalAmount || 0), 0);
     const productCounts = new Map();
     todaysSales.forEach((sale) => {
       sale.items.forEach((item) => {
@@ -3289,7 +3377,8 @@ export default function App() {
     });
     const mostSold = Array.from(productCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "None yet";
     return [
-      { label: "Today", value: formatCurrency(revenue), emphasis: revenue > 0, tone: "success" },
+      { label: "Collected today", value: formatCurrency(collected), emphasis: collected > 0, tone: "success" },
+      { label: "Pending today", value: formatCurrency(pendingTotal), tone: "warn" },
       { label: "Sales", value: todaysSales.length },
       { label: "Most sold", value: mostSold }
     ];
@@ -3510,6 +3599,7 @@ export default function App() {
       const salePayload = {
         customer_name: safeText(saleDraft.customer_name) || null,
         payment_method: saleDraft.payment_method || "upi",
+        payment_status: saleDraft.payment_status || "paid",
         notes: safeText(saleDraft.notes) || null,
         total_amount: total
       };
@@ -3580,7 +3670,39 @@ export default function App() {
       console.error("Sale error:", error);
       setSaleModalError(error?.message || "Could not save this sale.");
       setSalesBusy(false);
-      alert(`Error: ${error?.message || "Could not save this sale."}`);
+    }
+  }
+
+  async function handleMarkSalePaid(sale) {
+    if (!sale?.id || sale.paymentStatus !== "pending") {
+      return;
+    }
+
+    try {
+      setMarkingSalePaidId(sale.id);
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("sales")
+          .update({ payment_status: "paid" })
+          .eq("id", sale.id)
+          .select("*, sale_items(*)")
+          .single();
+        if (error) {
+          throw error;
+        }
+        const updatedSale = toSale(data);
+        setSales((current) => current.map((entry) => (entry.id === updatedSale.id ? updatedSale : entry)));
+      } else {
+        setSales((current) =>
+          current.map((entry) => (entry.id === sale.id ? { ...entry, paymentStatus: "paid" } : entry))
+        );
+      }
+      setStatusMessage("Marked sale as paid ✓");
+    } catch (error) {
+      console.error("Mark sale paid failed:", error);
+      setSaleModalError(error?.message || "Could not update this sale.");
+    } finally {
+      setMarkingSalePaidId("");
     }
   }
 
@@ -4514,6 +4636,10 @@ export default function App() {
               onRecordSale={handleOpenSaleModal}
               expandedSaleId={expandedSaleId}
               onToggleSale={(saleId) => setExpandedSaleId((current) => (current === saleId ? null : saleId))}
+              paymentFilter={salePaymentStatusFilter}
+              setPaymentFilter={setSalePaymentStatusFilter}
+              onMarkAsPaid={handleMarkSalePaid}
+              markingPaidId={markingSalePaidId}
             />
           </>
         ) : null}
