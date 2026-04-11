@@ -1999,7 +1999,6 @@ function CustomerCategoryBar({ categories, categoryFilter, setCategoryFilter }) 
 }
 
 function CustomerProductCard({ product, onSelect }) {
-  const showLowStock = product.quantity > 0 && product.quantity <= 5;
   const primaryImage = getPrimaryImage(product);
   const isNewProduct = isNewArrival(product.createdAt);
   return (
@@ -2019,7 +2018,6 @@ function CustomerProductCard({ product, onSelect }) {
         <h3>{product.name}</h3>
         <p className="customer-product-category">{product.category}</p>
         {hasDisplayValue(product.pricing.mrp) ? <p className="customer-price">{formatCurrency(product.pricing.mrp)}</p> : null}
-        {showLowStock ? <span className="customer-low-stock">Low stock</span> : null}
       </div>
     </button>
   );
@@ -2754,13 +2752,15 @@ function DetailPanel({
               <span>Quantity</span>
               <div className="detail-quantity-row">
                 <strong>{product.quantity}</strong>
-                <span
-                  className={`stock-count-badge ${
-                    product.quantity <= 0 ? "danger" : product.quantity <= 5 ? "warn" : "ok"
-                  }`}
-                >
-                  {product.quantity <= 0 ? "Out of stock" : product.quantity <= 5 ? "Low stock" : "In stock"}
-                </span>
+                {canManage && !customerMode ? (
+                  <span
+                    className={`stock-count-badge ${
+                      product.quantity <= 0 ? "danger" : product.quantity <= 5 ? "warn" : "ok"
+                    }`}
+                  >
+                    {product.quantity <= 0 ? "Out of stock" : product.quantity <= 5 ? "Low stock" : "In stock"}
+                  </span>
+                ) : null}
               </div>
             </div>
             {canManage && !customerMode && hasDisplayValue(product.pricing.costPrice ?? product.pricing.unitCost) ? (
