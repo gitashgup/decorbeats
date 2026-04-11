@@ -3280,18 +3280,19 @@ export default function App() {
         return String(right.id ?? "").localeCompare(String(left.id ?? ""));
       });
   }, [products]);
+  const customerFacing = !adminActive || previewCustomerView;
   const adminCatalog = useMemo(() => products.filter((product) => showArchived || !product.archivedAt), [products, showArchived]);
   const lowStockCatalog = useMemo(() => adminCatalog.filter((product) => product.quantity <= 10), [adminCatalog]);
 
   const currentCatalog = useMemo(() => {
-    if (!adminActive) {
+    if (customerFacing) {
       return customerCatalog;
     }
     if (activeTab === "low-stock") {
       return lowStockCatalog;
     }
     return adminCatalog;
-  }, [activeTab, adminActive, adminCatalog, customerCatalog, lowStockCatalog]);
+  }, [activeTab, adminCatalog, customerCatalog, customerFacing, lowStockCatalog]);
 
   const categories = useMemo(() => {
     return [
@@ -3313,7 +3314,7 @@ export default function App() {
       return matchesSearch && matchesCategory;
     });
 
-    if (!adminActive) {
+    if (customerFacing) {
       return visibleProducts;
     }
 
@@ -3324,7 +3325,7 @@ export default function App() {
       }
       return left.name.localeCompare(right.name);
     });
-  }, [adminActive, categoryFilter, currentCatalog, search]);
+  }, [categoryFilter, currentCatalog, customerFacing, search]);
 
   const filteredInquiries = useMemo(() => {
     const statusFiltered =
