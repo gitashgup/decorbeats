@@ -659,6 +659,7 @@ function toProduct(raw, index = 0) {
     imageUrls,
     notes: raw.notes ?? "",
     archivedAt: raw.archivedAt ?? raw.archived_at ?? null,
+    pinned: Boolean(raw.pinned),
     pricing: {
       unitCost: raw.pricing?.unitCost ?? raw.cost_price ?? raw.unit_cost ?? null,
       costPrice: raw.pricing?.costPrice ?? raw.cost_price ?? raw.unit_cost ?? null,
@@ -2534,6 +2535,7 @@ function ProductCard({
   onEdit,
   onShare,
   onArchiveToggle,
+  onPinToggle,
   onInlineEdit,
   onInlineAddImages,
   onInlineDeleteImage,
@@ -2555,7 +2557,10 @@ function ProductCard({
         <div className="product-card-body product-card-body-row">
           <div className="product-card-meta">
             <div className="product-card-top-row">
-              <span className="sku-chip">{product.sku}</span>
+              <div className="product-card-chip-row">
+                <span className="sku-chip">{product.sku}</span>
+                {product.pinned ? <span className="pin-chip">Pinned</span> : null}
+              </div>
               {!customerMode ? (
                 <div className="card-menu-wrap">
                   <button
@@ -2593,6 +2598,15 @@ function ProductCard({
                         }}
                       >
                         Share
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onPinToggle(product, !product.pinned);
+                        }}
+                      >
+                        {product.pinned ? "Unpin" : "Pin to top"}
                       </button>
                       <button
                         type="button"
@@ -2875,6 +2889,7 @@ function CatalogSection({
   onEdit,
   onShare,
   onArchiveToggle,
+  onPinToggle,
   onInlineEdit,
   onInlineAddImages,
   onInlineDeleteImage,
@@ -2914,6 +2929,7 @@ function CatalogSection({
                 onEdit={onEdit}
                 onShare={onShare}
                 onArchiveToggle={onArchiveToggle}
+                onPinToggle={onPinToggle}
                 onInlineEdit={onInlineEdit}
                 onInlineAddImages={onInlineAddImages}
                 onInlineDeleteImage={onInlineDeleteImage}
@@ -3253,6 +3269,9 @@ export default function App() {
     return [...products]
       .filter((product) => !product.archivedAt)
       .sort((left, right) => {
+        if (left.pinned !== right.pinned) {
+          return Number(right.pinned) - Number(left.pinned);
+        }
         const rightCreatedAt = new Date(right.createdAt || 0).getTime();
         const leftCreatedAt = new Date(left.createdAt || 0).getTime();
         if (Number.isFinite(rightCreatedAt) && Number.isFinite(leftCreatedAt) && rightCreatedAt !== leftCreatedAt) {
@@ -4385,6 +4404,38 @@ export default function App() {
     }
   }
 
+  async function handlePinToggle(product, pinned) {
+    setArchiveBusy(true);
+    setUploadError("");
+
+    try {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("products")
+          .update({ pinned })
+          .eq("id", product.id)
+          .select()
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        const nextProduct = toProduct(data);
+        setProducts((current) => current.map((item) => (item.id === nextProduct.id ? nextProduct : item)));
+      } else {
+        setProducts((current) => current.map((item) => (item.id === product.id ? { ...item, pinned } : item)));
+      }
+
+      setStatusMessage(pinned ? `${product.name} pinned to the top of customer view.` : `${product.name} unpinned.`);
+    } catch (error) {
+      console.log("Pin toggle failed:", error);
+      setUploadError(error?.message || "Pin status could not be updated right now.");
+    } finally {
+      setArchiveBusy(false);
+    }
+  }
+
   async function handleInquiryStatusUpdate(inquiry, nextStatus) {
     setInquiryBusy(true);
     try {
@@ -4592,6 +4643,7 @@ export default function App() {
               onEdit={handleEditProduct}
               onShare={handleShareProduct}
               onArchiveToggle={handleArchiveToggle}
+              onPinToggle={handlePinToggle}
               onInlineEdit={handleDetailEdit}
               onInlineAddImages={handleAddDetailImages}
               onInlineDeleteImage={handleDeleteDetailImage}
@@ -4701,6 +4753,7 @@ export default function App() {
               onEdit={handleEditProduct}
               onShare={handleShareProduct}
               onArchiveToggle={handleArchiveToggle}
+              onPinToggle={handlePinToggle}
               onInlineEdit={handleDetailEdit}
               onInlineAddImages={handleAddDetailImages}
               onInlineDeleteImage={handleDeleteDetailImage}
