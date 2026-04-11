@@ -411,6 +411,23 @@ h3 {
   text-transform: uppercase;
 }
 
+.customer-marketing-tag {
+  position: absolute;
+  left: 0.7rem;
+  bottom: 0.7rem;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(245, 237, 227, 0.9);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.32rem 0.62rem;
+  text-transform: uppercase;
+}
+
 .customer-product-image,
 .customer-sheet-image {
   width: 100%;

@@ -54,12 +54,14 @@ const emptyForm = {
   mrp: "",
   costPrice: "",
   b2b: "",
+  marketingTag: "",
   notes: "",
   imageUrl: ""
 };
 
 const categoryOptions = ["Bell", "Bowl", "Box", "Decor", "Diya", "Jars", "Misc", "Planter", "Plate", "Tree", "Urli", "Wall Decor"];
 const materialOptions = ["Brass", "Metal", "Ceramic", "Wood", "Glass", "Clay", "Mixed", "Other"];
+const marketingTagOptions = ["", "Featured", "New Arrival", "Best for Gifting", "Festive Pick", "Handpicked", "Limited Edition"];
 
 const materialSkuCodes = {
   Brass: "BR",
@@ -660,6 +662,7 @@ function toProduct(raw, index = 0) {
     notes: raw.notes ?? "",
     archivedAt: raw.archivedAt ?? raw.archived_at ?? null,
     pinned: Boolean(raw.pinned),
+    marketingTag: safeText(raw.marketingTag ?? raw.marketing_tag),
     pricing: {
       unitCost: raw.pricing?.unitCost ?? raw.cost_price ?? raw.unit_cost ?? null,
       costPrice: raw.pricing?.costPrice ?? raw.cost_price ?? raw.unit_cost ?? null,
@@ -751,6 +754,7 @@ function mapCsvRowToPayload(row) {
     unit_cost: parseNumber(row["Unit Cost"]),
     mrp: parseNumber(row.MRP),
     b2b_price: parseNumber(row["B2B Price"]),
+    marketing_tag: safeText(row["Marketing Tag"] ?? row.marketing_tag),
     notes: safeText(row.Notes),
     drive_url: normalizeUrl(row["Column 1"]),
     image_url: normalizeUrl(row["Product Image URL"])
@@ -2005,6 +2009,7 @@ function CustomerProductCard({ product, onSelect }) {
     <button type="button" className="customer-product-card desktop-reveal" onClick={() => onSelect(product)}>
       <div className="customer-product-image-wrap">
         {isNewProduct ? <span className="customer-new-badge">NEW</span> : null}
+        {product.marketingTag ? <span className="customer-marketing-tag">{product.marketingTag}</span> : null}
         {primaryImage ? (
           <img className="customer-product-image" src={primaryImage} alt={product.name} loading="lazy" />
         ) : (
@@ -2123,10 +2128,11 @@ function CustomerSheet({ product, onClose, onShare }) {
         </div>
         <CustomerImageCarousel product={product} />
         <div className="customer-sheet-copy">
-          <div className="customer-sheet-title-row">
-            <h2>{product.name}</h2>
-            {isNewProduct ? <span className="customer-sheet-new-badge">New Arrival</span> : null}
-          </div>
+        <div className="customer-sheet-title-row">
+          <h2>{product.name}</h2>
+          {isNewProduct ? <span className="customer-sheet-new-badge">New Arrival</span> : null}
+          {!isNewProduct && product.marketingTag ? <span className="customer-sheet-new-badge">{product.marketingTag}</span> : null}
+        </div>
           {hasDisplayValue(product.pricing.mrp) ? <p className="customer-sheet-price">{formatCurrency(product.pricing.mrp)}</p> : null}
           {occasionLine ? <p className="customer-sheet-occasion">{occasionLine}</p> : null}
           <p className="customer-sheet-meta">
@@ -2463,6 +2469,19 @@ function ProductForm({
           </div>
         </label>
         <label>
+          Marketing tag
+          <select
+            value={form.marketingTag}
+            onChange={(event) => setForm((current) => ({ ...current, marketingTag: event.target.value }))}
+          >
+            {marketingTagOptions.map((option) => (
+              <option key={option || "none"} value={option}>
+                {option || "No tag"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
           Wholesale price?
           <div className="rupee-field">
             <span>₹</span>
@@ -2679,6 +2698,7 @@ function DetailPanel({
     costPrice: "",
     b2b: "",
     quantity: "",
+    marketingTag: "",
     notes: ""
   });
   const marginMeta = getMarginMeta(product?.pricing?.mrp, product?.pricing?.costPrice ?? product?.pricing?.unitCost);
@@ -2692,6 +2712,7 @@ function DetailPanel({
       costPrice: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
       b2b: product.pricing.b2b ?? "",
       quantity: product.quantity ?? 0,
+      marketingTag: product.marketingTag ?? "",
       notes: product.notes ?? ""
     });
     setEditing(false);
@@ -2764,9 +2785,15 @@ function DetailPanel({
               </div>
             </div>
             {canManage && !customerMode && hasDisplayValue(product.pricing.costPrice ?? product.pricing.unitCost) ? (
+            <div>
+              <span>Cost Price</span>
+              <strong>{formatCurrency(product.pricing.costPrice ?? product.pricing.unitCost)}</strong>
+            </div>
+          ) : null}
+            {canManage && !customerMode && product.marketingTag ? (
               <div>
-                <span>Cost Price</span>
-                <strong>{formatCurrency(product.pricing.costPrice ?? product.pricing.unitCost)}</strong>
+                <span>Marketing tag</span>
+                <strong>{product.marketingTag}</strong>
               </div>
             ) : null}
             {hasDisplayValue(product.pricing.mrp) ? (
@@ -2841,6 +2868,19 @@ function DetailPanel({
               onClick={handleNumericInputClick}
               onChange={(event) => setDraft((current) => ({ ...current, costPrice: event.target.value }))}
             />
+          </div>
+          <div>
+            <span>Marketing tag</span>
+            <select
+              value={draft.marketingTag}
+              onChange={(event) => setDraft((current) => ({ ...current, marketingTag: event.target.value }))}
+            >
+              {marketingTagOptions.map((option) => (
+                <option key={option || "none"} value={option}>
+                  {option || "No tag"}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <span>B2B price</span>
@@ -3414,6 +3454,7 @@ export default function App() {
       mrp: product.pricing.mrp ?? "",
       costPrice: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
       b2b: product.pricing.b2b ?? "",
+      marketingTag: product.marketingTag ?? "",
       notes: product.notes ?? "",
       imageUrl: product.imageUrl ?? ""
     });
@@ -3949,6 +3990,7 @@ export default function App() {
       cost_price: draft.costPrice === "" ? null : Number(draft.costPrice),
       mrp: draft.mrp === "" ? null : Number(draft.mrp),
       b2b_price: draft.b2b === "" ? null : Number(draft.b2b),
+      marketing_tag: safeText(draft.marketingTag),
       notes: draft.notes
     };
 
@@ -4184,6 +4226,7 @@ export default function App() {
       cost_price: form.costPrice === "" ? null : Number(form.costPrice),
       mrp: form.mrp === "" ? null : Number(form.mrp),
       b2b_price: form.b2b === "" ? null : Number(form.b2b),
+      marketing_tag: safeText(form.marketingTag),
       notes: form.notes,
       image_url: form.imageUrl,
       image_urls: normalizeUrl(form.imageUrl) ? [normalizeUrl(form.imageUrl)] : []
