@@ -201,6 +201,16 @@ h3 {
   box-shadow: 0 10px 30px rgba(44, 24, 16, 0.08);
 }
 
+.customer-header-home {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
 .customer-header-logo,
 .customer-footer-logo {
   width: 52px;

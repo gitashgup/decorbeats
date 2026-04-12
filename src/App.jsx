@@ -1868,11 +1868,13 @@ function AnnouncementBar() {
   );
 }
 
-function CustomerHeader({ scrolled, tickerMessage, tickerAction, tickerVisible, onSearchTap, onTickerAction, onAdmin }) {
+function CustomerHeader({ scrolled, tickerMessage, tickerAction, tickerVisible, onSearchTap, onTickerAction, onAdmin, onHome }) {
   const tickerClassName = scrolled && tickerVisible ? "customer-header-ticker visible" : "customer-header-ticker";
   return (
     <header className={scrolled ? "customer-header scrolled" : "customer-header"}>
-      <img src={brandLogo} alt="Decorbeats" className="customer-header-logo" />
+      <button type="button" className="customer-header-home" aria-label="Go to Decorbeats home" onClick={onHome}>
+        <img src={brandLogo} alt="Decorbeats" className="customer-header-logo" />
+      </button>
       {tickerAction ? (
         <button
           type="button"
@@ -4632,6 +4634,19 @@ export default function App() {
     }
   }
 
+  function handleCustomerHome() {
+    setPublicScreen("customer");
+    setCategoryFilter("All");
+    setSearch("");
+    setSelectedId(null);
+    setRouteIntent({ screen: "customer", type: "home", slug: "" });
+    pendingRouteIntentRef.current = { screen: "customer", type: "home", slug: "" };
+    if (typeof window !== "undefined") {
+      window.history.pushState({}, "", "/");
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   if (!authReady) {
     return (
       <div className="app-shell">
@@ -4679,6 +4694,7 @@ export default function App() {
         onSearchTap={handleFocusCustomerSearch}
         onTickerAction={handleTickerAction}
         onAdmin={handleAdminEntry}
+        onHome={handleCustomerHome}
       />
       <main className="customer-main">
         {adminActive && previewCustomerView ? <CustomerPreviewBanner onBack={() => {
