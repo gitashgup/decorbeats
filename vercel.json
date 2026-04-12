@@ -7,13 +7,18 @@
     {
       "source": "/admin/:path*",
       "destination": "/"
-    }
-  ],
-  "redirects": [
+    },
+    {
+      "source": "/category/:path*",
+      "destination": "/"
+    },
+    {
+      "source": "/product-page/:path*",
+      "destination": "/"
+    },
     {
       "source": "/product/:path*",
-      "destination": "/",
-      "permanent": false
+      "destination": "/"
     }
   ]
 }

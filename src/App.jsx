@@ -97,6 +97,34 @@ function getInitialPublicScreen() {
   return window.location.pathname === "/admin" ? "admin-auth" : "customer";
 }
 
+function humanizeSlug(slug) {
+  return String(slug ?? "")
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function parseLegacyPath(pathname) {
+  const path = String(pathname ?? "/");
+
+  if (path === "/admin" || path.startsWith("/admin/")) {
+    return { screen: "admin-auth", type: "admin", slug: "" };
+  }
+
+  const categoryMatch = path.match(/^\/category\/([^/]+)\/?$/i);
+  if (categoryMatch) {
+    return { screen: "customer", type: "category", slug: categoryMatch[1] };
+  }
+
+  const productMatch = path.match(/^\/(?:product-page|product)\/([^/]+)\/?$/i);
+  if (productMatch) {
+    return { screen: "customer", type: "product", slug: productMatch[1] };
+  }
+
+  return { screen: "customer", type: "home", slug: "" };
+}
+
 const emptyInquiryDraft = {
   customer_name: "",
   customer_phone: "",
@@ -3092,6 +3120,9 @@ export default function App() {
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [showArchived, setShowArchived] = useState(false);
   const [publicScreen, setPublicScreen] = useState(getInitialPublicScreen);
+  const [routeIntent, setRouteIntent] = useState(() =>
+    typeof window === "undefined" ? { screen: "customer", type: "home", slug: "" } : parseLegacyPath(window.location.pathname)
+  );
   const [activeTab, setActiveTab] = useState("products");
   const [lastSyncAt, setLastSyncAt] = useState(null);
   const [csvPreviewRows, setCsvPreviewRows] = useState([]);
@@ -3119,6 +3150,9 @@ export default function App() {
   const customerSearchRef = useRef(null);
   const recognitionRef = useRef(null);
   const compressionTimerRef = useRef(null);
+  const pendingRouteIntentRef = useRef(
+    typeof window === "undefined" ? null : parseLegacyPath(window.location.pathname)
+  );
   const speechSupported =
     typeof window !== "undefined" && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
 
@@ -3225,7 +3259,10 @@ export default function App() {
     }
 
     function syncPublicScreenFromPath() {
-      setPublicScreen(window.location.pathname === "/admin" ? "admin-auth" : "customer");
+      const nextRoute = parseLegacyPath(window.location.pathname);
+      setPublicScreen(nextRoute.screen);
+      setRouteIntent(nextRoute);
+      pendingRouteIntentRef.current = nextRoute;
     }
 
     window.addEventListener("popstate", syncPublicScreenFromPath);
@@ -3408,6 +3445,55 @@ export default function App() {
     currentCatalog.find((product) => product.id === selectedId) ||
     products.find((product) => product.id === selectedId) ||
     null;
+
+  useEffect(() => {
+    const pendingRoute = pendingRouteIntentRef.current;
+    if (!pendingRoute || pendingRoute.screen !== "customer") {
+      return;
+    }
+
+    if (isSupabaseConfigured && !lastSyncAt) {
+      return;
+    }
+
+    if (pendingRoute.type === "home") {
+      pendingRouteIntentRef.current = null;
+      return;
+    }
+
+    if (pendingRoute.type === "category") {
+      const matchedCategory = categories.find((category) => slugify(category) === pendingRoute.slug) ?? null;
+      setSelectedId(null);
+      if (matchedCategory) {
+        setCategoryFilter(matchedCategory);
+        setSearch("");
+      } else {
+        setCategoryFilter("All");
+        setSearch(humanizeSlug(pendingRoute.slug));
+      }
+      pendingRouteIntentRef.current = null;
+      return;
+    }
+
+    if (pendingRoute.type === "product") {
+      const matchedProduct =
+        customerCatalog.find((product) => product.slug === pendingRoute.slug) ||
+        customerCatalog.find((product) => slugify(product.name) === pendingRoute.slug) ||
+        customerCatalog.find((product) => slugify(`${product.sku}-${product.name}`) === pendingRoute.slug) ||
+        null;
+
+      if (matchedProduct) {
+        setCategoryFilter("All");
+        setSearch("");
+        setSelectedId(matchedProduct.id);
+      } else {
+        setSelectedId(null);
+        setCategoryFilter("All");
+        setSearch(humanizeSlug(pendingRoute.slug));
+      }
+      pendingRouteIntentRef.current = null;
+    }
+  }, [categories, customerCatalog, isSupabaseConfigured, lastSyncAt]);
 
   const stats = useMemo(() => {
     return {
