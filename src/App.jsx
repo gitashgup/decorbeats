@@ -304,12 +304,56 @@ function toSale(raw) {
   };
 }
 
+function toPurchase(raw) {
+  const totalAmount = Number(raw.total_amount ?? 0);
+  const amountPaid = Number(raw.amount_paid ?? 0);
+  const balanceDue = raw.balance_due == null ? Math.max(0, totalAmount - amountPaid) : Number(raw.balance_due ?? 0);
+  return {
+    id: raw.id,
+    createdAt: raw.created_at,
+    vendorName: safeText(raw.vendor_name, "Unnamed vendor"),
+    vendorPhone: safeText(raw.vendor_phone),
+    orderDate: safeText(raw.order_date),
+    expectedDeliveryDate: safeText(raw.expected_delivery_date),
+    status: safeText(raw.status, "planned").toLowerCase(),
+    notes: safeText(raw.notes),
+    totalAmount,
+    amountPaid,
+    balanceDue,
+    referenceImageUrl: normalizeUrl(raw.reference_image_url),
+    items: Array.isArray(raw.purchase_items)
+      ? raw.purchase_items.map((item) => ({
+          id: item.id,
+          productSku: safeText(item.product_sku),
+          productName: safeText(item.product_name),
+          quantityOrdered: Number(item.quantity_ordered ?? 0),
+          costPrice: item.cost_price == null ? null : Number(item.cost_price),
+          lineTotal: item.line_total == null ? null : Number(item.line_total)
+        }))
+      : []
+  };
+}
+
 function createEmptySaleDraft() {
   return {
     customer_name: "",
     payment_method: "upi",
     payment_status: "paid",
     notes: "",
+    items: []
+  };
+}
+
+function createEmptyPurchaseDraft() {
+  return {
+    vendor_name: "",
+    vendor_phone: "",
+    order_date: new Date().toISOString().slice(0, 10),
+    expected_delivery_date: "",
+    status: "planned",
+    amount_paid: "",
+    notes: "",
+    reference_image_url: "",
     items: []
   };
 }
@@ -335,9 +379,31 @@ function formatSaleDate(value) {
   }).format(new Date(value));
 }
 
+function formatPurchaseDate(value) {
+  if (!value) {
+    return "Not set";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  }).format(parsed);
+}
+
 function formatInquiryStatus(status) {
   const normalized = safeText(status, "new").toLowerCase();
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function formatPurchaseStatus(status) {
+  return safeText(status, "planned")
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function createEmptyInquiryDraft() {
@@ -485,6 +551,17 @@ function ReceiptIcon() {
   );
 }
 
+function BoxIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M12 2.8 4 6.6v10.8l8 3.8 8-3.8V6.6l-8-3.8Zm0 2.2 5.4 2.57L12 10.17 6.6 7.57 12 5Zm-6 4.14 5 2.37v6.92l-5-2.38V9.14Zm7 9.3v-6.92l5-2.37v6.91l-5 2.38Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 function SearchIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -544,6 +621,10 @@ function getFileExtension(fileName) {
 
 function buildProductImagePath(sku, fileName) {
   return `${sanitizeStorageSegment(sku)}/${Date.now()}.${getFileExtension(fileName)}`;
+}
+
+function buildPurchaseReferenceImagePath(vendorName, fileName) {
+  return `purchases/${sanitizeStorageSegment(vendorName, "vendor")}/${Date.now()}.${getFileExtension(fileName)}`;
 }
 
 function getNextSku(products, material, category) {
@@ -1378,6 +1459,381 @@ function SalesScreen({ sales, summaryItems, onRecordSale, expandedSaleId, onTogg
         )}
       </section>
     </section>
+  );
+}
+
+function PurchaseSummaryStrip({ items }) {
+  return <StatStrip items={items} />;
+}
+
+function PurchaseStatusFilters({ activeStatus, onChange }) {
+  const filters = ["all", "planned", "ordered", "partially_paid", "in_transit", "received", "cancelled"];
+
+  return (
+    <div className="inquiry-status-row" aria-label="Filter purchases by status">
+      {filters.map((status) => (
+        <button
+          key={status}
+          type="button"
+          className={activeStatus === status ? "inquiry-status-pill active" : "inquiry-status-pill"}
+          onClick={() => onChange(status)}
+        >
+          {status === "all" ? "All" : formatPurchaseStatus(status)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PurchaseCard({ purchase, expanded, onToggle }) {
+  const itemsSummary = purchase.items.map((item) => `${item.quantityOrdered}× ${item.productName || item.productSku}`).join(" + ");
+  const balance = Number(purchase.balanceDue || 0);
+  const badgeClass = `purchase-status-badge ${purchase.status}`;
+
+  return (
+    <article className={expanded ? "purchase-card expanded" : "purchase-card"}>
+      <button type="button" className="purchase-card-main" onClick={() => onToggle(purchase.id)}>
+        <div className="purchase-card-top">
+          <div>
+            <p className="sale-card-date">{formatPurchaseDate(purchase.expectedDeliveryDate || purchase.orderDate)}</p>
+            <h3>{purchase.vendorName}</h3>
+          </div>
+          <span className={badgeClass}>{formatPurchaseStatus(purchase.status)}</span>
+        </div>
+        <p className="sale-card-items">{itemsSummary || "No items recorded"}</p>
+        <div className="purchase-card-meta">
+          <strong>{formatCurrency(purchase.totalAmount)}</strong>
+          <span>{balance > 0 ? `${formatCurrency(balance)} due` : "Fully paid"}</span>
+        </div>
+      </button>
+      {expanded ? (
+        <div className="purchase-card-detail">
+          <div className="sale-detail-grid">
+            <div>
+              <span>Vendor</span>
+              <strong>{purchase.vendorName}</strong>
+            </div>
+            <div>
+              <span>Phone</span>
+              <strong>{purchase.vendorPhone || "Not set"}</strong>
+            </div>
+            <div>
+              <span>Ordered</span>
+              <strong>{formatPurchaseDate(purchase.orderDate)}</strong>
+            </div>
+            <div>
+              <span>Expected</span>
+              <strong>{formatPurchaseDate(purchase.expectedDeliveryDate)}</strong>
+            </div>
+            <div>
+              <span>Paid</span>
+              <strong>{formatCurrency(purchase.amountPaid)}</strong>
+            </div>
+            <div>
+              <span>Balance</span>
+              <strong>{formatCurrency(purchase.balanceDue)}</strong>
+            </div>
+          </div>
+          {purchase.referenceImageUrl ? (
+            <div className="purchase-reference-media">
+              <img src={purchase.referenceImageUrl} alt={`${purchase.vendorName} reference`} loading="lazy" />
+            </div>
+          ) : null}
+          <ul className="sale-item-list">
+            {purchase.items.map((item) => (
+              <li key={item.id || `${item.productSku}-${item.productName}`}>
+                <div>
+                  <strong>{item.productName || item.productSku}</strong>
+                  <span>{item.productSku || "Manual item"}</span>
+                </div>
+                <div>
+                  <strong>{item.quantityOrdered} × {formatCurrency(item.costPrice)}</strong>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {purchase.notes ? <p className="detail-note">{purchase.notes}</p> : null}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function PurchasesScreen({
+  purchases,
+  summaryItems,
+  onAddPurchase,
+  expandedPurchaseId,
+  onTogglePurchase,
+  statusFilter,
+  setStatusFilter
+}) {
+  return (
+    <section className="stack-grid">
+      <button type="button" className="primary-button inquiry-log-button" onClick={onAddPurchase}>
+        <BoxIcon />
+        <span>Add Purchase</span>
+      </button>
+      <PurchaseSummaryStrip items={summaryItems} />
+      <PurchaseStatusFilters activeStatus={statusFilter} onChange={setStatusFilter} />
+      <section className="inquiry-list">
+        {purchases.length ? (
+          purchases.map((purchase) => (
+            <PurchaseCard
+              key={purchase.id}
+              purchase={purchase}
+              expanded={expandedPurchaseId === purchase.id}
+              onToggle={onTogglePurchase}
+            />
+          ))
+        ) : (
+          <div className="panel-card empty-state">
+            <p className="eyebrow">No purchases yet</p>
+            <h3>Your vendor orders will appear here.</h3>
+          </div>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function RecordPurchaseModal({
+  open,
+  draft,
+  setDraft,
+  products,
+  productSearch,
+  setProductSearch,
+  pickerOpen,
+  setPickerOpen,
+  busy,
+  errorMessage,
+  compressionMessage,
+  uploadStageMessage,
+  onReferenceImageChange,
+  onClose,
+  onAddProduct,
+  onRemoveProduct,
+  onUpdateItem,
+  onSave
+}) {
+  if (!open) {
+    return null;
+  }
+
+  const matchingProducts = products.filter((product) => {
+    const query = productSearch.trim().toLowerCase();
+    if (!query) {
+      return true;
+    }
+    return [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase().includes(query);
+  });
+
+  const total = draft.items.reduce(
+    (sum, item) => sum + Number(item.quantity_ordered || 0) * Number(item.cost_price || 0),
+    0
+  );
+  const amountPaid = Number(draft.amount_paid || 0);
+  const balanceDue = Math.max(0, total - amountPaid);
+
+  return (
+    <div className="inquiry-modal-overlay" onClick={onClose}>
+      <div className="inquiry-modal sale-modal" onClick={(event) => event.stopPropagation()}>
+        <form
+          className="inquiry-modal-body inquiry-confirm-form sale-form"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSave();
+          }}
+        >
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Purchases</p>
+              <h3>Add purchase order</h3>
+            </div>
+          </div>
+          {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
+          <label>
+            Vendor name
+            <input
+              value={draft.vendor_name}
+              onChange={(event) => setDraft((current) => ({ ...current, vendor_name: event.target.value }))}
+              placeholder="Who are you buying from?"
+            />
+          </label>
+          <label>
+            Vendor phone
+            <input
+              value={draft.vendor_phone}
+              onChange={(event) => setDraft((current) => ({ ...current, vendor_phone: event.target.value }))}
+              placeholder="Phone or WhatsApp number"
+            />
+          </label>
+          <div className="inquiry-inline-fields">
+            <label>
+              Order date
+              <input
+                type="date"
+                value={draft.order_date}
+                onChange={(event) => setDraft((current) => ({ ...current, order_date: event.target.value }))}
+              />
+            </label>
+            <label>
+              Tentative delivery
+              <input
+                type="date"
+                value={draft.expected_delivery_date}
+                onChange={(event) => setDraft((current) => ({ ...current, expected_delivery_date: event.target.value }))}
+              />
+            </label>
+          </div>
+          <label>
+            Status
+            <select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))}>
+              <option value="planned">Planned</option>
+              <option value="ordered">Ordered</option>
+              <option value="partially_paid">Partially paid</option>
+              <option value="in_transit">In transit</option>
+              <option value="received">Received</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label className="product-photo-dropzone">
+            <CameraIcon />
+            <strong>{busy ? "Uploading..." : "Tap to add reference photo"}</strong>
+            <span>{draft.reference_image_url ? "Photo added. Tap again to replace it." : "Optional vendor or product reference image."}</span>
+            {draft.reference_image_url ? (
+              <img src={draft.reference_image_url} alt="Purchase reference" className="product-photo-preview" />
+            ) : null}
+            <input type="file" accept="image/*,.heic,.heif" onChange={onReferenceImageChange} disabled={busy} />
+          </label>
+          {uploadStageMessage ? <p className="compression-note">{uploadStageMessage}</p> : null}
+          {compressionMessage ? <p className="compression-note">{compressionMessage}</p> : null}
+          <div className="inquiry-products-editor span-2">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Products</p>
+                <h3>Purchase items</h3>
+              </div>
+              <button type="button" className="ghost-button" onClick={() => setPickerOpen((value) => !value)}>
+                Add Product
+              </button>
+            </div>
+            {pickerOpen ? (
+              <div className="sale-picker">
+                <input
+                  className="search-input"
+                  type="search"
+                  value={productSearch}
+                  onChange={(event) => setProductSearch(event.target.value)}
+                  placeholder="Search products by name or SKU"
+                />
+                <div className="sale-picker-results">
+                  {matchingProducts.map((product) => (
+                    <button key={product.id} type="button" className="sale-picker-item" onClick={() => onAddProduct(product)}>
+                      <div>
+                        <strong>{product.name}</strong>
+                        <span>{product.sku}</span>
+                      </div>
+                      <small>{formatCurrency(product.pricing.costPrice ?? product.pricing.unitCost ?? product.pricing.mrp)}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="inquiry-product-editor-list">
+              {draft.items.length ? (
+                draft.items.map((item, index) => (
+                  <div key={`${item.product_sku || item.product_name}-${index}`} className="inquiry-product-editor-card sale-item-card">
+                    <div className="sale-item-head">
+                      <div>
+                        <strong>{item.product_name}</strong>
+                        <span>{item.product_sku || "Manual item"}</span>
+                      </div>
+                      <button type="button" className="detail-cancel-link" onClick={() => onRemoveProduct(index)}>
+                        ×
+                      </button>
+                    </div>
+                    <div className="inquiry-inline-fields">
+                      <label>
+                        Quantity
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={Number(item.quantity_ordered || 0) === 0 ? "" : item.quantity_ordered}
+                          placeholder="0"
+                          onClick={handleNumericInputClick}
+                          onChange={(event) => onUpdateItem(index, "quantity_ordered", event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Cost price
+                        <div className="rupee-field">
+                          <span>₹</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={Number(item.cost_price || 0) === 0 ? "" : item.cost_price}
+                            placeholder="0"
+                            onClick={handleNumericInputClick}
+                            onChange={(event) => onUpdateItem(index, "cost_price", event.target.value)}
+                          />
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="support-copy">Add products to track this purchase order.</p>
+              )}
+            </div>
+          </div>
+          <div className="inquiry-inline-fields">
+            <label>
+              Amount paid
+              <div className="rupee-field">
+                <span>₹</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={Number(draft.amount_paid || 0) === 0 ? "" : draft.amount_paid}
+                  placeholder="0"
+                  onClick={handleNumericInputClick}
+                  onChange={(event) => setDraft((current) => ({ ...current, amount_paid: event.target.value }))}
+                />
+              </div>
+            </label>
+            <div className="sale-total-card">
+              <span>Balance due</span>
+              <strong>{formatCurrency(balanceDue)}</strong>
+            </div>
+          </div>
+          <label className="span-2">
+            Notes
+            <textarea
+              rows="4"
+              value={draft.notes}
+              onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+              placeholder="What still needs to be paid, confirmed, or followed up?"
+            />
+          </label>
+          <div className="sale-total-card span-2">
+            <span>Order total</span>
+            <strong>{formatCurrency(total)}</strong>
+          </div>
+          <div className="detail-edit-actions">
+            <button type="button" className="primary-button detail-save-button" disabled={busy || !draft.items.length} onClick={onSave}>
+              {busy ? "Saving..." : "Save Purchase"}
+            </button>
+            <button type="button" className="detail-cancel-link" onClick={onClose}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -3029,6 +3485,7 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
     { id: "products", label: "Products", icon: <GridIcon /> },
     { id: "inquiries", label: "Inquiries", icon: <ChatIcon /> },
     { id: "sales", label: "Sales", icon: <ReceiptIcon /> },
+    { id: "purchases", label: "Purchases", icon: <BoxIcon /> },
     { id: "low-stock", label: "Low Stock", icon: <WarningIcon />, badge: lowStockCount },
     { id: "settings", label: "Settings", icon: <GearIcon /> }
   ];
@@ -3071,8 +3528,19 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
         className={activeTab === "low-stock" ? "nav-item active" : "nav-item"}
         onClick={() => setActiveTab("low-stock")}
       >
-        <span className="nav-icon nav-icon-alert">
+        <span className="nav-icon">
           {items[3].icon}
+        </span>
+        <span>Purchases</span>
+      </button>
+
+      <button
+        type="button"
+        className={activeTab === "low-stock" ? "nav-item active" : "nav-item"}
+        onClick={() => setActiveTab("low-stock")}
+      >
+        <span className="nav-icon nav-icon-alert">
+          {items[4].icon}
           {lowStockCount ? <small>{lowStockCount}</small> : null}
         </span>
         <span>Low Stock</span>
@@ -3083,7 +3551,7 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
         className={activeTab === "settings" ? "nav-item active" : "nav-item"}
         onClick={() => setActiveTab("settings")}
       >
-        <span className="nav-icon">{items[4].icon}</span>
+        <span className="nav-icon">{items[5].icon}</span>
         <span>Settings</span>
       </button>
     </nav>
@@ -3094,9 +3562,11 @@ export default function App() {
   const [products, setProducts] = useState(seedProducts.map(toProduct));
   const [inquiries, setInquiries] = useState([]);
   const [sales, setSales] = useState([]);
+  const [purchases, setPurchases] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [expandedInquiryId, setExpandedInquiryId] = useState(null);
   const [expandedSaleId, setExpandedSaleId] = useState(null);
+  const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [inquiryStatusFilter, setInquiryStatusFilter] = useState("all");
@@ -3116,6 +3586,7 @@ export default function App() {
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [inquiryBusy, setInquiryBusy] = useState(false);
   const [salesBusy, setSalesBusy] = useState(false);
+  const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [session, setSession] = useState(null);
@@ -3148,6 +3619,12 @@ export default function App() {
   const [salePickerOpen, setSalePickerOpen] = useState(false);
   const [saleModalError, setSaleModalError] = useState("");
   const [markingSalePaidId, setMarkingSalePaidId] = useState("");
+  const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
+  const [purchaseDraft, setPurchaseDraft] = useState(createEmptyPurchaseDraft());
+  const [purchaseStatusFilter, setPurchaseStatusFilter] = useState("all");
+  const [purchaseProductSearch, setPurchaseProductSearch] = useState("");
+  const [purchasePickerOpen, setPurchasePickerOpen] = useState(false);
+  const [purchaseModalError, setPurchaseModalError] = useState("");
   const productGridRef = useRef(null);
   const customerSearchRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -3234,9 +3711,23 @@ export default function App() {
       setSales((data ?? []).map(toSale));
     }
 
+    async function loadPurchases() {
+      const { data, error } = await supabase
+        .from("purchases")
+        .select("*, purchase_items(*)")
+        .order("created_at", { ascending: false });
+
+      if (cancelled || error) {
+        return;
+      }
+
+      setPurchases((data ?? []).map(toPurchase));
+    }
+
     loadProducts();
     loadInquiries();
     loadSales();
+    loadPurchases();
 
     return () => {
       cancelled = true;
@@ -3415,6 +3906,10 @@ export default function App() {
     const filtered = salePaymentStatusFilter === "all" ? sales : sales.filter((sale) => sale.paymentStatus === salePaymentStatusFilter);
     return [...filtered].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
   }, [sales, salePaymentStatusFilter]);
+  const filteredPurchases = useMemo(() => {
+    const filtered = purchaseStatusFilter === "all" ? purchases : purchases.filter((purchase) => purchase.status === purchaseStatusFilter);
+    return [...filtered].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+  }, [purchaseStatusFilter, purchases]);
 
   useEffect(() => {
     if (typeof window === "undefined" || window.innerWidth < 768) {
@@ -3531,6 +4026,33 @@ export default function App() {
       { label: "Most sold", value: mostSold }
     ];
   }, [sales]);
+  const purchaseSummaryItems = useMemo(() => {
+    const totalPayable = purchases
+      .filter((purchase) => !["received", "cancelled"].includes(purchase.status))
+      .reduce((sum, purchase) => sum + Number(purchase.balanceDue || 0), 0);
+
+    const today = new Date();
+    const nextWeek = new Date();
+    nextWeek.setDate(today.getDate() + 7);
+
+    const dueSoon = purchases.filter((purchase) => {
+      if (!purchase.expectedDeliveryDate || ["received", "cancelled"].includes(purchase.status)) {
+        return false;
+      }
+      const deliveryDate = new Date(purchase.expectedDeliveryDate);
+      return !Number.isNaN(deliveryDate.getTime()) && deliveryDate >= today && deliveryDate <= nextWeek;
+    }).length;
+
+    const inTransit = purchases.filter((purchase) => purchase.status === "in_transit").length;
+    const received = purchases.filter((purchase) => purchase.status === "received").length;
+
+    return [
+      { label: "Total payable", value: formatCurrency(totalPayable), tone: "warn" },
+      { label: "Due soon", value: dueSoon },
+      { label: "In transit", value: inTransit },
+      { label: "Received", value: received, tone: "success" }
+    ];
+  }, [purchases]);
 
   function populateForm(product) {
     setForm({
@@ -3852,6 +4374,196 @@ export default function App() {
       setSaleModalError(error?.message || "Could not update this sale.");
     } finally {
       setMarkingSalePaidId("");
+    }
+  }
+
+  function resetPurchaseModal() {
+    setPurchaseModalOpen(false);
+    setPurchaseDraft(createEmptyPurchaseDraft());
+    setPurchaseProductSearch("");
+    setPurchasePickerOpen(false);
+    setPurchaseModalError("");
+  }
+
+  function handleOpenPurchaseModal() {
+    setPurchaseModalOpen(true);
+    setPurchaseDraft(createEmptyPurchaseDraft());
+    setPurchaseProductSearch("");
+    setPurchasePickerOpen(false);
+    setPurchaseModalError("");
+  }
+
+  function handleAddPurchaseProduct(product) {
+    setPurchaseDraft((current) => {
+      const existingIndex = current.items.findIndex((item) => item.product_sku === product.sku);
+      if (existingIndex >= 0) {
+        const nextItems = [...current.items];
+        nextItems[existingIndex] = {
+          ...nextItems[existingIndex],
+          quantity_ordered: Number(nextItems[existingIndex].quantity_ordered || 0) + 1
+        };
+        return { ...current, items: nextItems };
+      }
+
+      return {
+        ...current,
+        items: [
+          ...current.items,
+          {
+            product_sku: product.sku,
+            product_name: product.name,
+            quantity_ordered: 0,
+            cost_price: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
+            line_total: ""
+          }
+        ]
+      };
+    });
+    setPurchasePickerOpen(false);
+    setPurchaseProductSearch("");
+  }
+
+  function handleUpdatePurchaseItem(index, field, value) {
+    setPurchaseDraft((current) => {
+      const nextItems = [...current.items];
+      const currentItem = nextItems[index];
+      if (!currentItem) {
+        return current;
+      }
+      nextItems[index] = { ...currentItem, [field]: field === "quantity_ordered" || field === "cost_price" ? (value === "" ? "" : Number(value)) : value };
+      return { ...current, items: nextItems };
+    });
+  }
+
+  function handleRemovePurchaseProduct(index) {
+    setPurchaseDraft((current) => ({
+      ...current,
+      items: current.items.filter((_, itemIndex) => itemIndex !== index)
+    }));
+  }
+
+  async function handlePurchaseReferenceImageChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setUploadError("");
+    setPurchaseModalError("");
+    try {
+      const fileToUpload = await prepareUploadFile(file);
+      setPurchaseBusy(true);
+      if (isSupabaseConfigured) {
+        const path = buildPurchaseReferenceImagePath(purchaseDraft.vendor_name || "vendor", fileToUpload.name);
+        const { error: storageError } = await supabase.storage.from(PRODUCT_STORAGE_BUCKET).upload(path, fileToUpload, { upsert: false });
+        if (storageError) {
+          throw storageError;
+        }
+        const { data } = supabase.storage.from(PRODUCT_STORAGE_BUCKET).getPublicUrl(path);
+        setPurchaseDraft((current) => ({ ...current, reference_image_url: data.publicUrl }));
+      } else {
+        setPurchaseDraft((current) => ({ ...current, reference_image_url: URL.createObjectURL(fileToUpload) }));
+      }
+    } catch (error) {
+      console.error("Purchase reference upload failed:", error);
+      setPurchaseModalError(error?.message || "Could not upload this reference image.");
+    } finally {
+      setUploadStageMessage("");
+      setPurchaseBusy(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleSavePurchase() {
+    try {
+      if (!purchaseDraft.vendor_name.trim()) {
+        setPurchaseModalError("Add the vendor name before saving.");
+        return;
+      }
+
+      if (!purchaseDraft.items.length) {
+        setPurchaseModalError("Add at least one product before saving.");
+        return;
+      }
+
+      const invalidItem = purchaseDraft.items.find(
+        (item) => !safeText(item.product_name) || Number(item.quantity_ordered || 0) <= 0 || Number(item.cost_price || 0) <= 0
+      );
+      if (invalidItem) {
+        setPurchaseModalError("Each item needs a product, quantity, and cost price.");
+        return;
+      }
+
+      setPurchaseBusy(true);
+      setPurchaseModalError("");
+
+      const totalAmount = purchaseDraft.items.reduce(
+        (sum, item) => sum + Number(item.quantity_ordered || 0) * Number(item.cost_price || 0),
+        0
+      );
+      const amountPaid = Number(purchaseDraft.amount_paid || 0);
+      const balanceDue = Math.max(0, totalAmount - amountPaid);
+
+      const purchasePayload = {
+        vendor_name: safeText(purchaseDraft.vendor_name),
+        vendor_phone: safeText(purchaseDraft.vendor_phone) || null,
+        order_date: safeText(purchaseDraft.order_date) || null,
+        expected_delivery_date: safeText(purchaseDraft.expected_delivery_date) || null,
+        status: safeText(purchaseDraft.status, "planned"),
+        total_amount: totalAmount,
+        amount_paid: amountPaid,
+        balance_due: balanceDue,
+        notes: safeText(purchaseDraft.notes) || null,
+        reference_image_url: normalizeUrl(purchaseDraft.reference_image_url) || null
+      };
+
+      let savedPurchase;
+      if (isSupabaseConfigured) {
+        const { data: purchaseData, error: purchaseError } = await supabase.from("purchases").insert(purchasePayload).select().single();
+        if (purchaseError) {
+          throw purchaseError;
+        }
+
+        const itemsPayload = purchaseDraft.items.map((item) => ({
+          purchase_id: purchaseData.id,
+          product_sku: safeText(item.product_sku) || null,
+          product_name: safeText(item.product_name),
+          quantity_ordered: Number(item.quantity_ordered || 0),
+          cost_price: Number(item.cost_price || 0),
+          line_total: Number(item.quantity_ordered || 0) * Number(item.cost_price || 0)
+        }));
+
+        const { data: purchaseItemsData, error: itemsError } = await supabase.from("purchase_items").insert(itemsPayload).select();
+        if (itemsError) {
+          throw itemsError;
+        }
+
+        savedPurchase = toPurchase({ ...purchaseData, purchase_items: purchaseItemsData ?? [] });
+      } else {
+        savedPurchase = toPurchase({
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
+          ...purchasePayload,
+          purchase_items: purchaseDraft.items.map((item) => ({
+            id: crypto.randomUUID(),
+            product_sku: item.product_sku,
+            product_name: item.product_name,
+            quantity_ordered: item.quantity_ordered,
+            cost_price: item.cost_price,
+            line_total: Number(item.quantity_ordered || 0) * Number(item.cost_price || 0)
+          }))
+        });
+      }
+
+      setPurchases((current) => [savedPurchase, ...current]);
+      setExpandedPurchaseId(savedPurchase.id);
+      setStatusMessage("Purchase saved ✓");
+      resetPurchaseModal();
+    } catch (error) {
+      console.error("Purchase save failed:", error);
+      setPurchaseModalError(error?.message || "Could not save this purchase.");
+    } finally {
+      setPurchaseBusy(false);
     }
   }
 
@@ -4616,6 +5328,34 @@ export default function App() {
   const featuredCustomerProduct = customerCatalog.find((product) => getProductImages(product).length) || customerCatalog[0] || null;
   const generatedSku = form.id ? selectedProduct?.sku || "" : getNextSku(products, form.material, form.category);
   const activeTicker = TICKER_MESSAGES[headerTickerIndex];
+  const adminTitle =
+    activeTab === "products"
+      ? "Products"
+      : activeTab === "inquiries"
+        ? "Inquiries"
+        : activeTab === "sales"
+          ? "Sales"
+          : activeTab === "purchases"
+            ? "Purchases"
+            : activeTab === "add"
+              ? "Add or edit"
+              : activeTab === "low-stock"
+                ? "Low stock"
+                : "Settings";
+  const adminSubtitle =
+    activeTab === "products"
+      ? "Browse and edit the full catalog."
+      : activeTab === "inquiries"
+        ? "Track customer requests, quotes, and conversions."
+        : activeTab === "sales"
+          ? "Record completed orders, watch today’s numbers, and keep stock accurate."
+          : activeTab === "purchases"
+            ? "Track vendor orders, payments, and expected delivery dates."
+            : activeTab === "add"
+              ? "Create products, update details, and add imagery."
+              : activeTab === "low-stock"
+                ? "Focus on products that need replenishment."
+                : "Import stock, manage archive visibility, and control access.";
 
   function handleTickerAction(action) {
     if (action === "collection") {
@@ -4744,32 +5484,8 @@ export default function App() {
       <div className="screen-shell admin-shell">
         <ScreenHeader
           eyebrow="Decorbeats Admin"
-          title={
-            activeTab === "products"
-              ? "Products"
-              : activeTab === "inquiries"
-                ? "Inquiries"
-                : activeTab === "sales"
-                  ? "Sales"
-                : activeTab === "add"
-                  ? "Add or edit"
-                : activeTab === "low-stock"
-                  ? "Low stock"
-                  : "Settings"
-          }
-          subtitle={
-            activeTab === "products"
-              ? "Browse and edit the full catalog."
-              : activeTab === "inquiries"
-                ? "Track customer requests, quotes, and conversions."
-                : activeTab === "sales"
-                  ? "Record completed orders, watch today’s numbers, and keep stock accurate."
-                : activeTab === "add"
-                  ? "Create products, update details, and add imagery."
-                : activeTab === "low-stock"
-                  ? "Focus on products that need replenishment."
-                  : "Import stock, manage archive visibility, and control access."
-          }
+          title={adminTitle}
+          subtitle={adminSubtitle}
           action={<div className="user-badge">{userEmail ? `Signed in: ${userEmail}` : "Local admin mode"}</div>}
         />
 
@@ -4838,6 +5554,21 @@ export default function App() {
               setPaymentFilter={setSalePaymentStatusFilter}
               onMarkAsPaid={handleMarkSalePaid}
               markingPaidId={markingSalePaidId}
+            />
+          </>
+        ) : null}
+
+        {activeTab === "purchases" ? (
+          <>
+            <StatusStrip statusMessage={statusMessage} />
+            <PurchasesScreen
+              purchases={filteredPurchases}
+              summaryItems={purchaseSummaryItems}
+              onAddPurchase={handleOpenPurchaseModal}
+              expandedPurchaseId={expandedPurchaseId}
+              onTogglePurchase={(purchaseId) => setExpandedPurchaseId((current) => (current === purchaseId ? null : purchaseId))}
+              statusFilter={purchaseStatusFilter}
+              setStatusFilter={setPurchaseStatusFilter}
             />
           </>
         ) : null}
@@ -5008,6 +5739,26 @@ export default function App() {
         onRemoveProduct={handleRemoveSaleProduct}
         onUpdateItem={handleUpdateSaleItem}
         onSave={handleSaveSale}
+      />
+      <RecordPurchaseModal
+        open={purchaseModalOpen}
+        draft={purchaseDraft}
+        setDraft={setPurchaseDraft}
+        products={products.filter((product) => !product.archivedAt)}
+        productSearch={purchaseProductSearch}
+        setProductSearch={setPurchaseProductSearch}
+        pickerOpen={purchasePickerOpen}
+        setPickerOpen={setPurchasePickerOpen}
+        busy={purchaseBusy}
+        errorMessage={purchaseModalError}
+        compressionMessage={compressionMessage}
+        uploadStageMessage={uploadStageMessage}
+        onReferenceImageChange={handlePurchaseReferenceImageChange}
+        onClose={resetPurchaseModal}
+        onAddProduct={handleAddPurchaseProduct}
+        onRemoveProduct={handleRemovePurchaseProduct}
+        onUpdateItem={handleUpdatePurchaseItem}
+        onSave={handleSavePurchase}
       />
     </div>
   );

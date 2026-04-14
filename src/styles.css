@@ -2818,11 +2818,11 @@ header img {
   left: 50%;
   bottom: 0.7rem;
   transform: translateX(-50%);
-  width: min(100% - 1rem, 520px);
+  width: min(100% - 1rem, 620px);
   min-height: 80px;
   padding: 0.75rem 0.7rem 0.85rem;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   align-items: center;
   gap: 0.35rem;
   z-index: 20;
@@ -2859,6 +2859,10 @@ header img {
 
 .nav-item:nth-child(5) {
   grid-column: 5;
+}
+
+.nav-item:nth-child(6) {
+  grid-column: 6;
 }
 
 .nav-item.active {
@@ -3076,6 +3080,14 @@ header img {
   box-shadow: 0 14px 30px rgba(44, 24, 16, 0.06);
 }
 
+.purchase-card {
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+  overflow: hidden;
+  box-shadow: 0 14px 30px rgba(44, 24, 16, 0.06);
+}
+
 .sale-card-main {
   width: 100%;
   border: 0;
@@ -3087,7 +3099,25 @@ header img {
   gap: 0.7rem;
 }
 
+.purchase-card-main {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  padding: 1rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
 .sale-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.purchase-card-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -3108,6 +3138,11 @@ header img {
   margin: 0;
 }
 
+.purchase-card-top h3,
+.purchase-card-meta {
+  margin: 0;
+}
+
 .sale-card-date {
   color: var(--muted);
   font-size: 0.78rem;
@@ -3122,6 +3157,59 @@ header img {
 
 .sale-card-meta strong {
   font-size: 1rem;
+}
+
+.purchase-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.8rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.purchase-card-meta strong {
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.purchase-status-badge {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.15rem 0.65rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+  background: rgba(126, 116, 108, 0.18);
+  color: #655d57;
+}
+
+.purchase-status-badge.planned {
+  background: rgba(126, 116, 108, 0.18);
+  color: #655d57;
+}
+
+.purchase-status-badge.ordered,
+.purchase-status-badge.partially_paid {
+  background: rgba(214, 138, 57, 0.18);
+  color: #9c5a10;
+}
+
+.purchase-status-badge.in_transit {
+  background: rgba(79, 126, 191, 0.18);
+  color: #2f5f9f;
+}
+
+.purchase-status-badge.received {
+  background: rgba(61, 146, 81, 0.18);
+  color: #2f7f45;
+}
+
+.purchase-status-badge.cancelled {
+  background: rgba(126, 116, 108, 0.18);
+  color: #655d57;
 }
 
 .sale-payment-badge {
@@ -3171,6 +3259,26 @@ header img {
   display: grid;
   gap: 0.9rem;
   padding: 0 1rem 1rem;
+}
+
+.purchase-card-detail {
+  display: grid;
+  gap: 0.9rem;
+  padding: 0 1rem 1rem;
+}
+
+.purchase-reference-media {
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: rgba(245, 237, 227, 0.76);
+}
+
+.purchase-reference-media img {
+  width: 100%;
+  max-height: 240px;
+  object-fit: cover;
+  display: block;
 }
 
 .sale-card-actions {
