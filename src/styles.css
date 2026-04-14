@@ -3267,6 +3267,24 @@ header img {
   padding: 0 1rem 1rem;
 }
 
+.purchase-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.purchase-card-actions .compact-button {
+  min-height: 42px;
+  padding-inline: 1rem;
+}
+
+.purchase-status-note {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
 .purchase-reference-media {
   border-radius: 20px;
   overflow: hidden;

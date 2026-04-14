@@ -1500,10 +1500,11 @@ function PurchaseStatusFilters({ activeStatus, onChange }) {
   );
 }
 
-function PurchaseCard({ purchase, expanded, onToggle }) {
+function PurchaseCard({ purchase, expanded, onToggle, onUpdateStatus, updatingStatusId }) {
   const itemsSummary = purchase.items.map((item) => `${item.quantityOrdered}× ${item.productName || item.productSku}`).join(" + ");
   const balance = Number(purchase.balanceDue || 0);
   const badgeClass = `purchase-status-badge ${purchase.status}`;
+  const statusBusy = updatingStatusId === purchase.id;
 
   return (
     <article className={expanded ? "purchase-card expanded" : "purchase-card"}>
@@ -1523,6 +1524,29 @@ function PurchaseCard({ purchase, expanded, onToggle }) {
       </button>
       {expanded ? (
         <div className="purchase-card-detail">
+          <div className="purchase-card-actions">
+            {purchase.status !== "received" ? (
+              <button
+                type="button"
+                className="primary-button compact-button"
+                onClick={() => onUpdateStatus(purchase, "received")}
+                disabled={statusBusy}
+              >
+                {statusBusy ? "Saving..." : "Mark as Received"}
+              </button>
+            ) : null}
+            {purchase.status !== "in_transit" && purchase.status !== "received" ? (
+              <button
+                type="button"
+                className="ghost-button compact-button"
+                onClick={() => onUpdateStatus(purchase, "in_transit")}
+                disabled={statusBusy}
+              >
+                Mark In Transit
+              </button>
+            ) : null}
+            {purchase.status === "received" ? <span className="purchase-status-note">Checked in as received</span> : null}
+          </div>
           <div className="sale-detail-grid">
             <div>
               <span>Vendor</span>
@@ -1581,7 +1605,9 @@ function PurchasesScreen({
   expandedPurchaseId,
   onTogglePurchase,
   statusFilter,
-  setStatusFilter
+  setStatusFilter,
+  onUpdatePurchaseStatus,
+  updatingPurchaseStatusId
 }) {
   return (
     <section className="stack-grid">
@@ -1599,6 +1625,8 @@ function PurchasesScreen({
               purchase={purchase}
               expanded={expandedPurchaseId === purchase.id}
               onToggle={onTogglePurchase}
+              onUpdateStatus={onUpdatePurchaseStatus}
+              updatingStatusId={updatingPurchaseStatusId}
             />
           ))
         ) : (
@@ -3618,6 +3646,7 @@ export default function App() {
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
   const [purchaseDraft, setPurchaseDraft] = useState(createEmptyPurchaseDraft());
   const [purchaseStatusFilter, setPurchaseStatusFilter] = useState("all");
+  const [updatingPurchaseStatusId, setUpdatingPurchaseStatusId] = useState("");
   const [purchaseProductSearch, setPurchaseProductSearch] = useState("");
   const [purchasePickerOpen, setPurchasePickerOpen] = useState(false);
   const [purchaseModalError, setPurchaseModalError] = useState("");
@@ -4475,6 +4504,49 @@ export default function App() {
       setUploadStageMessage("");
       setPurchaseBusy(false);
       event.target.value = "";
+    }
+  }
+
+  async function handleUpdatePurchaseStatus(purchase, nextStatus) {
+    try {
+      setUpdatingPurchaseStatusId(purchase.id);
+      let updatedPurchase;
+
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("purchases")
+          .update({ status: nextStatus })
+          .eq("id", purchase.id)
+          .select("*, purchase_items(*)")
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        updatedPurchase = toPurchase(data);
+      } else {
+        updatedPurchase = toPurchase({
+          ...purchase,
+          status: nextStatus,
+          purchase_items: purchase.items.map((item) => ({
+            id: item.id,
+            product_sku: item.productSku,
+            product_name: item.productName,
+            quantity_ordered: item.quantityOrdered,
+            cost_price: item.costPrice,
+            line_total: item.lineTotal
+          }))
+        });
+      }
+
+      setPurchases((current) => current.map((entry) => (entry.id === purchase.id ? updatedPurchase : entry)));
+      setStatusMessage(`Purchase marked as ${formatPurchaseStatus(nextStatus)} ✓`);
+    } catch (error) {
+      console.error("Purchase status update failed:", error);
+      setStatusMessage(error?.message || "Could not update this purchase status.");
+    } finally {
+      setUpdatingPurchaseStatusId("");
     }
   }
 
@@ -5573,6 +5645,8 @@ export default function App() {
               onTogglePurchase={(purchaseId) => setExpandedPurchaseId((current) => (current === purchaseId ? null : purchaseId))}
               statusFilter={purchaseStatusFilter}
               setStatusFilter={setPurchaseStatusFilter}
+              onUpdatePurchaseStatus={handleUpdatePurchaseStatus}
+              updatingPurchaseStatusId={updatingPurchaseStatusId}
             />
           </>
         ) : null}
