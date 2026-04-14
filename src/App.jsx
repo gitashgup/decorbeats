@@ -350,11 +350,11 @@ function createEmptyPurchaseDraft() {
     vendor_phone: "",
     order_date: new Date().toISOString().slice(0, 10),
     expected_delivery_date: "",
-    status: "planned",
+    status: "ordered",
     amount_paid: "",
     notes: "",
     reference_image_url: "",
-    items: []
+    items: [{ product_sku: "", product_name: "", quantity_ordered: "", cost_price: "", line_total: "" }]
   };
 }
 
@@ -1601,11 +1601,6 @@ function RecordPurchaseModal({
   open,
   draft,
   setDraft,
-  products,
-  productSearch,
-  setProductSearch,
-  pickerOpen,
-  setPickerOpen,
   busy,
   errorMessage,
   compressionMessage,
@@ -1620,14 +1615,6 @@ function RecordPurchaseModal({
   if (!open) {
     return null;
   }
-
-  const matchingProducts = products.filter((product) => {
-    const query = productSearch.trim().toLowerCase();
-    if (!query) {
-      return true;
-    }
-    return [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase().includes(query);
-  });
 
   const total = draft.items.reduce(
     (sum, item) => sum + Number(item.quantity_ordered || 0) * Number(item.cost_price || 0),
@@ -1716,46 +1703,40 @@ function RecordPurchaseModal({
                 <p className="eyebrow">Products</p>
                 <h3>Purchase items</h3>
               </div>
-              <button type="button" className="ghost-button" onClick={() => setPickerOpen((value) => !value)}>
-                Add Product
+              <button type="button" className="ghost-button" onClick={() => onAddProduct()}>
+                Add another
               </button>
             </div>
-            {pickerOpen ? (
-              <div className="sale-picker">
-                <input
-                  className="search-input"
-                  type="search"
-                  value={productSearch}
-                  onChange={(event) => setProductSearch(event.target.value)}
-                  placeholder="Search products by name or SKU"
-                />
-                <div className="sale-picker-results">
-                  {matchingProducts.map((product) => (
-                    <button key={product.id} type="button" className="sale-picker-item" onClick={() => onAddProduct(product)}>
-                      <div>
-                        <strong>{product.name}</strong>
-                        <span>{product.sku}</span>
-                      </div>
-                      <small>{formatCurrency(product.pricing.costPrice ?? product.pricing.unitCost ?? product.pricing.mrp)}</small>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
             <div className="inquiry-product-editor-list">
               {draft.items.length ? (
                 draft.items.map((item, index) => (
                   <div key={`${item.product_sku || item.product_name}-${index}`} className="inquiry-product-editor-card sale-item-card">
                     <div className="sale-item-head">
                       <div>
-                        <strong>{item.product_name}</strong>
+                        <strong>{item.product_name || `Item ${index + 1}`}</strong>
                         <span>{item.product_sku || "Manual item"}</span>
                       </div>
                       <button type="button" className="detail-cancel-link" onClick={() => onRemoveProduct(index)}>
                         ×
                       </button>
                     </div>
+                    <label>
+                      Product name
+                      <input
+                        value={item.product_name}
+                        placeholder="What product are you ordering?"
+                        onChange={(event) => onUpdateItem(index, "product_name", event.target.value)}
+                      />
+                    </label>
                     <div className="inquiry-inline-fields">
+                      <label>
+                        SKU
+                        <input
+                          value={item.product_sku}
+                          placeholder="Optional"
+                          onChange={(event) => onUpdateItem(index, "product_sku", event.target.value)}
+                        />
+                      </label>
                       <label>
                         Quantity
                         <input
@@ -3525,8 +3506,8 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
 
       <button
         type="button"
-        className={activeTab === "low-stock" ? "nav-item active" : "nav-item"}
-        onClick={() => setActiveTab("low-stock")}
+        className={activeTab === "purchases" ? "nav-item active" : "nav-item"}
+        onClick={() => setActiveTab("purchases")}
       >
         <span className="nav-icon">
           {items[3].icon}
@@ -4394,6 +4375,14 @@ export default function App() {
   }
 
   function handleAddPurchaseProduct(product) {
+    if (!product) {
+      setPurchaseDraft((current) => ({
+        ...current,
+        items: [...current.items, { product_sku: "", product_name: "", quantity_ordered: "", cost_price: "", line_total: "" }]
+      }));
+      return;
+    }
+
     setPurchaseDraft((current) => {
       const existingIndex = current.items.findIndex((item) => item.product_sku === product.sku);
       if (existingIndex >= 0) {
@@ -5744,11 +5733,6 @@ export default function App() {
         open={purchaseModalOpen}
         draft={purchaseDraft}
         setDraft={setPurchaseDraft}
-        products={products.filter((product) => !product.archivedAt)}
-        productSearch={purchaseProductSearch}
-        setProductSearch={setPurchaseProductSearch}
-        pickerOpen={purchasePickerOpen}
-        setPickerOpen={setPurchasePickerOpen}
         busy={purchaseBusy}
         errorMessage={purchaseModalError}
         compressionMessage={compressionMessage}
