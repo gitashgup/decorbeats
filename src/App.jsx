@@ -344,6 +344,21 @@ function createEmptySaleDraft() {
   };
 }
 
+function createPurchaseItemDraft(overrides = {}) {
+  return {
+    client_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `purchase-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    product_sku: "",
+    product_name: "",
+    quantity_ordered: "",
+    cost_price: "",
+    line_total: "",
+    ...overrides
+  };
+}
+
 function createEmptyPurchaseDraft() {
   return {
     vendor_name: "",
@@ -354,7 +369,7 @@ function createEmptyPurchaseDraft() {
     amount_paid: "",
     notes: "",
     reference_image_url: "",
-    items: [{ product_sku: "", product_name: "", quantity_ordered: "", cost_price: "", line_total: "" }]
+    items: [createPurchaseItemDraft()]
   };
 }
 
@@ -1710,7 +1725,7 @@ function RecordPurchaseModal({
             <div className="inquiry-product-editor-list">
               {draft.items.length ? (
                 draft.items.map((item, index) => (
-                  <div key={`${item.product_sku || item.product_name}-${index}`} className="inquiry-product-editor-card sale-item-card">
+                  <div key={item.client_id || item.id || `${index}`} className="inquiry-product-editor-card sale-item-card">
                     <div className="sale-item-head">
                       <div>
                         <strong>{item.product_name || `Item ${index + 1}`}</strong>
@@ -4378,7 +4393,7 @@ export default function App() {
     if (!product) {
       setPurchaseDraft((current) => ({
         ...current,
-        items: [...current.items, { product_sku: "", product_name: "", quantity_ordered: "", cost_price: "", line_total: "" }]
+        items: [...current.items, createPurchaseItemDraft()]
       }));
       return;
     }
@@ -4398,13 +4413,13 @@ export default function App() {
         ...current,
         items: [
           ...current.items,
-          {
+          createPurchaseItemDraft({
             product_sku: product.sku,
             product_name: product.name,
             quantity_ordered: 0,
             cost_price: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
             line_total: ""
-          }
+          })
         ]
       };
     });
