@@ -3950,3 +3950,182 @@ header img {
     align-items: flex-start;
   }
 }
+
+@media (max-width: 767px) {
+  .customer-footer {
+    width: 100vw !important;
+    margin: 2rem calc(50% - 50vw) 0 !important;
+    padding: 1.15rem 1rem calc(1.25rem + env(safe-area-inset-bottom)) !important;
+    display: block !important;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(196, 136, 90, 0.16), transparent 34%),
+      #1a0e08 !important;
+    color: #e8d5b7 !important;
+    text-align: left !important;
+    border-radius: 0 !important;
+  }
+
+  .customer-footer-contact,
+  .customer-footer-main,
+  .customer-footer-bottom {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .customer-footer-contact {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+
+  .customer-footer-contact-item,
+  .customer-footer-contact-item + .customer-footer-contact-item {
+    display: block !important;
+    padding: 0.8rem 0 !important;
+    border-left: 0 !important;
+    border-top: 1px solid rgba(232, 213, 183, 0.12) !important;
+    text-align: left !important;
+  }
+
+  .customer-footer-contact-item:first-child {
+    border-top: 0 !important;
+    padding-top: 0 !important;
+  }
+
+  .customer-footer-contact-icon {
+    display: none !important;
+  }
+
+  .customer-footer-contact-item strong,
+  footer .customer-footer-contact-item strong {
+    display: block !important;
+    margin: 0 0 0.28rem !important;
+    color: rgba(232, 213, 183, 0.62) !important;
+    font-size: 0.68rem !important;
+    line-height: 1.2 !important;
+    letter-spacing: 0.16em !important;
+    text-transform: uppercase !important;
+  }
+
+  .customer-footer-contact-item p,
+  .customer-footer-contact-item a,
+  footer .customer-footer-contact-item p,
+  footer .customer-footer-contact-item a {
+    margin: 0 !important;
+    color: #f5ede3 !important;
+    font-size: 0.9rem !important;
+    line-height: 1.45 !important;
+    font-weight: 500 !important;
+    text-decoration: none !important;
+  }
+
+  .customer-footer-divider {
+    width: 100% !important;
+    margin: 0.35rem 0 !important;
+    border-top: 1px solid rgba(232, 213, 183, 0.12) !important;
+  }
+
+  .customer-footer-main {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 0.9rem !important;
+    justify-items: stretch !important;
+    text-align: center !important;
+    padding: 1rem 0 !important;
+  }
+
+  .customer-footer-brand,
+  .customer-footer-cta,
+  .customer-footer-owner {
+    display: grid !important;
+    justify-items: center !important;
+    gap: 0.45rem !important;
+    text-align: center !important;
+  }
+
+  .customer-footer-logo,
+  footer .customer-footer-logo,
+  footer img.customer-footer-logo {
+    display: none !important;
+  }
+
+  .customer-footer-brand::before {
+    content: "Decorbeats";
+    color: #f5ede3;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .customer-footer-brand p,
+  .customer-footer-cta p,
+  footer .customer-footer-brand p,
+  footer .customer-footer-cta p {
+    color: #e8d5b7 !important;
+    font-size: 0.88rem !important;
+    line-height: 1.45 !important;
+    margin: 0 !important;
+  }
+
+  .footer-whatsapp,
+  .customer-footer .customer-whatsapp-button {
+    width: min(100%, 360px) !important;
+    min-height: 48px !important;
+    justify-self: center !important;
+    border-radius: 16px !important;
+    padding: 0.72rem 1rem !important;
+    font-size: 1rem !important;
+    line-height: 1 !important;
+    box-shadow: 0 14px 32px rgba(37, 211, 102, 0.18) !important;
+  }
+
+  .customer-footer .customer-whatsapp-button svg {
+    width: 18px !important;
+    height: 18px !important;
+  }
+
+  .customer-footer-owner {
+    min-height: auto !important;
+  }
+
+  .customer-admin-link,
+  footer .customer-admin-link {
+    min-height: 32px !important;
+    padding: 0 !important;
+    color: rgba(232, 213, 183, 0.7) !important;
+    font-size: 0.7rem !important;
+    letter-spacing: 0.14em !important;
+    text-align: center !important;
+  }
+
+  .customer-footer-bottom {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    padding: 0.95rem 0 0 !important;
+    color: #e8d5b7 !important;
+    font-size: 0.78rem !important;
+    line-height: 1.35 !important;
+    text-align: center !important;
+  }
+
+  .customer-footer-bottom span,
+  .customer-footer-bottom span:last-child,
+  footer .customer-footer-bottom span {
+    color: #e8d5b7 !important;
+    text-align: center !important;
+  }
+
+  .customer-footer-bottom-tagline,
+  footer .customer-footer-bottom-tagline {
+    max-width: 19rem !important;
+    color: #c4885a !important;
+    font-size: 0.68rem !important;
+    letter-spacing: 0.16em !important;
+    line-height: 1.45 !important;
+  }
+}
