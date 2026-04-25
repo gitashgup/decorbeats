@@ -4339,6 +4339,9 @@ export default function App() {
 
       setSalesBusy(true);
       setSaleModalError("");
+      if (isSupabaseConfigured && !session?.user) {
+        throw new Error("Your admin session has expired. Please sign in again before recording the sale.");
+      }
       const salePayload = {
         customer_name: safeText(saleDraft.customer_name) || null,
         payment_method: saleDraft.payment_method || "upi",
@@ -4368,17 +4371,24 @@ export default function App() {
           throw itemsError;
         }
 
-        const productUpdates = inventoryChanges.map(({ product, nextQuantity }) =>
-          supabase.from("products").update({ quantity: nextQuantity }).eq("id", product.id).select().single()
-        );
-        const productResults = await Promise.all(productUpdates);
-        const updateError = productResults.find((result) => result.error)?.error;
-        if (updateError) {
-          throw updateError;
+        for (const { product, item, nextQuantity } of inventoryChanges) {
+          const { error: productUpdateError } = await supabase
+            .from("products")
+            .update({ quantity: nextQuantity })
+            .eq("id", product.id);
+
+          if (productUpdateError) {
+            throw new Error(
+              `Could not update stock for ${item.product_name || item.product_sku}: ${productUpdateError.message}`
+            );
+          }
         }
-        const normalizedProducts = productResults.map((result) => toProduct(result.data));
+
         setProducts((current) =>
-          current.map((product) => normalizedProducts.find((nextProduct) => nextProduct.id === product.id) || product)
+          current.map((product) => {
+            const change = inventoryChanges.find(({ product: changedProduct }) => changedProduct.id === product.id);
+            return change ? { ...product, quantity: change.nextQuantity } : product;
+          })
         );
 
         savedSale = toSale({ ...saleData, sale_items: saleItemsData ?? [] });
@@ -4412,7 +4422,11 @@ export default function App() {
       setSalesBusy(false);
     } catch (error) {
       console.error("Sale error:", error);
-      setSaleModalError(error?.message || "Could not save this sale.");
+      setSaleModalError(
+        error?.message === "Load failed"
+          ? "Could not reach Supabase. Please check your internet connection and make sure you are still signed in."
+          : error?.message || "Could not save this sale."
+      );
       setSalesBusy(false);
     }
   }
