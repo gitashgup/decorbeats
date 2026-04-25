@@ -62,6 +62,12 @@ const emptyForm = {
 const categoryOptions = ["Bell", "Bowl", "Box", "Decor", "Diya", "Jars", "Misc", "Planter", "Plate", "Tree", "Urli", "Wall Decor"];
 const materialOptions = ["Brass", "Metal", "Ceramic", "Wood", "Glass", "Clay", "Mixed", "Other"];
 const marketingTagOptions = ["", "Featured", "New Arrival", "Best for Gifting", "Festive Pick", "Handpicked", "Limited Edition"];
+const customerOccasions = [
+  { label: "Festive Gifting", category: "Diya", note: "Diyas, urlis and pooja accents" },
+  { label: "Home Decor", category: "Decor", note: "Statement pieces for warm corners" },
+  { label: "Corporate Orders", category: "Box", note: "Bulk-ready gifts and keepsakes" },
+  { label: "Wall Stories", category: "Wall Decor", note: "Brass details for beautiful walls" }
+];
 
 const materialSkuCodes = {
   Brass: "BR",
@@ -2461,6 +2467,33 @@ function TrustStrip({ productCount }) {
       {items.map((item) => (
         <span key={item}>{item}</span>
       ))}
+    </section>
+  );
+}
+
+function CustomerOccasionRail({ onSelectCategory, onShop }) {
+  return (
+    <section className="customer-occasion-rail" aria-label="Shop by occasion">
+      <div className="customer-occasion-head">
+        <p className="eyebrow">Shop by need</p>
+        <h2>Find the right gift faster</h2>
+      </div>
+      <div className="customer-occasion-list">
+        {customerOccasions.map((occasion) => (
+          <button
+            key={occasion.label}
+            type="button"
+            className="customer-occasion-card"
+            onClick={() => {
+              onSelectCategory(occasion.category);
+              onShop();
+            }}
+          >
+            <span>{occasion.label}</span>
+            <small>{occasion.note}</small>
+          </button>
+        ))}
+      </div>
     </section>
   );
 }
@@ -5580,6 +5613,7 @@ export default function App() {
           setActiveTab("products");
         }} /> : null}
         <CustomerHero featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
+        <CustomerOccasionRail onSelectCategory={setCategoryFilter} onShop={handleScrollToCollection} />
         <TrustStrip productCount={stats.totalProducts} />
         <section className="customer-catalog-shell" ref={productGridRef}>
           <div className="customer-collections-head desktop-reveal">
