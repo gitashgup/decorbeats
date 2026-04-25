@@ -7,11 +7,12 @@ const WHATSAPP_NUMBER = "919811133661";
 const PRODUCT_STORAGE_BUCKET = "products";
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 const ANNOUNCEMENTS = [
+  "𝄞 Decorbeats — where every gift finds its rhythm",
   "✦ Summer Sale — Up to 30% off selected items",
-  "✦ Bulk orders welcome · 50 to 400+ units",
-  "✦ Handcrafted in India · Shipped across the country",
+  "♪ Bulk orders welcome · 50 to 400+ units",
+  "♫ Handcrafted in India · Shipped across the country",
   "✦ WhatsApp us for custom gifting solutions",
-  "✦ New arrivals added weekly"
+  "𝄞 New arrivals added weekly"
 ];
 const TICKER_MESSAGES = [
   { text: "𝄞  DECORBEATS — WHERE EVERY GIFT FINDS ITS RHYTHM  𝄞", action: null },
@@ -63,10 +64,15 @@ const categoryOptions = ["Bell", "Bowl", "Box", "Decor", "Diya", "Jars", "Misc",
 const materialOptions = ["Brass", "Metal", "Ceramic", "Wood", "Glass", "Clay", "Mixed", "Other"];
 const marketingTagOptions = ["", "Featured", "New Arrival", "Best for Gifting", "Festive Pick", "Handpicked", "Limited Edition"];
 const customerOccasions = [
-  { label: "Festive Gifting", category: "Diya", note: "Diyas, urlis and pooja accents" },
-  { label: "Home Decor", category: "Decor", note: "Statement pieces for warm corners" },
-  { label: "Corporate Orders", category: "Box", note: "Bulk-ready gifts and keepsakes" },
-  { label: "Wall Stories", category: "Wall Decor", note: "Brass details for beautiful walls" }
+  { label: "Festive Gifting", category: "Diya", note: "Diyas, urlis and pooja accents", beat: "Raaga of light" },
+  { label: "Home Decor", category: "Decor", note: "Statement pieces for warm corners", beat: "A room with rhythm" },
+  { label: "Corporate Orders", category: "Box", note: "Bulk-ready gifts and keepsakes", beat: "Gifting in harmony" },
+  { label: "Wall Stories", category: "Wall Decor", note: "Brass details for beautiful walls", beat: "Notes for your walls" }
+];
+const customerBeatStories = [
+  { title: "Beat 01", text: "Hand-finished brass and metal pieces selected for celebrations." },
+  { title: "Beat 02", text: "Bulk gifting support for 50 to 400+ units with quick WhatsApp coordination." },
+  { title: "Beat 03", text: "A living catalogue that keeps new arrivals, stock and enquiries in tune." }
 ];
 
 const materialSkuCodes = {
@@ -2428,13 +2434,18 @@ function CustomerHero({ featuredProduct, onShop }) {
           : undefined
       }
     >
+      <div className="customer-hero-notes" aria-hidden="true">
+        <span>𝄞</span>
+        <span>♪</span>
+        <span>♫</span>
+      </div>
       <div className="customer-hero-copy">
         <p className="eyebrow">Decorbeats</p>
         <h1>
           <span>Handcrafted</span>
           <span>for every celebration.</span>
         </h1>
-        <p>Brass, metal & artisanal decor - made in India, gifted with love.</p>
+        <p>Brass, metal & artisanal decor - made in India, gifted with rhythm.</p>
         <div className="customer-hero-actions">
           <button type="button" className="primary-button customer-hero-cta" onClick={onShop}>
             Shop the Collection
@@ -2454,12 +2465,32 @@ function CustomerHero({ featuredProduct, onShop }) {
   );
 }
 
+function CustomerBeatStories() {
+  return (
+    <section className="customer-beat-stories desktop-reveal" aria-label="The Decorbeats rhythm">
+      <div className="customer-beat-intro">
+        <p className="eyebrow">The Decorbeats rhythm</p>
+        <h2>Every gift has a beat.</h2>
+      </div>
+      <div className="customer-beat-list">
+        {customerBeatStories.map((story) => (
+          <article key={story.title} className="customer-beat-card">
+            <span aria-hidden="true">𝄞</span>
+            <strong>{story.title}</strong>
+            <p>{story.text}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function TrustStrip({ productCount }) {
   const items = [
-    "Handcrafted in India",
-    "Bulk orders welcome",
-    `${productCount}+ products`,
-    "WhatsApp enquiry in minutes"
+    "𝄞 Handcrafted in India",
+    "♪ Bulk orders welcome",
+    `♫ ${productCount}+ products`,
+    "𝄞 WhatsApp enquiry in minutes"
   ];
 
   return (
@@ -2498,6 +2529,7 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
             }}
           >
             {occasion.image ? <img src={occasion.image} alt="" loading="lazy" /> : null}
+            <em>{occasion.beat}</em>
             <span>{occasion.label}</span>
             <small>{occasion.note}</small>
           </button>
@@ -5623,6 +5655,7 @@ export default function App() {
         }} /> : null}
         <CustomerHero featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
         <CustomerOccasionRail products={customerCatalog} onSelectCategory={setCategoryFilter} onShop={handleScrollToCollection} />
+        <CustomerBeatStories />
         <TrustStrip productCount={stats.totalProducts} />
         <section className="customer-catalog-shell" ref={productGridRef}>
           <div className="customer-collections-head desktop-reveal">

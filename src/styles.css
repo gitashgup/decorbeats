@@ -334,6 +334,53 @@ h3 {
   object-fit: cover;
 }
 
+.customer-hero-notes {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.customer-hero-notes span {
+  position: absolute;
+  color: rgba(255, 250, 244, 0.34);
+  font-family: "Cormorant Garamond", serif;
+  font-size: clamp(2.1rem, 11vw, 4.75rem);
+  line-height: 1;
+  text-shadow: 0 12px 34px rgba(44, 24, 16, 0.24);
+  animation: music-note-float 7s ease-in-out infinite;
+}
+
+.customer-hero-notes span:nth-child(1) {
+  top: 1.2rem;
+  right: 1.1rem;
+}
+
+.customer-hero-notes span:nth-child(2) {
+  top: 42%;
+  right: 12%;
+  animation-delay: 1.2s;
+}
+
+.customer-hero-notes span:nth-child(3) {
+  bottom: 1.8rem;
+  left: 1.2rem;
+  animation-delay: 2.2s;
+}
+
+@keyframes music-note-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg);
+    opacity: 0.36;
+  }
+
+  50% {
+    transform: translateY(-12px) rotate(5deg);
+    opacity: 0.68;
+  }
+}
+
 .customer-catalog-shell {
   display: grid;
   gap: 1rem;
@@ -599,6 +646,30 @@ h3 {
   line-height: 1;
 }
 
+.customer-occasion-card em {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 26px;
+  border-radius: 999px;
+  background: rgba(245, 237, 227, 0.18);
+  color: rgba(255, 250, 244, 0.82);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  padding: 0.2rem 0.62rem;
+  text-transform: uppercase;
+}
+
+.customer-occasion-card em::before {
+  content: "♪";
+  color: #e8d5b7;
+  letter-spacing: 0;
+}
+
 .customer-occasion-card small {
   position: relative;
   z-index: 1;
@@ -607,6 +678,67 @@ h3 {
   color: rgba(255, 250, 244, 0.78);
   font-size: 0.86rem;
   line-height: 1.35;
+}
+
+.customer-beat-stories {
+  display: grid;
+  gap: 0.85rem;
+  margin: 1.2rem 0;
+  padding: 1rem;
+  border: 1px solid rgba(139, 74, 42, 0.12);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(196, 136, 90, 0.2), transparent 28%),
+    linear-gradient(135deg, rgba(255, 251, 246, 0.94), rgba(232, 213, 183, 0.44));
+  box-shadow: 0 16px 36px rgba(44, 24, 16, 0.06);
+}
+
+.customer-beat-intro {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.customer-beat-intro h2 {
+  font-size: clamp(1.9rem, 8vw, 2.6rem);
+  line-height: 0.95;
+}
+
+.customer-beat-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.customer-beat-card {
+  position: relative;
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.9rem 0.95rem 0.9rem 3rem;
+  border-radius: 18px;
+  background: rgba(255, 251, 246, 0.74);
+  border: 1px solid rgba(139, 74, 42, 0.08);
+}
+
+.customer-beat-card span {
+  position: absolute;
+  top: 0.82rem;
+  left: 0.95rem;
+  color: var(--accent);
+  font-family: "Cormorant Garamond", serif;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.customer-beat-card strong {
+  color: var(--accent);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.customer-beat-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 @media (min-width: 768px) {
@@ -1537,7 +1669,9 @@ header img {
     content: "";
     position: absolute;
     inset: 0;
-    background: rgba(139, 74, 42, 0.08);
+    background:
+      linear-gradient(90deg, rgba(139, 74, 42, 0.18), rgba(139, 74, 42, 0.04)),
+      repeating-linear-gradient(135deg, rgba(255, 250, 244, 0.08) 0 1px, transparent 1px 18px);
   }
 
   .customer-hero-media img {
@@ -1616,9 +1750,64 @@ header img {
     background: rgba(44, 24, 16, 0.72);
   }
 
+  .customer-occasion-card em {
+    background: rgba(245, 237, 227, 0.16);
+    font-size: 0.64rem;
+  }
+
   .customer-occasion-card span {
     font-size: 1.65rem;
-    margin-top: 4.8rem;
+    margin-top: 3.9rem;
+  }
+
+  .customer-beat-stories {
+    grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 1.4rem;
+    margin: 0 0 1.35rem;
+    padding: 1.15rem;
+    border-radius: 18px;
+  }
+
+  .customer-beat-stories::before {
+    content: "♪  ♫  𝄞  ♪  ♫";
+    position: absolute;
+    right: 2rem;
+    top: -0.85rem;
+    color: rgba(139, 74, 42, 0.16);
+    font-family: "Cormorant Garamond", serif;
+    font-size: 3rem;
+    letter-spacing: 0.22em;
+    pointer-events: none;
+  }
+
+  .customer-beat-stories {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .customer-beat-intro h2 {
+    font-size: clamp(2.15rem, 2.8vw, 3.25rem);
+  }
+
+  .customer-beat-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+  }
+
+  .customer-beat-card {
+    min-height: 132px;
+    align-content: start;
+    transition:
+      transform 180ms ease,
+      box-shadow 180ms ease,
+      background 180ms ease;
+  }
+
+  .customer-beat-card:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 251, 246, 0.92);
+    box-shadow: 0 14px 28px rgba(44, 24, 16, 0.08);
   }
 
   .customer-catalog-shell {
