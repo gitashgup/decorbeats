@@ -261,12 +261,10 @@ h3 {
 .customer-hero {
   position: relative;
   overflow: hidden;
-  min-height: 360px;
-  padding: 1.5rem;
-  border-radius: 32px;
-  background:
-    linear-gradient(180deg, rgba(250, 242, 232, 0.98), rgba(233, 220, 203, 0.92)),
-    linear-gradient(135deg, #fbf4ea 0%, #ead9c5 100%);
+  min-height: 420px;
+  padding: 0;
+  border-radius: 28px;
+  background: #1f120d;
   background-size: cover;
   background-position: center;
   box-shadow: var(--shadow);
@@ -276,12 +274,7 @@ h3 {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    to bottom,
-    rgba(245, 237, 227, 0.3) 0%,
-    rgba(245, 237, 227, 0.7) 60%,
-    rgba(245, 237, 227, 0.9) 100%
-  );
+  background: linear-gradient(180deg, rgba(44, 24, 16, 0.08) 0%, rgba(44, 24, 16, 0.38) 48%, rgba(44, 24, 16, 0.82) 100%);
   pointer-events: none;
 }
 
@@ -289,19 +282,27 @@ h3 {
   position: relative;
   display: grid;
   gap: 0.85rem;
-  max-width: 320px;
+  align-content: end;
+  min-height: 420px;
+  max-width: 360px;
+  padding: 1.35rem;
   z-index: 1;
 }
 
 .customer-hero-copy h1 {
   font-size: clamp(2.5rem, 11vw, 4.2rem);
   line-height: 0.95;
+  color: #fffaf4;
 }
 
 .customer-hero-copy p {
   margin: 0;
-  color: var(--muted);
+  color: rgba(255, 250, 244, 0.82);
   line-height: 1.6;
+}
+
+.customer-hero-copy .eyebrow {
+  color: rgba(255, 250, 244, 0.78);
 }
 
 .customer-hero-cta {
@@ -310,8 +311,27 @@ h3 {
   padding-inline: 1.35rem;
 }
 
-.customer-hero-media {
+.customer-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.customer-hero-link {
   display: none;
+}
+
+.customer-hero-media {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.customer-hero-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .customer-catalog-shell {
@@ -480,8 +500,6 @@ h3 {
   display: inline;
 }
 
-.customer-hero-actions,
-.customer-hero-link,
 .customer-scroll-indicator,
 .trust-strip,
 .featured-categories,
@@ -541,20 +559,40 @@ h3 {
 }
 
 .customer-occasion-card {
+  position: relative;
   flex: 0 0 76%;
-  min-height: 104px;
+  min-height: 150px;
   scroll-snap-align: start;
   border: 1px solid rgba(139, 74, 42, 0.12);
   border-radius: 22px;
   padding: 1rem;
-  background: rgba(255, 251, 246, 0.82);
+  overflow: hidden;
+  background: rgba(44, 24, 16, 0.72);
   box-shadow: 0 12px 32px rgba(44, 24, 16, 0.06);
-  color: var(--ink);
+  color: #fffaf4;
   text-align: left;
 }
 
+.customer-occasion-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(44, 24, 16, 0.05), rgba(44, 24, 16, 0.72));
+}
+
+.customer-occasion-card img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .customer-occasion-card span {
+  position: relative;
+  z-index: 1;
   display: block;
+  margin-top: 4.4rem;
   font-family: "Cormorant Garamond", serif;
   font-size: 1.45rem;
   font-weight: 800;
@@ -562,9 +600,11 @@ h3 {
 }
 
 .customer-occasion-card small {
+  position: relative;
+  z-index: 1;
   display: block;
   margin-top: 0.55rem;
-  color: var(--muted);
+  color: rgba(255, 250, 244, 0.78);
   font-size: 0.86rem;
   line-height: 1.35;
 }
@@ -1421,13 +1461,12 @@ header img {
   .customer-hero {
     position: relative;
     width: 100%;
-    min-height: 520px;
+    min-height: 560px;
     margin: 0.75rem 0 1.35rem;
     border-radius: 18px;
     overflow: hidden;
-    display: block;
     padding: 0;
-    background: linear-gradient(135deg, rgba(245, 237, 227, 0.96), rgba(232, 213, 183, 0.74));
+    background: #1f120d;
     box-shadow: 0 18px 46px rgba(44, 24, 16, 0.08);
   }
 
@@ -1435,7 +1474,7 @@ header img {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, rgba(245, 237, 227, 0.95) 0%, rgba(245, 237, 227, 0.82) 42%, rgba(245, 237, 227, 0.2) 72%, rgba(245, 237, 227, 0.08) 100%);
+    background: linear-gradient(90deg, rgba(44, 24, 16, 0.78) 0%, rgba(44, 24, 16, 0.46) 42%, rgba(44, 24, 16, 0.18) 74%, rgba(44, 24, 16, 0.12) 100%);
     z-index: 1;
   }
 
@@ -1443,25 +1482,30 @@ header img {
     position: relative;
     z-index: 2;
     width: min(100%, 540px);
-    min-height: 520px;
+    min-height: 560px;
     display: flex;
     flex-direction: column;
     justify-content: center;
     gap: 1rem;
-    padding: 3rem 3rem;
+    padding: 3rem;
     background: transparent;
   }
 
   .customer-hero-copy h1 {
     font-size: clamp(3.45rem, 5vw, 4.85rem);
     line-height: 0.94;
+    color: #fffaf4;
   }
 
   .customer-hero-copy p:not(.eyebrow) {
     max-width: 30rem;
     font-size: 1.18rem;
     line-height: 1.6;
-    color: rgba(44, 24, 16, 0.68);
+    color: rgba(255, 250, 244, 0.78);
+  }
+
+  .customer-hero-copy .eyebrow {
+    color: rgba(255, 250, 244, 0.72);
   }
 
   .customer-hero-actions {
@@ -1479,7 +1523,7 @@ header img {
 
   .customer-hero-link {
     min-height: 48px;
-    color: var(--accent);
+    color: #fffaf4;
     font-weight: 700;
   }
 
@@ -1493,7 +1537,7 @@ header img {
     content: "";
     position: absolute;
     inset: 0;
-    background: linear-gradient(90deg, rgba(245, 237, 227, 0.02) 30%, rgba(139, 74, 42, 0.16) 100%);
+    background: rgba(139, 74, 42, 0.08);
   }
 
   .customer-hero-media img {
@@ -1569,11 +1613,12 @@ header img {
   .customer-occasion-card:hover {
     transform: translateY(-2px);
     border-color: rgba(139, 74, 42, 0.28);
-    background: rgba(255, 251, 246, 0.96);
+    background: rgba(44, 24, 16, 0.72);
   }
 
   .customer-occasion-card span {
     font-size: 1.65rem;
+    margin-top: 4.8rem;
   }
 
   .customer-catalog-shell {

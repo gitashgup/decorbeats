@@ -2471,7 +2471,15 @@ function TrustStrip({ productCount }) {
   );
 }
 
-function CustomerOccasionRail({ onSelectCategory, onShop }) {
+function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
+  const occasions = customerOccasions.map((occasion) => {
+    const product = products.find((entry) => entry.category === occasion.category && getPrimaryImage(entry));
+    return {
+      ...occasion,
+      image: product ? getPrimaryImage(product) : ""
+    };
+  });
+
   return (
     <section className="customer-occasion-rail" aria-label="Shop by occasion">
       <div className="customer-occasion-head">
@@ -2479,7 +2487,7 @@ function CustomerOccasionRail({ onSelectCategory, onShop }) {
         <h2>Find the right gift faster</h2>
       </div>
       <div className="customer-occasion-list">
-        {customerOccasions.map((occasion) => (
+        {occasions.map((occasion) => (
           <button
             key={occasion.label}
             type="button"
@@ -2489,6 +2497,7 @@ function CustomerOccasionRail({ onSelectCategory, onShop }) {
               onShop();
             }}
           >
+            {occasion.image ? <img src={occasion.image} alt="" loading="lazy" /> : null}
             <span>{occasion.label}</span>
             <small>{occasion.note}</small>
           </button>
@@ -5613,7 +5622,7 @@ export default function App() {
           setActiveTab("products");
         }} /> : null}
         <CustomerHero featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
-        <CustomerOccasionRail onSelectCategory={setCategoryFilter} onShop={handleScrollToCollection} />
+        <CustomerOccasionRail products={customerCatalog} onSelectCategory={setCategoryFilter} onShop={handleScrollToCollection} />
         <TrustStrip productCount={stats.totalProducts} />
         <section className="customer-catalog-shell" ref={productGridRef}>
           <div className="customer-collections-head desktop-reveal">
