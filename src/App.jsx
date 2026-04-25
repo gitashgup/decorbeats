@@ -1872,6 +1872,9 @@ function RecordSaleModal({
   setPickerOpen,
   busy,
   errorMessage,
+  confirmation,
+  onCancelConfirmation,
+  onConfirmSale,
   onClose,
   onAddProduct,
   onRemoveProduct,
@@ -2057,11 +2060,38 @@ function RecordSaleModal({
             <span>Order total</span>
             <strong>{formatCurrency(total)}</strong>
           </div>
+          {confirmation ? (
+            <div className="sale-confirm-card span-2">
+              <p className="eyebrow">Confirm Sale</p>
+              <h3>Stock will be reduced</h3>
+              <ul className="sale-confirm-list">
+                {confirmation.inventoryChanges.map(({ item, product, nextQuantity }) => (
+                  <li key={item.product_sku}>
+                    <strong>{item.product_name}</strong>
+                    <span>
+                      {product.quantity} → {nextQuantity}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="sale-confirm-total">
+                Total: <strong>{formatCurrency(confirmation.total)}</strong> ({formatPaymentMethod(confirmation.paymentMethod)})
+              </p>
+              <div className="detail-edit-actions">
+                <button type="button" className="ghost-button" disabled={busy} onClick={onCancelConfirmation}>
+                  Cancel
+                </button>
+                <button type="button" className="primary-button detail-save-button" disabled={busy} onClick={onConfirmSale}>
+                  {busy ? "Saving..." : "Confirm & Save"}
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div className="detail-edit-actions">
             <button
               type="button"
               className="primary-button detail-save-button"
-              disabled={busy || !draft.items.length}
+              disabled={busy || !draft.items.length || Boolean(confirmation)}
               onClick={onSave}
             >
               {busy ? "Saving..." : "Complete Sale"}
@@ -3641,6 +3671,7 @@ export default function App() {
   const [salePaymentStatusFilter, setSalePaymentStatusFilter] = useState("all");
   const [saleProductSearch, setSaleProductSearch] = useState("");
   const [salePickerOpen, setSalePickerOpen] = useState(false);
+  const [saleConfirmation, setSaleConfirmation] = useState(null);
   const [saleModalError, setSaleModalError] = useState("");
   const [markingSalePaidId, setMarkingSalePaidId] = useState("");
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
@@ -4176,6 +4207,7 @@ export default function App() {
     setSaleDraft(createEmptySaleDraft());
     setSaleProductSearch("");
     setSalePickerOpen(false);
+    setSaleConfirmation(null);
     setSaleModalError("");
   }
 
@@ -4184,10 +4216,12 @@ export default function App() {
     setSaleDraft(createEmptySaleDraft());
     setSaleProductSearch("");
     setSalePickerOpen(false);
+    setSaleConfirmation(null);
     setSaleModalError("");
   }
 
   function handleAddSaleProduct(product) {
+    setSaleConfirmation(null);
     setSaleDraft((current) => {
       const existingIndex = current.items.findIndex((item) => item.product_sku === product.sku);
       if (existingIndex >= 0) {
@@ -4218,6 +4252,7 @@ export default function App() {
   }
 
   function handleUpdateSaleItem(index, field, value) {
+    setSaleConfirmation(null);
     setSaleDraft((current) => {
       const nextItems = [...current.items];
       const currentItem = nextItems[index];
@@ -4239,56 +4274,68 @@ export default function App() {
   }
 
   function handleRemoveSaleProduct(index) {
+    setSaleConfirmation(null);
     setSaleDraft((current) => ({
       ...current,
       items: current.items.filter((_, itemIndex) => itemIndex !== index)
     }));
   }
 
-  async function handleSaveSale() {
+  function buildSaleConfirmation() {
+    if (!saleDraft.items.length) {
+      setSaleModalError("Add at least one product before saving.");
+      return null;
+    }
+
+    const inventoryChanges = saleDraft.items.map((item) => {
+      const product = products.find((entry) => entry.sku === item.product_sku);
+      return {
+        item,
+        product,
+        nextQuantity: Math.max(0, Number(product?.quantity || 0) - Number(item.quantity_sold || 0))
+      };
+    });
+
+    const invalidStock = inventoryChanges.find(
+      ({ product, item }) =>
+        !product ||
+        Number(item.quantity_sold || 0) <= 0 ||
+        Number(item.quantity_sold || 0) > Number(product.quantity || 0)
+    );
+    if (invalidStock) {
+      setSaleModalError(`Stock is not available for ${invalidStock.item.product_name || invalidStock.item.product_sku}.`);
+      return null;
+    }
+
+    const total = saleDraft.items.reduce(
+      (sum, item) => sum + Number(item.quantity_sold || 0) * Number(item.selling_price || 0),
+      0
+    );
+
+    return {
+      inventoryChanges,
+      total,
+      paymentMethod: saleDraft.payment_method || "upi"
+    };
+  }
+
+  function handleSaveSale() {
+    setSaleModalError("");
+    const confirmation = buildSaleConfirmation();
+    if (!confirmation) {
+      return;
+    }
+    setSaleConfirmation(confirmation);
+  }
+
+  async function handleConfirmSale() {
     try {
-      if (!saleDraft.items.length) {
-        setSaleModalError("Add at least one product before saving.");
+      const confirmation = saleConfirmation || buildSaleConfirmation();
+      if (!confirmation) {
         return;
       }
 
-      const inventoryChanges = saleDraft.items.map((item) => {
-        const product = products.find((entry) => entry.sku === item.product_sku);
-        return {
-          item,
-          product,
-          nextQuantity: Math.max(0, Number(product?.quantity || 0) - Number(item.quantity_sold || 0))
-        };
-      });
-
-      const invalidStock = inventoryChanges.find(
-        ({ product, item }) =>
-          !product ||
-          Number(item.quantity_sold || 0) <= 0 ||
-          Number(item.quantity_sold || 0) > Number(product.quantity || 0)
-      );
-      if (invalidStock) {
-        setSaleModalError(`Stock is not available for ${invalidStock.item.product_name || invalidStock.item.product_sku}.`);
-        return;
-      }
-
-      const total = saleDraft.items.reduce(
-        (sum, item) => sum + Number(item.quantity_sold || 0) * Number(item.selling_price || 0),
-        0
-      );
-
-      const confirmationLines = inventoryChanges.map(
-        ({ item, product, nextQuantity }) => `• ${item.product_name}: ${product.quantity} → ${nextQuantity}`
-      );
-      const shouldConfirm = window.confirm(
-        `Confirm Sale\n\nThis will reduce stock:\n${confirmationLines.join("\n")}\n\nTotal: ${formatCurrency(total)} (${formatPaymentMethod(
-          saleDraft.payment_method
-        )})`
-      );
-
-      if (!shouldConfirm) {
-        return;
-      }
+      const { inventoryChanges, total } = confirmation;
 
       setSalesBusy(true);
       setSaleModalError("");
@@ -4360,6 +4407,7 @@ export default function App() {
       setSales((current) => [savedSale, ...current]);
       setExpandedSaleId(savedSale.id);
       setStatusMessage("Sale recorded ✓");
+      setSaleConfirmation(null);
       resetSaleModal();
       setSalesBusy(false);
     } catch (error) {
@@ -5812,6 +5860,9 @@ export default function App() {
         setPickerOpen={setSalePickerOpen}
         busy={salesBusy}
         errorMessage={saleModalError}
+        confirmation={saleConfirmation}
+        onCancelConfirmation={() => setSaleConfirmation(null)}
+        onConfirmSale={handleConfirmSale}
         onClose={resetSaleModal}
         onAddProduct={handleAddSaleProduct}
         onRemoveProduct={handleRemoveSaleProduct}
