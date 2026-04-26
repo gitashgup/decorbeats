@@ -316,6 +316,36 @@ function toSale(raw) {
   };
 }
 
+function isMissingSaleRpcError(error) {
+  const message = safeText(error?.message).toLowerCase();
+  return error?.code === "PGRST202" || message.includes("record_sale_with_items") || message.includes("could not find the function");
+}
+
+function formatSaleSaveError(error) {
+  const message = safeText(error?.message);
+  if (message === "Load failed" || error?.name === "TypeError") {
+    return "Could not reach Supabase from this phone. Please check the connection, then try once more. If it repeats, update the app after the next deploy.";
+  }
+  if (message.toLowerCase().includes("row-level security")) {
+    return "Supabase security is blocking this sale. Please check the sales, sale_items, and products RLS policies.";
+  }
+  return message || "Could not save this sale.";
+}
+
+function saleFromRpcData(data) {
+  const payload = Array.isArray(data) ? data[0] : data;
+  if (!payload) {
+    return null;
+  }
+  if (payload.sale && Array.isArray(payload.sale_items)) {
+    return toSale({ ...payload.sale, sale_items: payload.sale_items });
+  }
+  if (payload.id) {
+    return toSale(payload);
+  }
+  return null;
+}
+
 function toPurchase(raw) {
   const totalAmount = Number(raw.total_amount ?? 0);
   const amountPaid = Number(raw.amount_paid ?? 0);
@@ -4426,13 +4456,7 @@ export default function App() {
 
       let savedSale;
       if (isSupabaseConfigured) {
-        const { data: saleData, error: saleError } = await supabase.from("sales").insert(salePayload).select().single();
-        if (saleError) {
-          throw saleError;
-        }
-
         const saleItemsPayload = saleDraft.items.map((item) => ({
-          sale_id: saleData.id,
           product_sku: item.product_sku,
           product_name: item.product_name,
           quantity_sold: Number(item.quantity_sold || 0),
@@ -4440,22 +4464,54 @@ export default function App() {
           cost_price: item.cost_price === "" ? null : Number(item.cost_price)
         }));
 
-        const { data: saleItemsData, error: itemsError } = await supabase.from("sale_items").insert(saleItemsPayload).select();
-        if (itemsError) {
-          throw itemsError;
+        let usedRpcSave = false;
+        const { data: rpcData, error: rpcError } = await supabase.rpc("record_sale_with_items", {
+          sale_payload: salePayload,
+          sale_items_payload: saleItemsPayload
+        });
+
+        if (rpcError && !isMissingSaleRpcError(rpcError)) {
+          throw rpcError;
         }
 
-        for (const { product, item, nextQuantity } of inventoryChanges) {
-          const { error: productUpdateError } = await supabase
-            .from("products")
-            .update({ quantity: nextQuantity })
-            .eq("id", product.id);
-
-          if (productUpdateError) {
-            throw new Error(
-              `Could not update stock for ${item.product_name || item.product_sku}: ${productUpdateError.message}`
-            );
+        if (!rpcError) {
+          savedSale = saleFromRpcData(rpcData);
+          usedRpcSave = Boolean(savedSale);
+          if (!savedSale) {
+            throw new Error("Sale was saved, but Supabase returned an unreadable response. Please refresh Sales before trying again.");
           }
+        }
+
+        if (!usedRpcSave) {
+          const { data: saleData, error: saleError } = await supabase.from("sales").insert(salePayload).select().single();
+          if (saleError) {
+            throw saleError;
+          }
+
+          const saleItemsWithSaleId = saleItemsPayload.map((item) => ({
+            ...item,
+            sale_id: saleData.id
+          }));
+
+          const { data: saleItemsData, error: itemsError } = await supabase.from("sale_items").insert(saleItemsWithSaleId).select();
+          if (itemsError) {
+            throw itemsError;
+          }
+
+          for (const { product, item, nextQuantity } of inventoryChanges) {
+            const { error: productUpdateError } = await supabase
+              .from("products")
+              .update({ quantity: nextQuantity })
+              .eq("id", product.id);
+
+            if (productUpdateError) {
+              throw new Error(
+                `Could not update stock for ${item.product_name || item.product_sku}: ${productUpdateError.message}`
+              );
+            }
+          }
+
+          savedSale = toSale({ ...saleData, sale_items: saleItemsData ?? [] });
         }
 
         setProducts((current) =>
@@ -4464,8 +4520,6 @@ export default function App() {
             return change ? { ...product, quantity: change.nextQuantity } : product;
           })
         );
-
-        savedSale = toSale({ ...saleData, sale_items: saleItemsData ?? [] });
       } else {
         setProducts((current) =>
           current.map((product) => {
@@ -4496,11 +4550,7 @@ export default function App() {
       setSalesBusy(false);
     } catch (error) {
       console.error("Sale error:", error);
-      setSaleModalError(
-        error?.message === "Load failed"
-          ? "Could not reach Supabase. Please check your internet connection and make sure you are still signed in."
-          : error?.message || "Could not save this sale."
-      );
+      setSaleModalError(formatSaleSaveError(error));
       setSalesBusy(false);
     }
   }
