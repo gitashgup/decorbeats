@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { track } from "@vercel/analytics";
 import { products as seedProducts } from "./data/products";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
@@ -250,7 +251,19 @@ function openWhatsAppChat(message) {
   document.body.removeChild(anchor);
 }
 
+function trackCustomerEvent(eventName, properties = {}) {
+  try {
+    track(eventName, {
+      ...properties,
+      surface: "customer"
+    });
+  } catch (error) {
+    console.debug("Analytics event skipped:", eventName, error);
+  }
+}
+
 function openBulkWhatsApp() {
+  trackCustomerEvent("Bulk WhatsApp Clicked", { source: "ticker" });
   openWhatsAppChat("Hi, I would like to enquire about a bulk gifting order for Decorbeats.");
 }
 
@@ -2480,7 +2493,13 @@ function CustomerHero({ featuredProduct, onShop }) {
           <button type="button" className="primary-button customer-hero-cta" onClick={onShop}>
             Shop the Collection
           </button>
-          <a className="customer-hero-link" href={getBulkWhatsAppUrl()} target="_blank" rel="noopener noreferrer">
+          <a
+            className="customer-hero-link"
+            href={getBulkWhatsAppUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => trackCustomerEvent("Bulk WhatsApp Clicked", { source: "hero" })}
+          >
             Enquire for bulk orders →
           </a>
         </div>
@@ -2554,7 +2573,7 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
             type="button"
             className="customer-occasion-card"
             onClick={() => {
-              onSelectCategory(occasion.category);
+              onSelectCategory(occasion.category, "occasion_card");
               onShop();
             }}
           >
@@ -2594,7 +2613,7 @@ function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
           type="button"
           className="featured-category-tile"
           onClick={() => {
-            onSelectCategory(tile.category);
+            onSelectCategory(tile.category, "featured_category");
             onShop();
           }}
         >
@@ -2620,7 +2639,13 @@ function EditorialSection() {
         <p>Thoughtfully crafted brass, metal and artisanal decor pieces for celebrations, events and elevated gifting.</p>
         <p>Designed to feel personal, finished by hand, and ready for meaningful moments across homes and occasions.</p>
         <p>From intimate gifting to large-format corporate orders, each piece is made to carry warmth and story.</p>
-        <a className="customer-whatsapp-button editorial-whatsapp" href={getBulkWhatsAppUrl()} target="_blank" rel="noopener noreferrer">
+        <a
+          className="customer-whatsapp-button editorial-whatsapp"
+          href={getBulkWhatsAppUrl()}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => trackCustomerEvent("Bulk WhatsApp Clicked", { source: "editorial" })}
+        >
           <WhatsAppIcon />
           <span>Enquire on WhatsApp</span>
         </a>
@@ -2637,7 +2662,7 @@ function CustomerCategoryBar({ categories, categoryFilter, setCategoryFilter }) 
           key={category}
           type="button"
           className={category === categoryFilter ? "customer-category-chip active" : "customer-category-chip"}
-          onClick={() => setCategoryFilter(category)}
+          onClick={() => setCategoryFilter(category, "category_bar")}
         >
           {category}
         </button>
@@ -2672,7 +2697,7 @@ function CustomerProductCard({ product, onSelect }) {
   );
 }
 
-function CustomerSheet({ product, onClose, onShare }) {
+function CustomerSheet({ product, onClose, onShare, onWhatsApp }) {
   const [closing, setClosing] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
   const closeTimerRef = useRef(null);
@@ -2787,6 +2812,7 @@ function CustomerSheet({ product, onClose, onShare }) {
             href={getProductWhatsAppUrl(product)}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => onWhatsApp(product)}
           >
             <WhatsAppIcon />
             <span>Enquire on WhatsApp</span>
@@ -2838,7 +2864,13 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
         </div>
         <div className="customer-footer-cta">
           <p>For bulk orders of 50+ units</p>
-          <a className="customer-whatsapp-button footer-whatsapp" href={getBulkWhatsAppUrl()} target="_blank" rel="noopener noreferrer">
+          <a
+            className="customer-whatsapp-button footer-whatsapp"
+            href={getBulkWhatsAppUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => trackCustomerEvent("Bulk WhatsApp Clicked", { source: "footer" })}
+          >
             <WhatsAppIcon />
             <span>WhatsApp</span>
           </a>
@@ -4231,6 +4263,14 @@ export default function App() {
   }
 
   function handleProductSelect(product) {
+    if (!adminActive || previewCustomerView) {
+      trackCustomerEvent("Product Viewed", {
+        sku: product.sku,
+        product: product.name,
+        category: product.category,
+        hasPrice: hasDisplayValue(product.pricing?.mrp)
+      });
+    }
     setSelectedId((current) => (current === product.id ? null : product.id));
     if (adminActive) {
       populateForm(product);
@@ -5031,12 +5071,39 @@ export default function App() {
   }
 
   function handleScrollToCollection() {
+    trackCustomerEvent("Shop Collection Clicked");
     productGridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function handleFocusCustomerSearch() {
+    trackCustomerEvent("Search Focused");
     customerSearchRef.current?.focus();
     customerSearchRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function handleCustomerSearchBlur() {
+    const query = search.trim();
+    if (!query) {
+      return;
+    }
+    trackCustomerEvent("Search Used", {
+      query,
+      resultCount: filteredProducts.length
+    });
+  }
+
+  function handleCustomerCategorySelect(category, source = "category_bar") {
+    trackCustomerEvent("Category Selected", { category, source });
+    setCategoryFilter(category);
+  }
+
+  function handleCustomerWhatsAppClick(product) {
+    trackCustomerEvent("Product WhatsApp Clicked", {
+      sku: product.sku,
+      product: product.name,
+      category: product.category,
+      hasPrice: hasDisplayValue(product.pricing?.mrp)
+    });
   }
 
   async function handleDetailEdit(product, draft) {
@@ -5095,6 +5162,13 @@ export default function App() {
   }
 
   async function handleShareProduct(product) {
+    if (!adminActive || previewCustomerView) {
+      trackCustomerEvent("Product Shared", {
+        sku: product.sku,
+        product: product.name,
+        category: product.category
+      });
+    }
     const message = [
       product.name,
       `SKU: ${product.sku}`,
@@ -5630,6 +5704,7 @@ export default function App() {
   }
 
   function handleAdminEntry() {
+    trackCustomerEvent("Admin Link Clicked");
     setPublicScreen("admin-auth");
     if (typeof window !== "undefined") {
       window.history.pushState({}, "", "/admin");
@@ -5704,7 +5779,7 @@ export default function App() {
           setActiveTab("products");
         }} /> : null}
         <CustomerHero featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
-        <CustomerOccasionRail products={customerCatalog} onSelectCategory={setCategoryFilter} onShop={handleScrollToCollection} />
+        <CustomerOccasionRail products={customerCatalog} onSelectCategory={handleCustomerCategorySelect} onShop={handleScrollToCollection} />
         <CustomerBeatStories />
         <TrustStrip productCount={stats.totalProducts} />
         <section className="customer-catalog-shell" ref={productGridRef}>
@@ -5715,7 +5790,7 @@ export default function App() {
             </div>
           </div>
           <div className="customer-filter-bar">
-            <CustomerCategoryBar categories={categories} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} />
+            <CustomerCategoryBar categories={categories} categoryFilter={categoryFilter} setCategoryFilter={handleCustomerCategorySelect} />
             <div className="customer-search-row">
               <input
                 ref={customerSearchRef}
@@ -5724,12 +5799,13 @@ export default function App() {
                 placeholder="Search the collection"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
+                onBlur={handleCustomerSearchBlur}
               />
             </div>
           </div>
           <FeaturedCategoriesRow
             products={customerCatalog}
-            onSelectCategory={setCategoryFilter}
+            onSelectCategory={handleCustomerCategorySelect}
             onShop={handleScrollToCollection}
           />
           <EditorialSection />
@@ -5741,7 +5817,12 @@ export default function App() {
         </section>
         <CustomerFooter onAdmin={handleAdminEntry} showAdminLink={!adminActive} />
       </main>
-      <CustomerSheet product={selectedProduct} onClose={() => setSelectedId(null)} onShare={handleShareProduct} />
+      <CustomerSheet
+        product={selectedProduct}
+        onClose={() => setSelectedId(null)}
+        onShare={handleShareProduct}
+        onWhatsApp={handleCustomerWhatsAppClick}
+      />
     </div>
   ) : (
     <div className="app-shell app-shell-admin">
