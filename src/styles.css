@@ -469,7 +469,9 @@ h3 {
 .customer-product-image-wrap {
   position: relative;
   aspect-ratio: 1 / 1;
-  background: rgba(255, 255, 255, 0.7);
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.88), transparent 38%),
+    linear-gradient(145deg, #fff8ef 0%, #f5ede3 58%, #e8d5b7 100%);
   overflow: visible;
 }
 
@@ -509,13 +511,17 @@ h3 {
 .customer-sheet-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 0.7rem;
+  box-sizing: border-box;
 }
 
 .customer-product-fallback {
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, rgba(204, 145, 87, 0.18), rgba(255, 255, 255, 0.45));
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 255, 255, 0.92), transparent 40%),
+    linear-gradient(145deg, #fff8ef 0%, #f5ede3 58%, #e8d5b7 100%);
   color: var(--accent);
   height: 100%;
   text-align: center;
@@ -1192,11 +1198,12 @@ h3 {
   }
 
   .customer-product-image {
+    padding: 1rem;
     transition: transform 200ms ease;
   }
 
   .customer-product-card:hover .customer-product-image {
-    transform: scale(1.03);
+    transform: scale(1.025);
   }
 
   .customer-card-hover-text {
@@ -2009,6 +2016,9 @@ header img {
   aspect-ratio: 1 / 1;
   overflow: hidden;
   border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.9), transparent 42%),
+    linear-gradient(145deg, #fff8ef 0%, #f5ede3 58%, #e8d5b7 100%);
 }
 
 .customer-carousel-count {
@@ -2036,7 +2046,7 @@ header img {
   overflow: hidden;
   border: 1px solid transparent;
   padding: 0;
-  background: rgba(255, 255, 255, 0.68);
+  background: linear-gradient(145deg, #fff8ef, #f5ede3);
 }
 
 .customer-carousel-thumb.active {
@@ -2047,7 +2057,9 @@ header img {
 .customer-carousel-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 0.25rem;
+  box-sizing: border-box;
 }
 
 .customer-sheet-copy {
