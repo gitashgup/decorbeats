@@ -127,3 +127,52 @@ end;
 $$;
 
 grant execute on function public.record_sale_with_items(jsonb, jsonb) to authenticated;
+
+create or replace function public.delete_sale_and_restore_stock(target_sale_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  deleted_sale public.sales%rowtype;
+  item jsonb;
+  saved_items jsonb;
+begin
+  if auth.role() <> 'authenticated' then
+    raise exception 'Only authenticated users can delete sales';
+  end if;
+
+  select *
+  into deleted_sale
+  from public.sales
+  where id = target_sale_id
+  for update;
+
+  if not found then
+    raise exception 'Sale not found';
+  end if;
+
+  select coalesce(jsonb_agg(to_jsonb(si) order by si.product_name), '[]'::jsonb)
+  into saved_items
+  from public.sale_items si
+  where si.sale_id = target_sale_id;
+
+  for item in select * from jsonb_array_elements(saved_items)
+  loop
+    update public.products
+    set quantity = coalesce(quantity, 0) + coalesce((item->>'quantity_sold')::integer, 0)
+    where sku = item->>'product_sku';
+  end loop;
+
+  delete from public.sales
+  where id = target_sale_id;
+
+  return jsonb_build_object(
+    'sale', to_jsonb(deleted_sale),
+    'sale_items', saved_items
+  );
+end;
+$$;
+
+grant execute on function public.delete_sale_and_restore_stock(uuid) to authenticated;

@@ -377,6 +377,11 @@ function isMissingSaleRpcError(error) {
   return error?.code === "PGRST202" || message.includes("record_sale_with_items") || message.includes("could not find the function");
 }
 
+function isMissingDeleteSaleRpcError(error) {
+  const message = safeText(error?.message).toLowerCase();
+  return error?.code === "PGRST202" || message.includes("delete_sale_and_restore_stock") || message.includes("could not find the function");
+}
+
 function formatSaleSaveError(error) {
   const message = safeText(error?.message);
   if (isMissingSaleRpcError(error)) {
@@ -1464,13 +1469,14 @@ function SalesPaymentFilters({ activeStatus, onChange }) {
   );
 }
 
-function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, markingPaidId }) {
+function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markingPaidId, deletingSaleId }) {
   const itemsSummary = sale.items.map((item) => `${item.quantitySold}× ${item.productName || item.productSku}`).join(" + ");
   const badgeClass =
     sale.paymentMethod === "upi" ? "sale-payment-badge upi" : sale.paymentMethod === "cash" ? "sale-payment-badge cash" : "sale-payment-badge";
   const paymentStatusClass = sale.paymentStatus === "pending" ? "sale-payment-status pending" : "sale-payment-status paid";
   const isPending = sale.paymentStatus === "pending";
   const isBusy = markingPaidId === sale.id;
+  const isDeleting = deletingSaleId === sale.id;
 
   return (
     <article className={expanded ? "sale-card expanded" : "sale-card"}>
@@ -1528,25 +1534,45 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, markingPaidId }) {
             ))}
           </ul>
           {sale.notes ? <p className="detail-note">{sale.notes}</p> : null}
-          {isPending ? (
-            <div className="sale-card-actions">
+          <div className="sale-card-actions">
+            {isPending ? (
               <button
                 type="button"
                 className="ghost-button"
-                disabled={isBusy}
+                disabled={isBusy || isDeleting}
                 onClick={() => onMarkAsPaid?.(sale)}
               >
                 {isBusy ? "Updating..." : "Mark as Paid"}
               </button>
-            </div>
-          ) : null}
+            ) : null}
+            <button
+              type="button"
+              className="danger-button"
+              disabled={isBusy || isDeleting}
+              onClick={() => onDeleteSale?.(sale)}
+            >
+              {isDeleting ? "Deleting..." : "Delete Sale"}
+            </button>
+          </div>
         </div>
       ) : null}
     </article>
   );
 }
 
-function SalesScreen({ sales, summaryItems, onRecordSale, expandedSaleId, onToggleSale, paymentFilter, setPaymentFilter, onMarkAsPaid, markingPaidId }) {
+function SalesScreen({
+  sales,
+  summaryItems,
+  onRecordSale,
+  expandedSaleId,
+  onToggleSale,
+  paymentFilter,
+  setPaymentFilter,
+  onMarkAsPaid,
+  onDeleteSale,
+  markingPaidId,
+  deletingSaleId
+}) {
   return (
     <section className="stack-grid">
       <button type="button" className="primary-button inquiry-log-button" onClick={onRecordSale}>
@@ -1564,7 +1590,9 @@ function SalesScreen({ sales, summaryItems, onRecordSale, expandedSaleId, onTogg
               expanded={expandedSaleId === sale.id}
               onToggle={onToggleSale}
               onMarkAsPaid={onMarkAsPaid}
+              onDeleteSale={onDeleteSale}
               markingPaidId={markingPaidId}
+              deletingSaleId={deletingSaleId}
             />
           ))
         ) : (
@@ -3822,6 +3850,7 @@ export default function App() {
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [inquiryBusy, setInquiryBusy] = useState(false);
   const [salesBusy, setSalesBusy] = useState(false);
+  const [deletingSaleId, setDeletingSaleId] = useState("");
   const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -4635,6 +4664,52 @@ export default function App() {
       setSaleModalError(error?.message || "Could not update this sale.");
     } finally {
       setMarkingSalePaidId("");
+    }
+  }
+
+  async function handleDeleteSale(sale) {
+    if (!sale?.id) {
+      return;
+    }
+
+    const restoreLines = sale.items
+      .map((item) => `• ${item.productName || item.productSku}: +${Number(item.quantitySold || 0)} stock`)
+      .join("\n");
+    const confirmed = window.confirm(
+      `Delete this sale?\n\nThis will restore inventory:\n${restoreLines || "• No stock items recorded"}\n\nThis cannot be undone.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingSaleId(sale.id);
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.rpc("delete_sale_and_restore_stock", {
+          target_sale_id: sale.id
+        });
+        if (error) {
+          throw error;
+        }
+      }
+
+      setProducts((current) =>
+        current.map((product) => {
+          const restoredQuantity = sale.items
+            .filter((item) => item.productSku === product.sku)
+            .reduce((sum, item) => sum + Number(item.quantitySold || 0), 0);
+          return restoredQuantity ? toProduct({ ...product, quantity: Number(product.quantity || 0) + restoredQuantity }) : product;
+        })
+      );
+      setSales((current) => current.filter((entry) => entry.id !== sale.id));
+      setExpandedSaleId((current) => (current === sale.id ? null : current));
+      setStatusMessage("Sale deleted and stock restored ✓");
+    } catch (error) {
+      console.error("Delete sale failed:", error);
+      const missingRpcMessage = "The sale delete function is not installed in Supabase yet. Please run the latest sales SQL migration, then try again.";
+      setStatusMessage(isMissingDeleteSaleRpcError(error) ? missingRpcMessage : error?.message || "Could not delete this sale.");
+    } finally {
+      setDeletingSaleId("");
     }
   }
 
@@ -5908,7 +5983,9 @@ export default function App() {
               paymentFilter={salePaymentStatusFilter}
               setPaymentFilter={setSalePaymentStatusFilter}
               onMarkAsPaid={handleMarkSalePaid}
+              onDeleteSale={handleDeleteSale}
               markingPaidId={markingSalePaidId}
+              deletingSaleId={deletingSaleId}
             />
           </>
         ) : null}
