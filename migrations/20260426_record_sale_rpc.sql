@@ -87,9 +87,9 @@ begin
     end if;
 
     update public.products
-    set quantity = quantity - (item->>'quantity_sold')::integer
+    set quantity = coalesce(quantity, 0) - (item->>'quantity_sold')::integer
     where sku = item->>'product_sku'
-      and quantity >= (item->>'quantity_sold')::integer;
+      and coalesce(quantity, 0) >= (item->>'quantity_sold')::integer;
 
     get diagnostics affected_count = row_count;
     if affected_count = 0 then

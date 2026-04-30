@@ -167,9 +167,16 @@ function isHeicLikeFile(file) {
   );
 }
 
-async function compressImage(file, maxWidthPx = 1200, qualityPercent = 0.82, onStatusChange = () => {}) {
+const CATALOGUE_IMAGE_SIZE = 1200;
+const CATALOGUE_IMAGE_MAX_CONTENT = 1060;
+const DECORBEATS_CREAM_RGB = "245, 237, 227";
+const DECORBEATS_BROWN_RGB = "139, 74, 42";
+
+async function compressImage(file, maxWidthPx = CATALOGUE_IMAGE_SIZE, qualityPercent = 0.82, onStatusChange = () => {}) {
   if (isHeicLikeFile(file)) {
     onStatusChange("Converting iPhone photo...");
+  } else {
+    onStatusChange("Creating Decorbeats catalogue image...");
   }
 
   return new Promise((resolve) => {
@@ -178,23 +185,59 @@ async function compressImage(file, maxWidthPx = 1200, qualityPercent = 0.82, onS
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        let width = img.width;
-        let height = img.height;
+        const canvasSize = maxWidthPx;
+        const maxContentSize = Math.min(CATALOGUE_IMAGE_MAX_CONTENT, Math.round(canvasSize * 0.88));
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
 
-        if (width > maxWidthPx) {
-          height = Math.round((height * maxWidthPx) / width);
-          width = maxWidthPx;
+        if (width > maxContentSize || height > maxContentSize) {
+          const scale = Math.min(maxContentSize / width, maxContentSize / height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
         }
 
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
         const ctx = canvas.getContext("2d");
         if (!ctx) {
           resolve(file);
           return;
         }
 
-        ctx.drawImage(img, 0, 0, width, height);
+        const backgroundGradient = ctx.createLinearGradient(0, 0, canvasSize, canvasSize);
+        backgroundGradient.addColorStop(0, `rgb(${DECORBEATS_CREAM_RGB})`);
+        backgroundGradient.addColorStop(0.58, "rgb(250, 245, 238)");
+        backgroundGradient.addColorStop(1, "rgb(232, 213, 183)");
+        ctx.fillStyle = backgroundGradient;
+        ctx.fillRect(0, 0, canvasSize, canvasSize);
+
+        // A very subtle "beats" motif keeps the image branded without distracting from the product.
+        ctx.save();
+        ctx.globalAlpha = 0.08;
+        ctx.fillStyle = `rgb(${DECORBEATS_BROWN_RGB})`;
+        ctx.font = `${Math.round(canvasSize * 0.16)}px Georgia, serif`;
+        ctx.fillText("♪", canvasSize * 0.08, canvasSize * 0.2);
+        ctx.fillText("♫", canvasSize * 0.82, canvasSize * 0.88);
+        ctx.restore();
+
+        const x = Math.round((canvasSize - width) / 2);
+        const y = Math.round((canvasSize - height) / 2);
+
+        ctx.save();
+        ctx.shadowColor = "rgba(44, 24, 16, 0.16)";
+        ctx.shadowBlur = Math.round(canvasSize * 0.035);
+        ctx.shadowOffsetY = Math.round(canvasSize * 0.025);
+        ctx.drawImage(img, x, y, width, height);
+        ctx.restore();
+
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        ctx.fillStyle = `rgb(${DECORBEATS_BROWN_RGB})`;
+        ctx.font = `${Math.round(canvasSize * 0.032)}px Georgia, serif`;
+        ctx.textAlign = "center";
+        ctx.fillText("Decorbeats", canvasSize / 2, canvasSize - Math.round(canvasSize * 0.055));
+        ctx.restore();
+
         canvas.toBlob(
           (blob) => {
             resolve(
@@ -336,6 +379,9 @@ function isMissingSaleRpcError(error) {
 
 function formatSaleSaveError(error) {
   const message = safeText(error?.message);
+  if (isMissingSaleRpcError(error)) {
+    return "The safe sale-saving function is not installed in Supabase yet. Please run the latest sales SQL migration, then try again.";
+  }
   if (message === "Load failed" || error?.name === "TypeError") {
     return "Could not reach Supabase from this phone. Please check the connection, then try once more. If it repeats, update the app after the next deploy.";
   }
@@ -4504,54 +4550,18 @@ export default function App() {
           cost_price: item.cost_price === "" ? null : Number(item.cost_price)
         }));
 
-        let usedRpcSave = false;
         const { data: rpcData, error: rpcError } = await supabase.rpc("record_sale_with_items", {
           sale_payload: salePayload,
           sale_items_payload: saleItemsPayload
         });
 
-        if (rpcError && !isMissingSaleRpcError(rpcError)) {
+        if (rpcError) {
           throw rpcError;
         }
 
-        if (!rpcError) {
-          savedSale = saleFromRpcData(rpcData);
-          usedRpcSave = Boolean(savedSale);
-          if (!savedSale) {
-            throw new Error("Sale was saved, but Supabase returned an unreadable response. Please refresh Sales before trying again.");
-          }
-        }
-
-        if (!usedRpcSave) {
-          const { data: saleData, error: saleError } = await supabase.from("sales").insert(salePayload).select().single();
-          if (saleError) {
-            throw saleError;
-          }
-
-          const saleItemsWithSaleId = saleItemsPayload.map((item) => ({
-            ...item,
-            sale_id: saleData.id
-          }));
-
-          const { data: saleItemsData, error: itemsError } = await supabase.from("sale_items").insert(saleItemsWithSaleId).select();
-          if (itemsError) {
-            throw itemsError;
-          }
-
-          for (const { product, item, nextQuantity } of inventoryChanges) {
-            const { error: productUpdateError } = await supabase
-              .from("products")
-              .update({ quantity: nextQuantity })
-              .eq("id", product.id);
-
-            if (productUpdateError) {
-              throw new Error(
-                `Could not update stock for ${item.product_name || item.product_sku}: ${productUpdateError.message}`
-              );
-            }
-          }
-
-          savedSale = toSale({ ...saleData, sale_items: saleItemsData ?? [] });
+        savedSale = saleFromRpcData(rpcData);
+        if (!savedSale) {
+          throw new Error("Sale was saved, but Supabase returned an unreadable response. Please refresh Sales before trying again.");
         }
 
         setProducts((current) =>
@@ -4870,7 +4880,7 @@ export default function App() {
   }
 
   function showCompressionFeedback(originalFile, optimizedFile) {
-    const nextMessage = `Optimised: ${formatFileSize(originalFile.size)} → ${formatFileSize(optimizedFile.size)}`;
+    const nextMessage = `Polished: ${formatFileSize(originalFile.size)} → ${formatFileSize(optimizedFile.size)} catalogue image`;
     setCompressionMessage(nextMessage);
     if (compressionTimerRef.current) {
       window.clearTimeout(compressionTimerRef.current);
