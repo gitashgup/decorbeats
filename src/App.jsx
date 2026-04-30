@@ -472,6 +472,7 @@ function createEmptyPurchaseDraft() {
     order_date: new Date().toISOString().slice(0, 10),
     expected_delivery_date: "",
     status: "ordered",
+    total_amount: "",
     amount_paid: "",
     notes: "",
     reference_image_url: "",
@@ -1715,7 +1716,11 @@ function PurchaseCard({ purchase, expanded, onToggle, onUpdateStatus, updatingSt
                   <span>{item.productSku || "Manual item"}</span>
                 </div>
                 <div>
-                  <strong>{item.quantityOrdered} × {formatCurrency(item.costPrice)}</strong>
+                  <strong>
+                    {item.costPrice == null
+                      ? `${item.quantityOrdered} ordered`
+                      : `${item.quantityOrdered} × ${formatCurrency(item.costPrice)}`}
+                  </strong>
                 </div>
               </li>
             ))}
@@ -1788,10 +1793,7 @@ function RecordPurchaseModal({
     return null;
   }
 
-  const total = draft.items.reduce(
-    (sum, item) => sum + Number(item.quantity_ordered || 0) * Number(item.cost_price || 0),
-    0
-  );
+  const total = Number(draft.total_amount || 0);
   const amountPaid = Number(draft.amount_paid || 0);
   const balanceDue = Math.max(0, total - amountPaid);
 
@@ -1847,17 +1849,6 @@ function RecordPurchaseModal({
               />
             </label>
           </div>
-          <label>
-            Status
-            <select value={draft.status} onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))}>
-              <option value="planned">Planned</option>
-              <option value="ordered">Ordered</option>
-              <option value="partially_paid">Partially paid</option>
-              <option value="in_transit">In transit</option>
-              <option value="received">Received</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </label>
           <label className="product-photo-dropzone">
             <CameraIcon />
             <strong>{busy ? "Uploading..." : "Tap to add reference photo"}</strong>
@@ -1869,6 +1860,48 @@ function RecordPurchaseModal({
           </label>
           {uploadStageMessage ? <p className="compression-note">{uploadStageMessage}</p> : null}
           {compressionMessage ? <p className="compression-note">{compressionMessage}</p> : null}
+          <div className="purchase-payment-summary span-2">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Payment</p>
+                <h3>Total and advance</h3>
+              </div>
+            </div>
+            <div className="inquiry-inline-fields">
+              <label>
+                Total amount
+                <div className="rupee-field">
+                  <span>₹</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={Number(draft.total_amount || 0) === 0 ? "" : draft.total_amount}
+                    placeholder="Full vendor bill"
+                    onClick={handleNumericInputClick}
+                    onChange={(event) => setDraft((current) => ({ ...current, total_amount: event.target.value }))}
+                  />
+                </div>
+              </label>
+              <label>
+                Amount paid
+                <div className="rupee-field">
+                  <span>₹</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={Number(draft.amount_paid || 0) === 0 ? "" : draft.amount_paid}
+                    placeholder="Advance paid"
+                    onClick={handleNumericInputClick}
+                    onChange={(event) => setDraft((current) => ({ ...current, amount_paid: event.target.value }))}
+                  />
+                </div>
+              </label>
+            </div>
+            <div className="sale-total-card purchase-balance-card">
+              <span>Balance due</span>
+              <strong>{formatCurrency(balanceDue)}</strong>
+            </div>
+          </div>
           <div className="inquiry-products-editor span-2">
             <div className="section-head">
               <div>
@@ -1921,46 +1954,12 @@ function RecordPurchaseModal({
                           onChange={(event) => onUpdateItem(index, "quantity_ordered", event.target.value)}
                         />
                       </label>
-                      <label>
-                        Cost price
-                        <div className="rupee-field">
-                          <span>₹</span>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            value={Number(item.cost_price || 0) === 0 ? "" : item.cost_price}
-                            placeholder="0"
-                            onClick={handleNumericInputClick}
-                            onChange={(event) => onUpdateItem(index, "cost_price", event.target.value)}
-                          />
-                        </div>
-                      </label>
                     </div>
                   </div>
                 ))
               ) : (
                 <p className="support-copy">Add products to track this purchase order.</p>
               )}
-            </div>
-          </div>
-          <div className="inquiry-inline-fields">
-            <label>
-              Amount paid
-              <div className="rupee-field">
-                <span>₹</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={Number(draft.amount_paid || 0) === 0 ? "" : draft.amount_paid}
-                  placeholder="0"
-                  onClick={handleNumericInputClick}
-                  onChange={(event) => setDraft((current) => ({ ...current, amount_paid: event.target.value }))}
-                />
-              </div>
-            </label>
-            <div className="sale-total-card">
-              <span>Balance due</span>
-              <strong>{formatCurrency(balanceDue)}</strong>
             </div>
           </div>
           <label className="span-2">
@@ -1972,10 +1971,6 @@ function RecordPurchaseModal({
               placeholder="What still needs to be paid, confirmed, or followed up?"
             />
           </label>
-          <div className="sale-total-card span-2">
-            <span>Order total</span>
-            <strong>{formatCurrency(total)}</strong>
-          </div>
           <div className="detail-edit-actions">
             <button type="button" className="primary-button detail-save-button" disabled={busy || !draft.items.length} onClick={onSave}>
               {busy ? "Saving..." : "Save Purchase"}
@@ -4756,9 +4751,7 @@ export default function App() {
           createPurchaseItemDraft({
             product_sku: product.sku,
             product_name: product.name,
-            quantity_ordered: 0,
-            cost_price: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
-            line_total: ""
+            quantity_ordered: 0
           })
         ]
       };
@@ -4774,7 +4767,7 @@ export default function App() {
       if (!currentItem) {
         return current;
       }
-      nextItems[index] = { ...currentItem, [field]: field === "quantity_ordered" || field === "cost_price" ? (value === "" ? "" : Number(value)) : value };
+      nextItems[index] = { ...currentItem, [field]: field === "quantity_ordered" ? (value === "" ? "" : Number(value)) : value };
       return { ...current, items: nextItems };
     });
   }
@@ -4874,21 +4867,28 @@ export default function App() {
       }
 
       const invalidItem = purchaseDraft.items.find(
-        (item) => !safeText(item.product_name) || Number(item.quantity_ordered || 0) <= 0 || Number(item.cost_price || 0) <= 0
+        (item) => !safeText(item.product_name) || Number(item.quantity_ordered || 0) <= 0
       );
       if (invalidItem) {
-        setPurchaseModalError("Each item needs a product, quantity, and cost price.");
+        setPurchaseModalError("Each item needs a product name and quantity.");
+        return;
+      }
+
+      const totalAmount = Number(purchaseDraft.total_amount || 0);
+      const amountPaid = Number(purchaseDraft.amount_paid || 0);
+      if (totalAmount <= 0) {
+        setPurchaseModalError("Enter the total vendor bill amount.");
+        return;
+      }
+
+      if (amountPaid > totalAmount) {
+        setPurchaseModalError("Amount paid cannot be more than the total amount.");
         return;
       }
 
       setPurchaseBusy(true);
       setPurchaseModalError("");
 
-      const totalAmount = purchaseDraft.items.reduce(
-        (sum, item) => sum + Number(item.quantity_ordered || 0) * Number(item.cost_price || 0),
-        0
-      );
-      const amountPaid = Number(purchaseDraft.amount_paid || 0);
       const balanceDue = Math.max(0, totalAmount - amountPaid);
 
       const purchasePayload = {
@@ -4916,8 +4916,8 @@ export default function App() {
           product_sku: safeText(item.product_sku) || null,
           product_name: safeText(item.product_name),
           quantity_ordered: Number(item.quantity_ordered || 0),
-          cost_price: Number(item.cost_price || 0),
-          line_total: Number(item.quantity_ordered || 0) * Number(item.cost_price || 0)
+          cost_price: null,
+          line_total: null
         }));
 
         const { data: purchaseItemsData, error: itemsError } = await supabase.from("purchase_items").insert(itemsPayload).select();
@@ -4936,8 +4936,8 @@ export default function App() {
             product_sku: item.product_sku,
             product_name: item.product_name,
             quantity_ordered: item.quantity_ordered,
-            cost_price: item.cost_price,
-            line_total: Number(item.quantity_ordered || 0) * Number(item.cost_price || 0)
+            cost_price: null,
+            line_total: null
           }))
         });
       }
