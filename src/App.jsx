@@ -2864,31 +2864,38 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp }) {
         >
           <button type="button" className="customer-sheet-handle" aria-label="Close product details" onClick={dismissSheet} />
         </div>
+        <button type="button" className="customer-sheet-close" aria-label="Close product details" onClick={dismissSheet}>
+          ×
+        </button>
         <CustomerImageCarousel product={product} />
         <div className="customer-sheet-copy">
-        <div className="customer-sheet-title-row">
-          <h2>{product.name}</h2>
-          {isNewProduct ? <span className="customer-sheet-new-badge">New Arrival</span> : null}
-          {!isNewProduct && product.marketingTag ? <span className="customer-sheet-new-badge">{product.marketingTag}</span> : null}
-        </div>
+          <p className="customer-sheet-kicker">Decorbeats collection</p>
+          <div className="customer-sheet-title-row">
+            <h2>{product.name}</h2>
+            {isNewProduct ? <span className="customer-sheet-new-badge">New Arrival</span> : null}
+            {!isNewProduct && product.marketingTag ? <span className="customer-sheet-new-badge">{product.marketingTag}</span> : null}
+          </div>
           {hasDisplayValue(product.pricing.mrp) ? <p className="customer-sheet-price">{formatCurrency(product.pricing.mrp)}</p> : null}
           {occasionLine ? <p className="customer-sheet-occasion">{occasionLine}</p> : null}
-          <p className="customer-sheet-meta">
-            {product.category} · {product.material}
-          </p>
-          <a
-            className="customer-whatsapp-button"
-            href={getProductWhatsAppUrl(product)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => onWhatsApp(product)}
-          >
-            <WhatsAppIcon />
-            <span>Enquire on WhatsApp</span>
-          </a>
-          <button type="button" className="customer-share-link" onClick={() => onShare(product)}>
-            Share
-          </button>
+          <div className="customer-sheet-meta">
+            <span>{product.category}</span>
+            <span>{product.material}</span>
+          </div>
+          <div className="customer-sheet-actions">
+            <a
+              className="customer-whatsapp-button"
+              href={getProductWhatsAppUrl(product)}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => onWhatsApp(product)}
+            >
+              <WhatsAppIcon />
+              <span>Enquire on WhatsApp</span>
+            </a>
+            <button type="button" className="customer-share-link" onClick={() => onShare(product)}>
+              Share product
+            </button>
+          </div>
         </div>
       </aside>
     </div>
