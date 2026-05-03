@@ -56,9 +56,12 @@ const emptyForm = {
   mrp: "",
   costPrice: "",
   b2b: "",
+  size: "",
+  weight: "",
   marketingTag: "",
   notes: "",
-  imageUrl: ""
+  imageUrl: "",
+  videoUrl: ""
 };
 
 const categoryOptions = ["Bell", "Bowl", "Box", "Decor", "Diya", "Jars", "Misc", "Planter", "Plate", "Tree", "Urli", "Wall Decor"];
@@ -729,6 +732,10 @@ function normalizeImageUrls(value) {
   return [];
 }
 
+function normalizeVideoUrls(value) {
+  return normalizeImageUrls(value);
+}
+
 function sanitizeStorageSegment(value, fallback = "draft") {
   const cleaned = safeText(value)
     .replace(/[^a-zA-Z0-9_-]+/g, "-")
@@ -743,6 +750,10 @@ function getFileExtension(fileName) {
 
 function buildProductImagePath(sku, fileName) {
   return `${sanitizeStorageSegment(sku)}/${Date.now()}.${getFileExtension(fileName)}`;
+}
+
+function buildProductVideoPath(sku, fileName) {
+  return `${sanitizeStorageSegment(sku)}/videos/${Date.now()}.${getFileExtension(fileName)}`;
 }
 
 function buildPurchaseReferenceImagePath(vendorName, fileName) {
@@ -771,6 +782,10 @@ function getProductImages(product) {
   }
   const fallback = normalizeUrl(product?.imageUrl);
   return fallback ? [fallback] : [];
+}
+
+function getProductVideos(product) {
+  return normalizeVideoUrls(product?.videoUrls);
 }
 
 function getPrimaryImage(product) {
@@ -877,6 +892,7 @@ function WhatsAppIcon() {
 function toProduct(raw, index = 0) {
   const quantity = Number(raw.quantity ?? 0);
   const imageUrls = normalizeImageUrls(raw.imageUrls ?? raw.image_urls);
+  const videoUrls = normalizeVideoUrls(raw.videoUrls ?? raw.video_urls);
   const primaryImage = imageUrls[0] ?? normalizeUrl(raw.imageUrl ?? raw.image_url);
   return {
     id: raw.id ?? index + 1,
@@ -890,6 +906,9 @@ function toProduct(raw, index = 0) {
     driveUrl: raw.driveUrl ?? raw.drive_url ?? "",
     imageUrl: primaryImage,
     imageUrls,
+    videoUrls,
+    size: safeText(raw.size),
+    weight: safeText(raw.weight),
     notes: raw.notes ?? "",
     archivedAt: raw.archivedAt ?? raw.archived_at ?? null,
     pinned: Boolean(raw.pinned),
@@ -985,6 +1004,8 @@ function mapCsvRowToPayload(row) {
     unit_cost: parseNumber(row["Unit Cost"]),
     mrp: parseNumber(row.MRP),
     b2b_price: parseNumber(row["B2B Price"]),
+    size: safeText(row.Size ?? row.size),
+    weight: safeText(row.Weight ?? row.weight),
     marketing_tag: safeText(row["Marketing Tag"] ?? row.marketing_tag),
     notes: safeText(row.Notes),
     drive_url: normalizeUrl(row["Column 1"]),
@@ -1009,6 +1030,8 @@ function mapSettingsCsvRowToPayload(row) {
     cost_price: parseNumber(getCsvValue(row, "cost_price", "cost", "unit_cost")),
     mrp: parseNumber(getCsvValue(row, "mrp")),
     b2b_price: parseNumber(getCsvValue(row, "b2b_price", "b2b")),
+    size: safeText(getCsvValue(row, "size", "dimensions")),
+    weight: safeText(getCsvValue(row, "weight")),
     notes: safeText(getCsvValue(row, "description", "notes"))
   };
 }
@@ -2771,6 +2794,7 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp }) {
   const [dragOffset, setDragOffset] = useState(0);
   const closeTimerRef = useRef(null);
   const dragStateRef = useRef({ startY: 0, deltaY: 0, dragging: false });
+  const videos = getProductVideos(product);
 
   useEffect(() => {
     setClosing(false);
@@ -2880,7 +2904,24 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp }) {
           <div className="customer-sheet-meta">
             <span>{product.category}</span>
             <span>{product.material}</span>
+            {product.size ? <span>{product.size}</span> : null}
+            {product.weight ? <span>{product.weight}</span> : null}
           </div>
+          {videos.length ? (
+            <div className="customer-sheet-videos">
+              <p>Product video</p>
+              {videos.map((url, index) => (
+                <video
+                  key={`${url}-${index}`}
+                  className="customer-sheet-video"
+                  src={url}
+                  controls
+                  playsInline
+                  preload="metadata"
+                />
+              ))}
+            </div>
+          ) : null}
           <div className="customer-sheet-actions">
             <a
               className="customer-whatsapp-button"
@@ -2977,13 +3018,21 @@ function ProductMediaManager({
   uploadStageMessage,
   onAddImages,
   onDeleteImage,
-  onSetCoverImage
+  onSetCoverImage,
+  onAddVideos,
+  onDeleteVideo
 }) {
   const fileInputRef = useRef(null);
+  const videoInputRef = useRef(null);
   const images = getProductImages(product);
+  const videos = getProductVideos(product);
 
   return (
     <div className="media-manager">
+      <div className="media-manager-head">
+        <strong>Photos</strong>
+        <span>First photo is the cover image</span>
+      </div>
       <div className="media-strip">
         {images.map((url, index) => (
           <button
@@ -3029,6 +3078,49 @@ function ProductMediaManager({
           const files = Array.from(event.target.files ?? []);
           if (files.length) {
             onAddImages(product, files);
+          }
+          event.target.value = "";
+        }}
+      />
+      <div className="media-manager-head media-manager-head-spaced">
+        <strong>Videos</strong>
+        <span>Add short product clips for customer confidence</span>
+      </div>
+      <div className="media-strip">
+        {videos.map((url, index) => (
+          <div key={`${url}-${index}`} className="media-video-card">
+            <video src={url} muted playsInline controls preload="metadata" />
+            <span
+              className="media-delete"
+              role="button"
+              tabIndex={0}
+              onClick={() => onDeleteVideo(product, url)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onDeleteVideo(product, url);
+                }
+              }}
+            >
+              ×
+            </span>
+          </div>
+        ))}
+        <button type="button" className="media-add-tile media-video-add" onClick={() => videoInputRef.current?.click()} disabled={busy}>
+          <span>+</span>
+          <small>{busy ? "Uploading..." : "Video"}</small>
+        </button>
+      </div>
+      <input
+        ref={videoInputRef}
+        className="visually-hidden"
+        type="file"
+        accept="video/*"
+        multiple
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          if (files.length) {
+            onAddVideos(product, files);
           }
           event.target.value = "";
         }}
@@ -3234,6 +3326,22 @@ function ProductForm({
           </select>
         </label>
         <label>
+          Size / Dimensions
+          <input
+            value={form.size}
+            placeholder="e.g. 8 x 8 x 4 in"
+            onChange={(event) => setForm((current) => ({ ...current, size: event.target.value }))}
+          />
+        </label>
+        <label>
+          Weight
+          <input
+            value={form.weight}
+            placeholder="e.g. 850 g or 1.2 kg"
+            onChange={(event) => setForm((current) => ({ ...current, weight: event.target.value }))}
+          />
+        </label>
+        <label>
           Wholesale price?
           <div className="rupee-field">
             <span>₹</span>
@@ -3246,6 +3354,14 @@ function ProductForm({
               onChange={(event) => setForm((current) => ({ ...current, b2b: event.target.value }))}
             />
           </div>
+        </label>
+        <label className="span-2">
+          Product video URL
+          <input
+            value={form.videoUrl}
+            placeholder="Optional video link"
+            onChange={(event) => setForm((current) => ({ ...current, videoUrl: event.target.value }))}
+          />
         </label>
         <label className="span-2">
           Any notes?
@@ -3309,6 +3425,8 @@ function ProductCard({
   onInlineAddImages,
   onInlineDeleteImage,
   onInlineSetCoverImage,
+  onInlineAddVideos,
+  onInlineDeleteVideo,
   imageBusy,
   uploadError,
   compressionMessage,
@@ -3415,6 +3533,8 @@ function ProductCard({
           onAddImages={onInlineAddImages}
           onDeleteImage={onInlineDeleteImage}
           onSetCoverImage={onInlineSetCoverImage}
+          onAddVideos={onInlineAddVideos}
+          onDeleteVideo={onInlineDeleteVideo}
           imageBusy={imageBusy}
           uploadError={uploadError}
           compressionMessage={compressionMessage}
@@ -3436,6 +3556,8 @@ function DetailPanel({
   onAddImages,
   onDeleteImage,
   onSetCoverImage,
+  onAddVideos,
+  onDeleteVideo,
   imageBusy,
   uploadError,
   compressionMessage,
@@ -3450,6 +3572,8 @@ function DetailPanel({
     costPrice: "",
     b2b: "",
     quantity: "",
+    size: "",
+    weight: "",
     marketingTag: "",
     notes: ""
   });
@@ -3464,6 +3588,8 @@ function DetailPanel({
       costPrice: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
       b2b: product.pricing.b2b ?? "",
       quantity: product.quantity ?? 0,
+      size: product.size ?? "",
+      weight: product.weight ?? "",
       marketingTag: product.marketingTag ?? "",
       notes: product.notes ?? ""
     });
@@ -3497,6 +3623,8 @@ function DetailPanel({
               onAddImages={onAddImages}
               onDeleteImage={onDeleteImage}
               onSetCoverImage={onSetCoverImage}
+              onAddVideos={onAddVideos}
+              onDeleteVideo={onDeleteVideo}
             />
           </>
         ) : null}
@@ -3521,6 +3649,18 @@ function DetailPanel({
               <span>Material</span>
               <strong>{product.material}</strong>
             </div>
+            {product.size ? (
+              <div>
+                <span>Size</span>
+                <strong>{product.size}</strong>
+              </div>
+            ) : null}
+            {product.weight ? (
+              <div>
+                <span>Weight</span>
+                <strong>{product.weight}</strong>
+              </div>
+            ) : null}
             <div className="detail-quantity-block">
               <span>Quantity</span>
               <div className="detail-quantity-row">
@@ -3645,6 +3785,22 @@ function DetailPanel({
             />
           </div>
           <label>
+            Size / Dimensions
+            <input
+              value={draft.size}
+              placeholder="e.g. 8 x 8 x 4 in"
+              onChange={(event) => setDraft((current) => ({ ...current, size: event.target.value }))}
+            />
+          </label>
+          <label>
+            Weight
+            <input
+              value={draft.weight}
+              placeholder="e.g. 850 g or 1.2 kg"
+              onChange={(event) => setDraft((current) => ({ ...current, weight: event.target.value }))}
+            />
+          </label>
+          <label>
             Quantity
             <input
               type="number"
@@ -3686,6 +3842,8 @@ function CatalogSection({
   onInlineAddImages,
   onInlineDeleteImage,
   onInlineSetCoverImage,
+  onInlineAddVideos,
+  onInlineDeleteVideo,
   imageBusy,
   uploadError,
   compressionMessage,
@@ -3726,6 +3884,8 @@ function CatalogSection({
                 onInlineAddImages={onInlineAddImages}
                 onInlineDeleteImage={onInlineDeleteImage}
                 onInlineSetCoverImage={onInlineSetCoverImage}
+                onInlineAddVideos={onInlineAddVideos}
+                onInlineDeleteVideo={onInlineDeleteVideo}
                 imageBusy={imageBusy}
                 uploadError={uploadError}
                 compressionMessage={compressionMessage}
@@ -4333,9 +4493,12 @@ export default function App() {
       mrp: product.pricing.mrp ?? "",
       costPrice: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
       b2b: product.pricing.b2b ?? "",
+      size: product.size ?? "",
+      weight: product.weight ?? "",
       marketingTag: product.marketingTag ?? "",
       notes: product.notes ?? "",
-      imageUrl: product.imageUrl ?? ""
+      imageUrl: product.imageUrl ?? "",
+      videoUrl: getProductVideos(product)[0] ?? ""
     });
   }
 
@@ -5211,6 +5374,8 @@ export default function App() {
       cost_price: draft.costPrice === "" ? null : Number(draft.costPrice),
       mrp: draft.mrp === "" ? null : Number(draft.mrp),
       b2b_price: draft.b2b === "" ? null : Number(draft.b2b),
+      size: safeText(draft.size) || null,
+      weight: safeText(draft.weight) || null,
       marketing_tag: safeText(draft.marketingTag),
       notes: draft.notes
     };
@@ -5237,7 +5402,9 @@ export default function App() {
                   ...payload,
                   cost_price: payload.cost_price,
                   b2b_price: payload.b2b_price,
-                  mrp: payload.mrp
+                  mrp: payload.mrp,
+                  size: payload.size,
+                  weight: payload.weight
                 })
               : item
           )
@@ -5314,6 +5481,35 @@ export default function App() {
       ...product,
       image_urls: cleaned,
       image_url: primaryImage
+    });
+    setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+    return normalized;
+  }
+
+  async function persistProductVideos(product, nextVideoUrls) {
+    const cleaned = nextVideoUrls.map(normalizeUrl).filter(Boolean);
+
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabase
+        .from("products")
+        .update({ video_urls: cleaned })
+        .eq("id", product.id)
+        .select()
+        .single();
+      if (error) {
+        throw error;
+      }
+      const normalized = toProduct(data);
+      setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+      setSelectedId(normalized.id);
+      populateForm(normalized);
+      setLastSyncAt(new Date().toISOString());
+      return normalized;
+    }
+
+    const normalized = toProduct({
+      ...product,
+      video_urls: cleaned
     });
     setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
     return normalized;
@@ -5401,6 +5597,67 @@ export default function App() {
     }
   }
 
+  async function handleAddDetailVideos(product, files) {
+    if (!canManage) {
+      setStatusMessage("Sign in first to manage product videos.");
+      return;
+    }
+
+    setUploadError("");
+    try {
+      setUploadBusy(true);
+      if (isSupabaseConfigured) {
+        const uploadedUrls = [];
+        for (const file of files) {
+          setUploadStageMessage("Uploading product video...");
+          const path = buildProductVideoPath(product.sku, file.name);
+          const { error: storageError } = await supabase.storage
+            .from(PRODUCT_STORAGE_BUCKET)
+            .upload(path, file, { upsert: false, contentType: file.type || "video/mp4" });
+          if (storageError) {
+            throw storageError;
+          }
+          const { data: publicUrlData } = supabase.storage.from(PRODUCT_STORAGE_BUCKET).getPublicUrl(path);
+          uploadedUrls.push(publicUrlData.publicUrl);
+        }
+        await persistProductVideos(product, [...getProductVideos(product), ...uploadedUrls]);
+        setStatusMessage(uploadedUrls.length === 1 ? "Video added to product." : `${uploadedUrls.length} videos added to product.`);
+      } else {
+        const localUrls = files.map((file) => URL.createObjectURL(file));
+        await persistProductVideos(product, [...getProductVideos(product), ...localUrls]);
+        setStatusMessage(localUrls.length === 1 ? "Video added locally." : `${localUrls.length} videos added locally.`);
+      }
+    } catch (error) {
+      console.log("Supabase video upload failed:", error);
+      const message = error?.message || "Could not upload this video.";
+      setUploadError(`Video upload failed: ${message}`);
+      setStatusMessage(`Video upload failed: ${message}`);
+    } finally {
+      setUploadStageMessage("");
+      setUploadBusy(false);
+    }
+  }
+
+  async function handleDeleteDetailVideo(product, videoUrlToRemove) {
+    if (!canManage) {
+      return;
+    }
+
+    setUploadBusy(true);
+    setUploadError("");
+    try {
+      await persistProductVideos(
+        product,
+        getProductVideos(product).filter((url) => url !== videoUrlToRemove)
+      );
+      setStatusMessage("Video removed from product.");
+    } catch (error) {
+      setStatusMessage(error.message || "Could not remove this video.");
+    } finally {
+      setUploadBusy(false);
+    }
+  }
+
   async function handleSignIn() {
     if (!isSupabaseConfigured || !authEmail || !authPassword) {
       return;
@@ -5454,10 +5711,13 @@ export default function App() {
       cost_price: form.costPrice === "" ? null : Number(form.costPrice),
       mrp: form.mrp === "" ? null : Number(form.mrp),
       b2b_price: form.b2b === "" ? null : Number(form.b2b),
+      size: safeText(form.size) || null,
+      weight: safeText(form.weight) || null,
       marketing_tag: safeText(form.marketingTag),
       notes: form.notes,
       image_url: form.imageUrl,
-      image_urls: normalizeUrl(form.imageUrl) ? [normalizeUrl(form.imageUrl)] : []
+      image_urls: normalizeUrl(form.imageUrl) ? [normalizeUrl(form.imageUrl)] : [],
+      video_urls: normalizeUrl(form.videoUrl) ? [normalizeUrl(form.videoUrl)] : []
     };
 
     try {
@@ -5947,6 +6207,8 @@ export default function App() {
               onInlineAddImages={handleAddDetailImages}
               onInlineDeleteImage={handleDeleteDetailImage}
               onInlineSetCoverImage={handleSetCoverImage}
+              onInlineAddVideos={handleAddDetailVideos}
+              onInlineDeleteVideo={handleDeleteDetailVideo}
               imageBusy={uploadBusy}
               uploadError={uploadError}
               compressionMessage={compressionMessage}
@@ -6044,6 +6306,8 @@ export default function App() {
               onAddImages={handleAddDetailImages}
               onDeleteImage={handleDeleteDetailImage}
               onSetCoverImage={handleSetCoverImage}
+              onAddVideos={handleAddDetailVideos}
+              onDeleteVideo={handleDeleteDetailVideo}
               imageBusy={uploadBusy}
               uploadError={uploadError}
               compressionMessage={compressionMessage}
@@ -6076,6 +6340,8 @@ export default function App() {
               onInlineAddImages={handleAddDetailImages}
               onInlineDeleteImage={handleDeleteDetailImage}
               onInlineSetCoverImage={handleSetCoverImage}
+              onInlineAddVideos={handleAddDetailVideos}
+              onInlineDeleteVideo={handleDeleteDetailVideo}
               imageBusy={uploadBusy}
               uploadError={uploadError}
               compressionMessage={compressionMessage}

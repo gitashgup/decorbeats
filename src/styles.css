@@ -2142,6 +2142,28 @@ header img {
   gap: 0.75rem;
 }
 
+.customer-sheet-videos {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.customer-sheet-videos p {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.customer-sheet-video {
+  width: 100%;
+  max-height: 240px;
+  border: 1px solid rgba(139, 74, 42, 0.14);
+  border-radius: 18px;
+  background: #1a0e08;
+}
+
 @media (min-width: 768px) {
   .customer-sheet-overlay.open {
     background: rgba(44, 24, 16, 0.42);
@@ -2311,7 +2333,7 @@ header img {
     gap: 0.55rem;
   }
 
-  .customer-sheet-meta span {
+.customer-sheet-meta span {
     min-height: 34px;
     display: inline-flex;
     align-items: center;
@@ -2322,6 +2344,29 @@ header img {
     padding: 0.3rem 0.8rem;
     font-size: 0.86rem;
     font-weight: 800;
+  }
+
+  .customer-sheet-videos {
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .customer-sheet-videos p {
+    margin: 0;
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .customer-sheet-video {
+    width: 100%;
+    max-height: 220px;
+    border: 1px solid rgba(139, 74, 42, 0.14);
+    border-radius: 22px;
+    background: #1a0e08;
+    box-shadow: 0 16px 30px rgba(44, 24, 16, 0.1);
   }
 
   .customer-sheet-actions {
@@ -2928,6 +2973,29 @@ header img {
   gap: 0.5rem;
 }
 
+.media-manager-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.media-manager-head strong {
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+
+.media-manager-head span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.media-manager-head-spaced {
+  margin-top: 0.8rem;
+}
+
 .media-strip {
   display: flex;
   gap: 0.6rem;
@@ -2958,6 +3026,23 @@ header img {
 }
 
 .media-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-video-card {
+  position: relative;
+  flex: 0 0 auto;
+  width: 104px;
+  height: 104px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+  background: #1a0e08;
+}
+
+.media-video-card video {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -3013,6 +3098,10 @@ header img {
 
 .media-add-tile small {
   font-size: 0.72rem;
+}
+
+.media-video-add small {
+  max-width: 4.4rem;
 }
 
 .detail-image-button {
