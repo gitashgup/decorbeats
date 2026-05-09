@@ -7,6 +7,7 @@ const brandLogo = "/assets/brand/decorbeats-logo.svg";
 const WHATSAPP_NUMBER = "919811133661";
 const PRODUCT_STORAGE_BUCKET = "products";
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+const RAZORPAY_CHECKOUT_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
 const ANNOUNCEMENTS = [
   "𝄞 Decorbeats — where every gift finds its rhythm",
   "✦ Summer Sale — Up to 30% off selected items",
@@ -811,6 +812,14 @@ function formatCurrency(value) {
   }).format(Number(value));
 }
 
+function parsePrice(value) {
+  if (!hasDisplayValue(value)) {
+    return null;
+  }
+  const parsed = Number(String(value).replace(/[₹,\s]/g, ""));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 function hasDisplayValue(value) {
   if (value == null) {
     return false;
@@ -821,6 +830,32 @@ function hasDisplayValue(value) {
   }
   const parsed = Number(normalized.replace(/,/g, ""));
   return Number.isNaN(parsed) ? true : parsed !== 0;
+}
+
+function loadRazorpayCheckout() {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Payments are only available in the browser"));
+  }
+
+  if (window.Razorpay) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const existingScript = document.querySelector(`script[src="${RAZORPAY_CHECKOUT_SCRIPT}"]`);
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Could not load Razorpay Checkout")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = RAZORPAY_CHECKOUT_SCRIPT;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Could not load Razorpay Checkout"));
+    document.body.appendChild(script);
+  });
 }
 
 function getMarginMeta(mrp, costPrice) {
@@ -2789,7 +2824,7 @@ function CustomerProductCard({ product, onSelect }) {
   );
 }
 
-function CustomerSheet({ product, onClose, onShare, onWhatsApp }) {
+function CustomerSheet({ product, onClose, onShare, onWhatsApp, onPayOnline, paymentBusy, paymentMessage }) {
   const [closing, setClosing] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
   const closeTimerRef = useRef(null);
@@ -2923,6 +2958,17 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp }) {
             </div>
           ) : null}
           <div className="customer-sheet-actions">
+            {hasDisplayValue(product.pricing.mrp) ? (
+              <button
+                type="button"
+                className="customer-pay-button"
+                onClick={() => onPayOnline(product)}
+                disabled={paymentBusy}
+              >
+                <span>{paymentBusy ? "Opening secure checkout..." : `Pay online ${formatCurrency(product.pricing.mrp)}`}</span>
+                <small>Powered by Razorpay</small>
+              </button>
+            ) : null}
             <a
               className="customer-whatsapp-button"
               href={getProductWhatsAppUrl(product)}
@@ -2936,6 +2982,7 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp }) {
             <button type="button" className="customer-share-link" onClick={() => onShare(product)}>
               Share product
             </button>
+            {paymentMessage ? <p className={`customer-payment-note ${paymentMessage.tone}`}>{paymentMessage.text}</p> : null}
           </div>
         </div>
       </aside>
@@ -4054,6 +4101,8 @@ export default function App() {
   const [purchaseProductSearch, setPurchaseProductSearch] = useState("");
   const [purchasePickerOpen, setPurchasePickerOpen] = useState(false);
   const [purchaseModalError, setPurchaseModalError] = useState("");
+  const [paymentBusyProductId, setPaymentBusyProductId] = useState("");
+  const [paymentMessage, setPaymentMessage] = useState(null);
   const productGridRef = useRef(null);
   const customerSearchRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -4371,6 +4420,10 @@ export default function App() {
     currentCatalog.find((product) => product.id === selectedId) ||
     products.find((product) => product.id === selectedId) ||
     null;
+
+  useEffect(() => {
+    setPaymentMessage(null);
+  }, [selectedId]);
 
   useEffect(() => {
     const pendingRoute = pendingRouteIntentRef.current;
@@ -5455,6 +5508,101 @@ export default function App() {
     }
   }
 
+  async function handlePayOnline(product) {
+    const price = parsePrice(product?.pricing?.mrp);
+    if (!product || !price) {
+      setPaymentMessage({ tone: "error", text: "Online payment is available only after an MRP is set for this product." });
+      return;
+    }
+
+    setPaymentBusyProductId(product.id);
+    setPaymentMessage({ tone: "info", text: "Opening secure Razorpay checkout..." });
+
+    try {
+      await loadRazorpayCheckout();
+
+      const orderResponse = await fetch("/api/razorpay-create-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          productId: product.id,
+          quantity: 1
+        })
+      });
+      const order = await orderResponse.json();
+      if (!orderResponse.ok) {
+        throw new Error(order?.error || "Could not start payment");
+      }
+
+      await new Promise((resolve, reject) => {
+        const checkout = new window.Razorpay({
+          key: order.keyId,
+          amount: order.amount,
+          currency: order.currency,
+          name: "Decorbeats",
+          description: `${product.name} (${product.sku})`,
+          image: `${window.location.origin}${brandLogo}`,
+          order_id: order.id,
+          notes: {
+            sku: product.sku,
+            product_name: product.name
+          },
+          theme: {
+            color: "#8B4A2A"
+          },
+          handler: async (paymentResponse) => {
+            try {
+              const verifyResponse = await fetch("/api/razorpay-verify", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify(paymentResponse)
+              });
+              const verifyResult = await verifyResponse.json();
+              if (!verifyResponse.ok || !verifyResult.verified) {
+                throw new Error(verifyResult?.error || "Payment could not be verified");
+              }
+              resolve(verifyResult);
+            } catch (error) {
+              reject(error);
+            }
+          },
+          modal: {
+            ondismiss: () => {
+              const error = new Error("Payment cancelled");
+              error.cancelled = true;
+              reject(error);
+            }
+          }
+        });
+
+        checkout.open();
+      });
+
+      trackCustomerEvent("Razorpay Payment Verified", {
+        sku: product.sku,
+        product: product.name,
+        amount: price
+      });
+      setPaymentMessage({
+        tone: "success",
+        text: "Payment successful. Please WhatsApp us your order details so we can confirm delivery."
+      });
+    } catch (error) {
+      if (error?.cancelled) {
+        setPaymentMessage({ tone: "info", text: "Payment was cancelled. You can try again whenever ready." });
+      } else {
+        console.error("Razorpay payment failed:", error);
+        setPaymentMessage({ tone: "error", text: error.message || "Could not complete payment. Please try WhatsApp enquiry." });
+      }
+    } finally {
+      setPaymentBusyProductId("");
+    }
+  }
+
   async function persistProductImages(product, nextImageUrls) {
     const cleaned = nextImageUrls.map(normalizeUrl).filter(Boolean);
     const primaryImage = cleaned[0] ?? null;
@@ -6174,6 +6322,9 @@ export default function App() {
         onClose={() => setSelectedId(null)}
         onShare={handleShareProduct}
         onWhatsApp={handleCustomerWhatsAppClick}
+        onPayOnline={handlePayOnline}
+        paymentBusy={Boolean(selectedProduct && paymentBusyProductId === selectedProduct.id)}
+        paymentMessage={paymentMessage}
       />
     </div>
   ) : (
