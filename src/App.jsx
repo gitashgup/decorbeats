@@ -69,7 +69,13 @@ const categoryOptions = ["Bell", "Bowl", "Box", "Decor", "Diya", "Jars", "Misc",
 const materialOptions = ["Brass", "Metal", "Ceramic", "Wood", "Glass", "Clay", "Mixed", "Other"];
 const marketingTagOptions = ["", "Featured", "New Arrival", "Best for Gifting", "Festive Pick", "Handpicked", "Limited Edition"];
 const customerOccasions = [
-  { label: "Festive Gifting", category: "Diya", note: "Diyas, urlis and pooja accents", beat: "Raaga of light" },
+  {
+    label: "Festive Gifting",
+    category: "Diya",
+    note: "Diyas, urlis and pooja accents",
+    beat: "Raaga of light",
+    preferredImageProducts: ["Hanging peacock diya with chain heavy"]
+  },
   { label: "Home Decor", category: "Decor", note: "Statement pieces for warm corners", beat: "A room with rhythm" },
   { label: "Corporate Orders", category: "Box", note: "Bulk-ready gifts and keepsakes", beat: "Gifting in harmony" },
   { label: "Wall Stories", category: "Wall Decor", note: "Brass details for beautiful walls", beat: "Notes for your walls" }
@@ -791,6 +797,35 @@ function getProductVideos(product) {
 
 function getPrimaryImage(product) {
   return getProductImages(product)[0] ?? "";
+}
+
+function normalizeProductMatch(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function findOccasionImageProduct(products, occasion) {
+  const preferredNames = (occasion.preferredImageProducts ?? [])
+    .map(normalizeProductMatch)
+    .filter(Boolean);
+
+  if (preferredNames.length) {
+    const preferredProduct = products.find((entry) => {
+      const productName = normalizeProductMatch(entry.name);
+      return (
+        getPrimaryImage(entry) &&
+        preferredNames.some((name) => productName === name || productName.includes(name) || name.includes(productName))
+      );
+    });
+
+    if (preferredProduct) {
+      return preferredProduct;
+    }
+  }
+
+  return products.find((entry) => entry.category === occasion.category && getPrimaryImage(entry));
 }
 
 function slugify(value) {
@@ -2680,7 +2715,7 @@ function TrustStrip({ productCount }) {
 
 function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
   const occasions = customerOccasions.map((occasion) => {
-    const product = products.find((entry) => entry.category === occasion.category && getPrimaryImage(entry));
+    const product = findOccasionImageProduct(products, occasion);
     return {
       ...occasion,
       image: product ? getPrimaryImage(product) : ""
