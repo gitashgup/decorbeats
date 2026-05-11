@@ -45,7 +45,12 @@ export default async function handler(request, response) {
       .update(`${orderId}|${paymentId}`)
       .digest("hex");
 
-    if (expectedSignature !== signature) {
+    const expectedBuffer = Buffer.from(expectedSignature, "hex");
+    const actualBuffer = Buffer.from(String(signature), "hex");
+    const signaturesMatch =
+      expectedBuffer.length === actualBuffer.length && crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+
+    if (!signaturesMatch) {
       sendJson(response, 400, { error: "Payment verification failed" });
       return;
     }

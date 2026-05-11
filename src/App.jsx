@@ -5521,7 +5521,7 @@ export default function App() {
     try {
       await loadRazorpayCheckout();
 
-      const orderResponse = await fetch("/api/razorpay-create-order", {
+      const orderResponse = await fetch("/api/create-order", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -5559,7 +5559,7 @@ export default function App() {
           name: "Decorbeats",
           description: `${product.name} (${product.sku})`,
           image: `${window.location.origin}${brandLogo}`,
-          order_id: order.id,
+          order_id: order.order_id,
           notes: {
             sku: product.sku,
             product_name: product.name
@@ -5569,7 +5569,7 @@ export default function App() {
           },
           handler: async (paymentResponse) => {
             try {
-              const verifyResponse = await fetch("/api/razorpay-verify", {
+              const verifyResponse = await fetch("/api/verify-payment", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json"
