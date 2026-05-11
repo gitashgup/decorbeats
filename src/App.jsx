@@ -5537,6 +5537,21 @@ export default function App() {
       }
 
       await new Promise((resolve, reject) => {
+        let settled = false;
+        const rejectOnce = (error) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          reject(error);
+        };
+        const resolveOnce = (value) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          resolve(value);
+        };
         const checkout = new window.Razorpay({
           key: order.keyId,
           amount: order.amount,
@@ -5565,18 +5580,38 @@ export default function App() {
               if (!verifyResponse.ok || !verifyResult.verified) {
                 throw new Error(verifyResult?.error || "Payment could not be verified");
               }
-              resolve(verifyResult);
+              resolveOnce(verifyResult);
             } catch (error) {
-              reject(error);
+              rejectOnce(error);
             }
           },
           modal: {
             ondismiss: () => {
               const error = new Error("Payment cancelled");
               error.cancelled = true;
-              reject(error);
+              rejectOnce(error);
             }
           }
+        });
+
+        checkout.on("payment.failed", (failureResponse) => {
+          const paymentError = failureResponse?.error ?? {};
+          const messageParts = [
+            paymentError.description,
+            paymentError.reason ? `Reason: ${paymentError.reason}` : null,
+            paymentError.code ? `Code: ${paymentError.code}` : null,
+            paymentError.step ? `Step: ${paymentError.step}` : null
+          ].filter(Boolean);
+          const error = new Error(messageParts.join(" · ") || "Payment failed in Razorpay Checkout");
+          error.razorpay = paymentError;
+          trackCustomerEvent("Razorpay Payment Failed", {
+            sku: product.sku,
+            product: product.name,
+            code: paymentError.code,
+            reason: paymentError.reason,
+            step: paymentError.step
+          });
+          rejectOnce(error);
         });
 
         checkout.open();
