@@ -304,6 +304,9 @@ function openWhatsAppChat(message) {
   document.body.removeChild(anchor);
 }
 
+const BULK_WHATSAPP_MESSAGE =
+  "Hi Decorbeats! I am interested in placing a bulk order of 50+ units. Please share your catalogue, pricing and delivery details.";
+
 function trackCustomerEvent(eventName, properties = {}) {
   try {
     track(eventName, {
@@ -317,13 +320,11 @@ function trackCustomerEvent(eventName, properties = {}) {
 
 function openBulkWhatsApp() {
   trackCustomerEvent("Bulk WhatsApp Clicked", { source: "ticker" });
-  openWhatsAppChat("Hi, I would like to enquire about a bulk gifting order for Decorbeats.");
+  openWhatsAppChat(BULK_WHATSAPP_MESSAGE);
 }
 
 function getBulkWhatsAppUrl() {
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-    "Hi, I would like to enquire about a bulk gifting order for Decorbeats."
-  )}`;
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(BULK_WHATSAPP_MESSAGE)}`;
 }
 
 function getProductWhatsAppUrl(product) {
