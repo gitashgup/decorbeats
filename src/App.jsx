@@ -87,24 +87,24 @@ const customerBeatStories = [
 ];
 const defaultHeroSlides = [
   {
+    id: "default-credibility",
+    eyebrow: "Decorbeats Trust",
+    title: "See the craft|gift with confidence.",
+    body: "Bengaluru experience center, GST presence across KA, TN & MH, and bulk gifting support from 50 to 400+ units.",
+    ctaLabel: "Enquire on WhatsApp",
+    ctaAction: "whatsapp",
+    contentPosition: "left",
+    imageUrl: "/assets/images/slider-credibility-studio.svg",
+    active: true,
+    sortOrder: 1
+  },
+  {
     id: "default-hero",
     eyebrow: "Decorbeats",
     title: "Handcrafted for every celebration.",
     body: "Brass, metal & artisanal decor - made in India, gifted with rhythm.",
     ctaLabel: "Shop the Collection",
     ctaAction: "collection",
-    contentPosition: "left",
-    imageUrl: "",
-    active: true,
-    sortOrder: 1
-  },
-  {
-    id: "default-trust",
-    eyebrow: "Experience Center",
-    title: "See the craft before you gift.",
-    body: "Visit our Bengaluru experience center for curated corporate, festive and wedding gifting ideas.",
-    ctaLabel: "Enquire on WhatsApp",
-    ctaAction: "whatsapp",
     contentPosition: "left",
     imageUrl: "",
     active: true,
@@ -1052,6 +1052,17 @@ function createEmptyHeroSlideForm() {
   };
 }
 
+function getHeroTitleLines(title) {
+  const cleanTitle = safeText(title, defaultHeroSlides[0].title);
+  if (cleanTitle.includes("|")) {
+    return cleanTitle.split("|").map((part) => part.trim()).filter(Boolean);
+  }
+  if (cleanTitle.includes("\n")) {
+    return cleanTitle.split("\n").map((part) => part.trim()).filter(Boolean);
+  }
+  return [cleanTitle];
+}
+
 function parseCsvLine(line) {
   const values = [];
   let current = "";
@@ -1553,7 +1564,24 @@ create policy "Public can read active hero slides"
 on hero_slides for select using (is_active = true);
 
 create policy "Authenticated users can manage hero slides"
-on hero_slides for all to authenticated using (true) with check (true);`}</pre>
+on hero_slides for all to authenticated using (true) with check (true);
+
+insert into hero_slides (
+  eyebrow, title, body, cta_label, cta_action, content_position, image_url, sort_order, is_active
+)
+select
+  'Decorbeats Trust',
+  'See the craft|gift with confidence.',
+  'Bengaluru experience center, GST presence across KA, TN & MH, and bulk gifting support from 50 to 400+ units.',
+  'Enquire on WhatsApp',
+  'whatsapp',
+  'left',
+  '/assets/images/slider-credibility-studio.svg',
+  1,
+  true
+where not exists (
+  select 1 from hero_slides where image_url = '/assets/images/slider-credibility-studio.svg'
+);`}</pre>
             ) : null}
           </div>
         ) : null}
@@ -2847,10 +2875,7 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
     : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: heroImage }));
   const activeSlide = preparedSlides[activeIndex] ?? preparedSlides[0] ?? defaultHeroSlides[0];
   const slideImage = activeSlide.imageUrl || heroImage;
-  const titleParts = safeText(activeSlide.title, defaultHeroSlides[0].title).split(/(?:\s+for\s+|\s+before\s+|\s+with\s+)/i);
-  const titleFirstLine = titleParts[0] || activeSlide.title;
-  const titleSecondLine =
-    titleParts.length > 1 ? activeSlide.title.replace(titleFirstLine, "").trim() : "";
+  const titleLines = getHeroTitleLines(activeSlide.title);
   const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}`;
 
   useEffect(() => {
@@ -2897,8 +2922,9 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
       <div className="customer-hero-copy">
         <p className="eyebrow">{activeSlide.eyebrow}</p>
         <h1>
-          <span>{titleFirstLine}</span>
-          {titleSecondLine ? <span>{titleSecondLine}</span> : null}
+          {titleLines.map((line) => (
+            <span key={line}>{line}</span>
+          ))}
         </h1>
         <p>{activeSlide.body}</p>
         <div className="customer-hero-actions">

@@ -25,3 +25,30 @@ on hero_slides for all
 to authenticated
 using (true)
 with check (true);
+
+insert into hero_slides (
+  eyebrow,
+  title,
+  body,
+  cta_label,
+  cta_action,
+  content_position,
+  image_url,
+  sort_order,
+  is_active
+)
+select
+  'Decorbeats Trust',
+  'See the craft|gift with confidence.',
+  'Bengaluru experience center, GST presence across KA, TN & MH, and bulk gifting support from 50 to 400+ units.',
+  'Enquire on WhatsApp',
+  'whatsapp',
+  'left',
+  '/assets/images/slider-credibility-studio.svg',
+  1,
+  true
+where not exists (
+  select 1
+  from hero_slides
+  where image_url = '/assets/images/slider-credibility-studio.svg'
+);
