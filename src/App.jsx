@@ -85,6 +85,32 @@ const customerBeatStories = [
   { title: "Beat 02", text: "Bulk gifting support for 50 to 400+ units with quick WhatsApp coordination." },
   { title: "Beat 03", text: "A living catalogue that keeps new arrivals, stock and enquiries in tune." }
 ];
+const defaultHeroSlides = [
+  {
+    id: "default-hero",
+    eyebrow: "Decorbeats",
+    title: "Handcrafted for every celebration.",
+    body: "Brass, metal & artisanal decor - made in India, gifted with rhythm.",
+    ctaLabel: "Shop the Collection",
+    ctaAction: "collection",
+    contentPosition: "left",
+    imageUrl: "",
+    active: true,
+    sortOrder: 1
+  },
+  {
+    id: "default-trust",
+    eyebrow: "Experience Center",
+    title: "See the craft before you gift.",
+    body: "Visit our Bengaluru experience center for curated corporate, festive and wedding gifting ideas.",
+    ctaLabel: "Enquire on WhatsApp",
+    ctaAction: "whatsapp",
+    contentPosition: "left",
+    imageUrl: "",
+    active: true,
+    sortOrder: 2
+  }
+];
 
 const materialSkuCodes = {
   Brass: "BR",
@@ -768,6 +794,10 @@ function buildPurchaseReferenceImagePath(vendorName, fileName) {
   return `purchases/${sanitizeStorageSegment(vendorName, "vendor")}/${Date.now()}.${getFileExtension(fileName)}`;
 }
 
+function buildHeroSlideImagePath(fileName) {
+  return `hero-slides/${Date.now()}.${getFileExtension(fileName)}`;
+}
+
 function getNextSku(products, material, category) {
   const materialCode = materialSkuCodes[material] || "OT";
   const categoryCode = categorySkuCodes[category] || "MISC";
@@ -990,6 +1020,35 @@ function toProduct(raw, index = 0) {
       mrp: raw.pricing?.mrp ?? raw.mrp ?? null,
       b2b: raw.pricing?.b2b ?? raw.b2b_price ?? null
     }
+  };
+}
+
+function toHeroSlide(raw, index = 0) {
+  return {
+    id: raw.id ?? `hero-slide-${index}`,
+    eyebrow: safeText(raw.eyebrow, "Decorbeats"),
+    title: safeText(raw.title, "Handcrafted for every celebration."),
+    body: safeText(raw.body, "Brass, metal & artisanal decor - made in India, gifted with rhythm."),
+    ctaLabel: safeText(raw.cta_label ?? raw.ctaLabel, "Shop the Collection"),
+    ctaAction: safeText(raw.cta_action ?? raw.ctaAction, "collection"),
+    contentPosition: safeText(raw.content_position ?? raw.contentPosition, "left"),
+    imageUrl: normalizeUrl(raw.image_url ?? raw.imageUrl),
+    active: raw.active ?? raw.is_active ?? true,
+    sortOrder: Number(raw.sort_order ?? raw.sortOrder ?? index + 1),
+    createdAt: raw.created_at ?? raw.createdAt ?? null
+  };
+}
+
+function createEmptyHeroSlideForm() {
+  return {
+    eyebrow: "Decorbeats",
+    title: "",
+    body: "",
+    ctaLabel: "Shop the Collection",
+    ctaAction: "collection",
+    contentPosition: "left",
+    imageUrl: "",
+    sortOrder: ""
   };
 }
 
@@ -1368,6 +1427,159 @@ function ImportPanel({ importBusy, previewRows, previewFileName, previewCount, o
           </div>
         </div>
       ) : null}
+    </section>
+  );
+}
+
+function HeroSlideSettingsPanel({
+  slides,
+  form,
+  setForm,
+  busy,
+  error,
+  uploadStageMessage,
+  compressionMessage,
+  onImageChange,
+  onSubmit,
+  onDelete
+}) {
+  return (
+    <section className="panel-card admin-card settings-card hero-slide-settings">
+      <div className="section-head">
+        <div>
+          <p className="eyebrow">Storefront</p>
+          <h3>Credibility Slider</h3>
+        </div>
+      </div>
+      <p className="support-copy">
+        Add trust-building hero slides for the customer page. Use this for experience center photos, GST credibility,
+        brand stories, exhibitions, or corporate gifting proof.
+      </p>
+      <form className="form-grid hero-slide-form" onSubmit={onSubmit}>
+        <label className="product-photo-dropzone hero-slide-dropzone">
+          {form.imageUrl ? <img src={form.imageUrl} alt="" className="product-photo-preview" /> : <CameraIcon />}
+          <strong>{busy ? "Working..." : "Tap to upload slider image"}</strong>
+          <span>Wide lifestyle images work best. We’ll optimise it before upload.</span>
+          <input type="file" accept="image/*,.heic,.heif" onChange={onImageChange} disabled={busy} />
+        </label>
+        {uploadStageMessage ? <p className="compression-note">{uploadStageMessage}</p> : null}
+        {compressionMessage ? <p className="compression-note">{compressionMessage}</p> : null}
+        <label>
+          Eyebrow
+          <input
+            type="text"
+            value={form.eyebrow}
+            placeholder="e.g. Bengaluru Experience Center"
+            onChange={(event) => setForm((current) => ({ ...current, eyebrow: event.target.value }))}
+          />
+        </label>
+        <label>
+          Headline
+          <input
+            type="text"
+            value={form.title}
+            placeholder="e.g. Visit our gifting studio in Bengaluru"
+            onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+          />
+        </label>
+        <label>
+          Supporting copy
+          <textarea
+            rows="3"
+            value={form.body}
+            placeholder="Add one short credibility-building line."
+            onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))}
+          />
+        </label>
+        <div className="form-grid hero-slide-inline">
+          <label>
+            Button text
+            <input
+              type="text"
+              value={form.ctaLabel}
+              onChange={(event) => setForm((current) => ({ ...current, ctaLabel: event.target.value }))}
+            />
+          </label>
+          <label>
+            Button action
+            <select value={form.ctaAction} onChange={(event) => setForm((current) => ({ ...current, ctaAction: event.target.value }))}>
+              <option value="collection">Scroll to collection</option>
+              <option value="whatsapp">Open WhatsApp</option>
+            </select>
+          </label>
+          <label>
+            Text position
+            <select
+              value={form.contentPosition}
+              onChange={(event) => setForm((current) => ({ ...current, contentPosition: event.target.value }))}
+            >
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </label>
+          <label>
+            Order
+            <input
+              type="number"
+              inputMode="numeric"
+              value={form.sortOrder}
+              placeholder={`${slides.length + 1}`}
+              onChange={(event) => setForm((current) => ({ ...current, sortOrder: event.target.value }))}
+            />
+          </label>
+        </div>
+        {error ? (
+          <div className="inline-upload-error">
+            <p>{error}</p>
+            {error.includes("table is missing") ? (
+              <pre>{`create table if not exists hero_slides (
+  id uuid default gen_random_uuid() primary key,
+  created_at timestamp default now(),
+  eyebrow text,
+  title text not null,
+  body text,
+  cta_label text default 'Shop the Collection',
+  cta_action text default 'collection',
+  content_position text default 'left',
+  image_url text,
+  sort_order integer default 1,
+  is_active boolean default true
+);
+
+alter table hero_slides enable row level security;
+
+create policy "Public can read active hero slides"
+on hero_slides for select using (is_active = true);
+
+create policy "Authenticated users can manage hero slides"
+on hero_slides for all to authenticated using (true) with check (true);`}</pre>
+            ) : null}
+          </div>
+        ) : null}
+        <button type="submit" className="primary-button product-submit-button" disabled={busy}>
+          {busy ? "Saving..." : "Add Slide"}
+        </button>
+      </form>
+      {slides.length ? (
+        <div className="hero-slide-list">
+          {slides.map((slide) => (
+            <article key={slide.id} className="hero-slide-list-item">
+              {slide.imageUrl ? <img src={slide.imageUrl} alt="" /> : <div className="hero-slide-list-placeholder">𝄞</div>}
+              <div>
+                <p className="eyebrow">{slide.eyebrow}</p>
+                <strong>{slide.title}</strong>
+                <span>{slide.contentPosition} · order {slide.sortOrder}</span>
+              </div>
+              <button type="button" className="detail-cancel-link" disabled={busy} onClick={() => onDelete(slide.id)}>
+                Remove
+              </button>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="support-copy">No custom slides yet. The storefront is using the default hero until you add one.</p>
+      )}
     </section>
   );
 }
@@ -2627,15 +2839,52 @@ function CustomerHeader({ scrolled, tickerMessage, tickerAction, tickerVisible, 
   );
 }
 
-function CustomerHero({ featuredProduct, onShop }) {
+function CustomerHero({ slides, featuredProduct, onShop }) {
+  const [activeIndex, setActiveIndex] = useState(0);
   const heroImage = getPrimaryImage(featuredProduct);
+  const preparedSlides = slides.length
+    ? slides
+    : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: heroImage }));
+  const activeSlide = preparedSlides[activeIndex] ?? preparedSlides[0] ?? defaultHeroSlides[0];
+  const slideImage = activeSlide.imageUrl || heroImage;
+  const titleParts = safeText(activeSlide.title, defaultHeroSlides[0].title).split(/(?:\s+for\s+|\s+before\s+|\s+with\s+)/i);
+  const titleFirstLine = titleParts[0] || activeSlide.title;
+  const titleSecondLine =
+    titleParts.length > 1 ? activeSlide.title.replace(titleFirstLine, "").trim() : "";
+  const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}`;
+
+  useEffect(() => {
+    if (preparedSlides.length <= 1) {
+      return undefined;
+    }
+    const intervalId = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % preparedSlides.length);
+    }, 5200);
+    return () => window.clearInterval(intervalId);
+  }, [preparedSlides.length]);
+
+  useEffect(() => {
+    if (activeIndex > preparedSlides.length - 1) {
+      setActiveIndex(0);
+    }
+  }, [activeIndex, preparedSlides.length]);
+
+  function handleSlideCta() {
+    if (activeSlide.ctaAction === "whatsapp") {
+      trackCustomerEvent("Bulk WhatsApp Clicked", { source: "hero-slider" });
+      openBulkWhatsApp();
+      return;
+    }
+    onShop();
+  }
+
   return (
     <section
-      className="customer-hero desktop-reveal"
+      className={heroClassName}
       style={
-        heroImage
+        slideImage
           ? {
-              backgroundImage: `linear-gradient(180deg, rgba(245, 237, 227, 0.72), rgba(236, 224, 210, 0.92)), url(${heroImage})`
+              backgroundImage: `linear-gradient(180deg, rgba(245, 237, 227, 0.72), rgba(236, 224, 210, 0.92)), url(${slideImage})`
             }
           : undefined
       }
@@ -2646,15 +2895,15 @@ function CustomerHero({ featuredProduct, onShop }) {
         <span>♫</span>
       </div>
       <div className="customer-hero-copy">
-        <p className="eyebrow">Decorbeats</p>
+        <p className="eyebrow">{activeSlide.eyebrow}</p>
         <h1>
-          <span>Handcrafted</span>
-          <span>for every celebration.</span>
+          <span>{titleFirstLine}</span>
+          {titleSecondLine ? <span>{titleSecondLine}</span> : null}
         </h1>
-        <p>Brass, metal & artisanal decor - made in India, gifted with rhythm.</p>
+        <p>{activeSlide.body}</p>
         <div className="customer-hero-actions">
-          <button type="button" className="primary-button customer-hero-cta" onClick={onShop}>
-            Shop the Collection
+          <button type="button" className="primary-button customer-hero-cta" onClick={handleSlideCta}>
+            {activeSlide.ctaLabel}
           </button>
           <a
             className="customer-hero-link"
@@ -2668,8 +2917,21 @@ function CustomerHero({ featuredProduct, onShop }) {
         </div>
       </div>
       <div className="customer-hero-media" aria-hidden="true">
-        {heroImage ? <img src={heroImage} alt={featuredProduct?.name || "Decorbeats collection"} loading="lazy" /> : null}
+        {slideImage ? <img src={slideImage} alt={activeSlide.title || featuredProduct?.name || "Decorbeats collection"} loading="lazy" /> : null}
       </div>
+      {preparedSlides.length > 1 ? (
+        <div className="customer-hero-dots" aria-label="Hero slides">
+          {preparedSlides.map((slide, index) => (
+            <button
+              key={slide.id}
+              type="button"
+              className={index === activeIndex ? "active" : ""}
+              aria-label={`Show slide ${index + 1}`}
+              onClick={() => setActiveIndex(index)}
+            />
+          ))}
+        </div>
+      ) : null}
       <div className="customer-scroll-indicator" aria-hidden="true">
         <span />
       </div>
@@ -4073,6 +4335,7 @@ export default function App() {
   const [inquiries, setInquiries] = useState([]);
   const [sales, setSales] = useState([]);
   const [purchases, setPurchases] = useState([]);
+  const [heroSlides, setHeroSlides] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [expandedInquiryId, setExpandedInquiryId] = useState(null);
   const [expandedSaleId, setExpandedSaleId] = useState(null);
@@ -4140,6 +4403,9 @@ export default function App() {
   const [purchaseModalError, setPurchaseModalError] = useState("");
   const [paymentBusyProductId, setPaymentBusyProductId] = useState("");
   const [paymentMessage, setPaymentMessage] = useState(null);
+  const [heroSlideForm, setHeroSlideForm] = useState(createEmptyHeroSlideForm);
+  const [heroSlideBusy, setHeroSlideBusy] = useState(false);
+  const [heroSlideError, setHeroSlideError] = useState("");
   const productGridRef = useRef(null);
   const customerSearchRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -4239,10 +4505,30 @@ export default function App() {
       setPurchases((data ?? []).map(toPurchase));
     }
 
+    async function loadHeroSlides() {
+      const { data, error } = await supabase
+        .from("hero_slides")
+        .select("*")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        console.info("Hero slides are not configured yet:", error.message);
+        return;
+      }
+
+      setHeroSlides((data ?? []).map(toHeroSlide).filter((slide) => slide.active));
+    }
+
     loadProducts();
     loadInquiries();
     loadSales();
     loadPurchases();
+    loadHeroSlides();
 
     return () => {
       cancelled = true;
@@ -5230,6 +5516,112 @@ export default function App() {
     setUploadStageMessage("");
     showCompressionFeedback(file, optimizedFile);
     return optimizedFile;
+  }
+
+  async function handleHeroSlideImageUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!isSupabaseConfigured || !canManage) {
+      setHeroSlideError("Sign in with Supabase before uploading slider images.");
+      event.target.value = "";
+      return;
+    }
+
+    setHeroSlideBusy(true);
+    setHeroSlideError("");
+    try {
+      const fileToUpload = await prepareUploadFile(file);
+      const path = buildHeroSlideImagePath(fileToUpload.name);
+      const { error } = await supabase.storage.from(PRODUCT_STORAGE_BUCKET).upload(path, fileToUpload, { upsert: true });
+      if (error) {
+        throw error;
+      }
+      const { data } = supabase.storage.from(PRODUCT_STORAGE_BUCKET).getPublicUrl(path);
+      setHeroSlideForm((current) => ({ ...current, imageUrl: data.publicUrl }));
+      setStatusMessage("Slider image uploaded. Add the slide to publish it.");
+    } catch (error) {
+      const message = error?.message || "Could not upload slider image.";
+      console.error("Hero slide upload failed:", error);
+      setHeroSlideError(`Upload failed: ${message}`);
+    } finally {
+      setUploadStageMessage("");
+      setHeroSlideBusy(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleSaveHeroSlide(event) {
+    event.preventDefault();
+
+    if (!isSupabaseConfigured || !canManage) {
+      setHeroSlideError("Sign in with Supabase before publishing slider slides.");
+      return;
+    }
+
+    if (!safeText(heroSlideForm.title)) {
+      setHeroSlideError("Add a headline for this slide.");
+      return;
+    }
+
+    setHeroSlideBusy(true);
+    setHeroSlideError("");
+    try {
+      const payload = {
+        eyebrow: safeText(heroSlideForm.eyebrow, "Decorbeats"),
+        title: safeText(heroSlideForm.title),
+        body: safeText(heroSlideForm.body),
+        cta_label: safeText(heroSlideForm.ctaLabel, "Shop the Collection"),
+        cta_action: safeText(heroSlideForm.ctaAction, "collection"),
+        content_position: safeText(heroSlideForm.contentPosition, "left"),
+        image_url: normalizeUrl(heroSlideForm.imageUrl),
+        sort_order: Number.parseInt(heroSlideForm.sortOrder, 10) || heroSlides.length + 1,
+        is_active: true
+      };
+      const { data, error } = await supabase.from("hero_slides").insert(payload).select().single();
+      if (error) {
+        throw error;
+      }
+      const normalized = toHeroSlide(data);
+      setHeroSlides((current) => [...current, normalized].sort((left, right) => left.sortOrder - right.sortOrder));
+      setHeroSlideForm(createEmptyHeroSlideForm());
+      setStatusMessage("Credibility slide added ✓");
+    } catch (error) {
+      const message = error?.message || "Could not add the slide.";
+      console.error("Hero slide save failed:", error);
+      setHeroSlideError(
+        message.includes("hero_slides") || message.includes("schema cache")
+          ? "Hero slider table is missing. Run the SQL shown below, then try again."
+          : message
+      );
+    } finally {
+      setHeroSlideBusy(false);
+    }
+  }
+
+  async function handleDeleteHeroSlide(slideId) {
+    if (!isSupabaseConfigured || !canManage) {
+      setHeroSlideError("Sign in with Supabase before changing slider slides.");
+      return;
+    }
+
+    setHeroSlideBusy(true);
+    setHeroSlideError("");
+    try {
+      const { error } = await supabase.from("hero_slides").update({ is_active: false }).eq("id", slideId);
+      if (error) {
+        throw error;
+      }
+      setHeroSlides((current) => current.filter((slide) => slide.id !== slideId));
+      setStatusMessage("Slide removed from storefront.");
+    } catch (error) {
+      console.error("Hero slide delete failed:", error);
+      setHeroSlideError(error?.message || "Could not remove this slide.");
+    } finally {
+      setHeroSlideBusy(false);
+    }
   }
 
   function startInquiryListening() {
@@ -6350,7 +6742,7 @@ export default function App() {
           setPreviewCustomerView(false);
           setActiveTab("products");
         }} /> : null}
-        <CustomerHero featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
+        <CustomerHero slides={heroSlides} featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
         <CustomerOccasionRail products={customerCatalog} onSelectCategory={handleCustomerCategorySelect} onShop={handleScrollToCollection} />
         <CustomerBeatStories />
         <TrustStrip productCount={stats.totalProducts} />
@@ -6603,6 +6995,18 @@ export default function App() {
               onFileChange={handleCsvImport}
               onConfirm={handleConfirmCsvImport}
               onClearPreview={handleClearCsvPreview}
+            />
+            <HeroSlideSettingsPanel
+              slides={heroSlides}
+              form={heroSlideForm}
+              setForm={setHeroSlideForm}
+              busy={heroSlideBusy}
+              error={heroSlideError}
+              uploadStageMessage={uploadStageMessage}
+              compressionMessage={compressionMessage}
+              onImageChange={handleHeroSlideImageUpload}
+              onSubmit={handleSaveHeroSlide}
+              onDelete={handleDeleteHeroSlide}
             />
             <AccountCard userEmail={userEmail} onSignOut={handleSignOut} />
             <section className="panel-card admin-card settings-card">
