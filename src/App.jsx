@@ -293,6 +293,52 @@ async function compressImage(file, maxWidthPx = CATALOGUE_IMAGE_SIZE, qualityPer
   });
 }
 
+async function compressHeroSlideImage(file, maxWidthPx = 2000, qualityPercent = 0.9, onStatusChange = () => {}) {
+  onStatusChange(isHeicLikeFile(file) ? "Converting slider image..." : "Optimising slider image...");
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
+
+        if (width > maxWidthPx) {
+          height = Math.round((height * maxWidthPx) / width);
+          width = maxWidthPx;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            resolve(
+              new File([blob || file], file.name.replace(/\.[^.]+$/, ".jpg"), {
+                type: "image/jpeg"
+              })
+            );
+          },
+          "image/jpeg",
+          qualityPercent
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = event.target.result;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+
 function formatFileSize(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return "0 KB";
@@ -2891,7 +2937,8 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
   const activeSlide = preparedSlides[activeIndex] ?? preparedSlides[0] ?? defaultHeroSlides[0];
   const slideImage = activeSlide.imageUrl || heroImage;
   const titleLines = getHeroTitleLines(activeSlide.title);
-  const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}`;
+  const isPosterSlide = Boolean(activeSlide.imageUrl);
+  const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}${isPosterSlide ? " hero-poster-slide" : ""}`;
 
   useEffect(() => {
     if (preparedSlides.length <= 1) {
@@ -2919,16 +2966,7 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
   }
 
   return (
-    <section
-      className={heroClassName}
-      style={
-        slideImage
-          ? {
-              backgroundImage: `linear-gradient(180deg, rgba(245, 237, 227, 0.72), rgba(236, 224, 210, 0.92)), url(${slideImage})`
-            }
-          : undefined
-      }
-    >
+    <section className={heroClassName}>
       <div className="customer-hero-notes" aria-hidden="true">
         <span>𝄞</span>
         <span>♪</span>
@@ -5559,6 +5597,13 @@ export default function App() {
     return optimizedFile;
   }
 
+  async function prepareHeroSlideUploadFile(file) {
+    const optimizedFile = await compressHeroSlideImage(file, 2000, 0.9, setUploadStageMessage);
+    setUploadStageMessage("");
+    showCompressionFeedback(file, optimizedFile);
+    return optimizedFile;
+  }
+
   async function handleHeroSlideImageUpload(event) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -5574,7 +5619,7 @@ export default function App() {
     setHeroSlideBusy(true);
     setHeroSlideError("");
     try {
-      const fileToUpload = await prepareUploadFile(file);
+      const fileToUpload = await prepareHeroSlideUploadFile(file);
       const path = buildHeroSlideImagePath(fileToUpload.name);
       const { error } = await supabase.storage.from(PRODUCT_STORAGE_BUCKET).upload(path, fileToUpload, { upsert: true });
       if (error) {
