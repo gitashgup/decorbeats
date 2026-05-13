@@ -1469,8 +1469,14 @@ function HeroSlideSettingsPanel({
       <form className="form-grid hero-slide-form" onSubmit={onSubmit}>
         <label className="product-photo-dropzone hero-slide-dropzone">
           {form.imageUrl ? <img src={form.imageUrl} alt="" className="product-photo-preview" /> : <CameraIcon />}
-          <strong>{busy ? "Working..." : "Tap to upload slider image"}</strong>
-          <span>Wide lifestyle images work best. We’ll optimise it before upload.</span>
+          {!form.imageUrl ? (
+            <>
+              <strong>{busy ? "Working..." : "Tap to upload slider image"}</strong>
+              <span>Wide lifestyle images work best. We’ll optimise it before upload.</span>
+            </>
+          ) : (
+            <span className="hero-slide-preview-badge">Tap to replace image</span>
+          )}
           <input type="file" accept="image/*,.heic,.heif" onChange={onImageChange} disabled={busy} />
         </label>
         {uploadStageMessage ? <p className="compression-note">{uploadStageMessage}</p> : null}

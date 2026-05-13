@@ -3563,6 +3563,21 @@ header img {
   opacity: 1;
 }
 
+.hero-slide-preview-badge {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 2;
+  width: fit-content;
+  border-radius: 999px;
+  background: rgba(255, 250, 244, 0.92);
+  color: var(--accent);
+  box-shadow: 0 10px 24px rgba(44, 24, 16, 0.16);
+  padding: 0.5rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .hero-slide-inline {
   gap: 0.7rem;
 }
