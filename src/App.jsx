@@ -3032,28 +3032,25 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
       <div className="customer-footer-contact">
         <div className="customer-footer-contact-item">
           <span className="customer-footer-contact-icon" aria-hidden="true">
-            📍
+            ✦
           </span>
-          <strong>Address</strong>
+          <strong>Bengaluru Experience Center</strong>
+          <p>No.126, Nirmaalya, Ground Floor, 1st A Cross, 1st Main Road, Supreme Residency Layout, Kodichikkanahalli, Bengaluru — 560076</p>
+        </div>
+        <div className="customer-footer-contact-item">
+          <span className="customer-footer-contact-icon" aria-hidden="true">
+            ♜
+          </span>
+          <strong>Registered Office</strong>
           <p>decorbeats(OPC) Pvt Ltd, B140, DeenDayalNagar, BrassCity, Moradabad, UP — 244001</p>
         </div>
         <div className="customer-footer-contact-item">
           <span className="customer-footer-contact-icon" aria-hidden="true">
-            📞
+            ✓
           </span>
-          <strong>Phone</strong>
-          <p>
-            <a href="tel:+919811133661">+91-9811-133-661</a>
-          </p>
-        </div>
-        <div className="customer-footer-contact-item">
-          <span className="customer-footer-contact-icon" aria-hidden="true">
-            ✉
-          </span>
-          <strong>Email</strong>
-          <p>
-            <a href="mailto:meghagoel@decorbeats.com">meghagoel@decorbeats.com</a>
-          </p>
+          <strong>GST Presence</strong>
+          <p>Karnataka · Tamil Nadu · Maharashtra</p>
+          <p className="customer-footer-mini">Multi-state registered for corporate and bulk orders.</p>
         </div>
       </div>
       <div className="customer-footer-divider" aria-hidden="true" />
@@ -3064,6 +3061,10 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
         </div>
         <div className="customer-footer-cta">
           <p>For bulk orders of 50+ units</p>
+          <p className="customer-footer-mini">
+            <a href="tel:+919811133661">+91-9811-133-661</a> ·{" "}
+            <a href="mailto:meghagoel@decorbeats.com">meghagoel@decorbeats.com</a>
+          </p>
           <a
             className="customer-whatsapp-button footer-whatsapp"
             href={getBulkWhatsAppUrl()}

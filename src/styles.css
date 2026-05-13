@@ -1341,6 +1341,22 @@ h3 {
     line-height: 1.6;
   }
 
+  .customer-footer-mini {
+    margin-top: 0.35rem !important;
+    color: rgba(232, 213, 183, 0.68) !important;
+    font-size: 12px !important;
+    line-height: 1.55 !important;
+  }
+
+  .customer-footer-mini a {
+    color: #f5ede3 !important;
+    text-decoration: none;
+  }
+
+  .customer-footer-mini a:hover {
+    text-decoration: underline;
+  }
+
   .footer-whatsapp {
     width: fit-content;
     justify-self: center;
@@ -1405,6 +1421,7 @@ footer .contact-label {
 
 footer .customer-footer-brand p,
 footer .customer-footer-cta p,
+footer .customer-footer-mini,
 footer .customer-admin-link,
 footer .customer-footer-bottom,
 footer .muted-text,
@@ -4638,8 +4655,10 @@ header img {
 
   .customer-footer-brand p,
   .customer-footer-cta p,
+  .customer-footer-mini,
   footer .customer-footer-brand p,
-  footer .customer-footer-cta p {
+  footer .customer-footer-cta p,
+  footer .customer-footer-mini {
     color: #e8d5b7 !important;
     font-size: 0.88rem !important;
     line-height: 1.45 !important;
