@@ -8,6 +8,7 @@ const WHATSAPP_NUMBER = "919811133661";
 const PRODUCT_STORAGE_BUCKET = "products";
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 const RAZORPAY_CHECKOUT_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
+const GOOGLE_ADS_CONTACT_CONVERSION = "AW-18084439764/kF1hCNnLiK4cENTNqq9D";
 const ANNOUNCEMENTS = [
   "𝄞 Decorbeats — where every gift finds its rhythm",
   "✦ Summer Sale — Up to 30% off selected items",
@@ -390,8 +391,24 @@ function trackCustomerEvent(eventName, properties = {}) {
   }
 }
 
-function openBulkWhatsApp() {
-  trackCustomerEvent("Bulk WhatsApp Clicked", { source: "ticker" });
+function trackGoogleAdsContactConversion(value = 1) {
+  if (typeof window === "undefined" || typeof window.gtag !== "function") {
+    return;
+  }
+  window.gtag("event", "conversion", {
+    send_to: GOOGLE_ADS_CONTACT_CONVERSION,
+    value: Number(value) || 1,
+    currency: "INR"
+  });
+}
+
+function trackBulkWhatsAppClick(source) {
+  trackCustomerEvent("Bulk WhatsApp Clicked", { source });
+  trackGoogleAdsContactConversion();
+}
+
+function openBulkWhatsApp(source = "direct") {
+  trackBulkWhatsAppClick(source);
   openWhatsAppChat(BULK_WHATSAPP_MESSAGE);
 }
 
@@ -2979,8 +2996,7 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
 
   function handleSlideCta() {
     if (activeSlide.ctaAction === "whatsapp") {
-      trackCustomerEvent("Bulk WhatsApp Clicked", { source: "hero-slider" });
-      openBulkWhatsApp();
+      openBulkWhatsApp("hero-slider");
       return;
     }
     onShop();
@@ -3010,7 +3026,7 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
             href={getBulkWhatsAppUrl()}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => trackCustomerEvent("Bulk WhatsApp Clicked", { source: "hero" })}
+            onClick={() => trackBulkWhatsAppClick("hero")}
           >
             Enquire for bulk orders →
           </a>
@@ -3169,7 +3185,7 @@ function EditorialSection() {
           href={getBulkWhatsAppUrl()}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={() => trackCustomerEvent("Bulk WhatsApp Clicked", { source: "editorial" })}
+          onClick={() => trackBulkWhatsAppClick("editorial")}
         >
           <WhatsAppIcon />
           <span>Enquire on WhatsApp</span>
@@ -3432,7 +3448,7 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
             href={getBulkWhatsAppUrl()}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => trackCustomerEvent("Bulk WhatsApp Clicked", { source: "footer" })}
+            onClick={() => trackBulkWhatsAppClick("footer")}
           >
             <WhatsAppIcon />
             <span>WhatsApp</span>
@@ -5992,6 +6008,7 @@ export default function App() {
       category: product.category,
       hasPrice: hasDisplayValue(product.pricing?.mrp)
     });
+    trackGoogleAdsContactConversion(product.pricing?.mrp);
   }
 
   async function handleDetailEdit(product, draft) {
@@ -6202,6 +6219,7 @@ export default function App() {
         product: product.name,
         amount: price
       });
+      trackGoogleAdsContactConversion(price);
       setPaymentMessage({
         tone: "success",
         text: "Payment successful. Please WhatsApp us your order details so we can confirm delivery."
