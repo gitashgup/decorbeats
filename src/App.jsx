@@ -3417,26 +3417,41 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
           ) : null}
           <div className="customer-sheet-actions">
             {hasDisplayValue(product.pricing.mrp) ? (
-              <button
-                type="button"
-                className="customer-pay-button"
-                onClick={() => onAddToCart(product)}
-                disabled={String(cartBusyProductId) === String(product.id)}
-              >
-                <span>{String(cartBusyProductId) === String(product.id) ? "Adding..." : `Add to cart · ${formatCurrency(product.pricing.mrp)}`}</span>
-                <small>Checkout securely with Razorpay</small>
-              </button>
+              <div className="customer-purchase-panel">
+                <div className="customer-purchase-panel-head">
+                  <span>Ready to order?</span>
+                  <strong>{formatCurrency(product.pricing.mrp)}</strong>
+                </div>
+                <button
+                  type="button"
+                  className="customer-pay-button"
+                  onClick={() => onAddToCart(product)}
+                  disabled={String(cartBusyProductId) === String(product.id)}
+                >
+                  <span>{String(cartBusyProductId) === String(product.id) ? "Adding to cart..." : "Add to cart"}</span>
+                  <small>Secure checkout with Razorpay</small>
+                </button>
+                <div className="customer-purchase-trust" aria-label="Checkout reassurance">
+                  <span>Secure payment</span>
+                  <span>WhatsApp order support</span>
+                </div>
+              </div>
             ) : null}
-            <a
-              className="customer-whatsapp-button"
-              href={getProductWhatsAppUrl(product)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => onWhatsApp(product)}
-            >
-              <WhatsAppIcon />
-              <span>Enquire on WhatsApp</span>
-            </a>
+
+            <div className="customer-help-panel">
+              <p>{hasDisplayValue(product.pricing.mrp) ? "Prefer to confirm details first?" : "Ask us for pricing and availability."}</p>
+              <a
+                className="customer-whatsapp-button"
+                href={getProductWhatsAppUrl(product)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => onWhatsApp(product)}
+              >
+                <WhatsAppIcon />
+                <span>Enquire on WhatsApp</span>
+              </a>
+            </div>
+
             <button type="button" className="customer-share-link" onClick={() => onShare(product)}>
               Share product
             </button>
