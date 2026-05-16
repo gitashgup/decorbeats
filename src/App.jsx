@@ -580,6 +580,24 @@ function createEmptyPurchaseDraft() {
   };
 }
 
+function createEmptyCheckoutDetails() {
+  return {
+    customerName: "",
+    phone: "",
+    email: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    pincode: "",
+    notes: ""
+  };
+}
+
+function getCartLineId(product) {
+  return String(product?.id ?? product?.sku ?? "");
+}
+
 function formatPaymentMethod(value) {
   return safeText(value, "upi").toUpperCase();
 }
@@ -2935,7 +2953,29 @@ function AnnouncementBar() {
   );
 }
 
-function CustomerHeader({ scrolled, tickerMessage, tickerAction, tickerVisible, onSearchTap, onTickerAction, onAdmin, onHome }) {
+function CartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M7 18.5a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6Zm10 0a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6ZM4.2 4.5H2V2.6h3.5l.76 3.1H21l-2.1 8.1a2.2 2.2 0 0 1-2.13 1.66H8.16a2.2 2.2 0 0 1-2.13-1.66L4.2 4.5Zm3.03 3.1 1.26 5.3c.04.18.2.3.38.3h7.9c.18 0 .34-.12.38-.3l1.33-5.3H7.23Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function CustomerHeader({
+  scrolled,
+  tickerMessage,
+  tickerAction,
+  tickerVisible,
+  onSearchTap,
+  onTickerAction,
+  onAdmin,
+  onHome,
+  cartCount,
+  onCartOpen
+}) {
   const tickerClassName = scrolled && tickerVisible ? "customer-header-ticker visible" : "customer-header-ticker";
   return (
     <header className={scrolled ? "customer-header scrolled" : "customer-header"}>
@@ -2958,6 +2998,10 @@ function CustomerHeader({ scrolled, tickerMessage, tickerAction, tickerVisible, 
       )}
       <button type="button" className="customer-header-admin-link" onClick={onAdmin}>
         Admin
+      </button>
+      <button type="button" className="customer-header-cart" aria-label={`Open cart, ${cartCount} items`} onClick={onCartOpen}>
+        <CartIcon />
+        {cartCount ? <span>{cartCount}</span> : null}
       </button>
       <button type="button" className="customer-header-search" aria-label="Search products" onClick={onSearchTap}>
         <SearchIcon />
@@ -3238,7 +3282,7 @@ function CustomerProductCard({ product, onSelect }) {
   );
 }
 
-function CustomerSheet({ product, onClose, onShare, onWhatsApp, onPayOnline, paymentBusy, paymentMessage }) {
+function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, cartBusyProductId, paymentMessage }) {
   const [closing, setClosing] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
   const closeTimerRef = useRef(null);
@@ -3376,11 +3420,11 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onPayOnline, pay
               <button
                 type="button"
                 className="customer-pay-button"
-                onClick={() => onPayOnline(product)}
-                disabled={paymentBusy}
+                onClick={() => onAddToCart(product)}
+                disabled={String(cartBusyProductId) === String(product.id)}
               >
-                <span>{paymentBusy ? "Opening secure checkout..." : `Pay online ${formatCurrency(product.pricing.mrp)}`}</span>
-                <small>Powered by Razorpay</small>
+                <span>{String(cartBusyProductId) === String(product.id) ? "Adding..." : `Add to cart · ${formatCurrency(product.pricing.mrp)}`}</span>
+                <small>Checkout securely with Razorpay</small>
               </button>
             ) : null}
             <a
@@ -3399,6 +3443,181 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onPayOnline, pay
             {paymentMessage ? <p className={`customer-payment-note ${paymentMessage.tone}`}>{paymentMessage.text}</p> : null}
           </div>
         </div>
+      </aside>
+    </div>
+  );
+}
+
+function CustomerCartDrawer({
+  open,
+  items,
+  details,
+  setDetails,
+  busy,
+  error,
+  success,
+  onClose,
+  onQuantityChange,
+  onRemove,
+  onCheckout
+}) {
+  const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
+  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="customer-cart-overlay open" onClick={onClose}>
+      <aside className="customer-cart-drawer" onClick={(event) => event.stopPropagation()}>
+        <div className="customer-cart-head">
+          <div>
+            <p className="eyebrow">Decorbeats checkout</p>
+            <h2>Your cart</h2>
+            <span>{itemCount ? `${itemCount} item${itemCount === 1 ? "" : "s"}` : "No items yet"}</span>
+          </div>
+          <button type="button" className="customer-sheet-close" aria-label="Close cart" onClick={onClose}>
+            ×
+          </button>
+        </div>
+
+        {error ? <p className="customer-payment-note error">{error}</p> : null}
+        {success ? <p className="customer-payment-note success">{success}</p> : null}
+
+        {items.length ? (
+          <>
+            <div className="customer-cart-items">
+              {items.map((item) => (
+                <article key={item.product.id} className="customer-cart-item">
+                  <img src={item.product.imageUrl || brandLogo} alt="" />
+                  <div>
+                    <strong>{item.product.name}</strong>
+                    <span>{item.product.sku}</span>
+                    <b>{formatCurrency(item.price)}</b>
+                  </div>
+                  <div className="customer-cart-qty">
+                    <button type="button" onClick={() => onQuantityChange(item.product.id, item.quantity - 1)} disabled={busy}>
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="1"
+                      value={item.quantity}
+                      onClick={handleNumericInputClick}
+                      onChange={(event) => onQuantityChange(item.product.id, Number(event.target.value) || 1)}
+                      disabled={busy}
+                    />
+                    <button type="button" onClick={() => onQuantityChange(item.product.id, item.quantity + 1)} disabled={busy}>
+                      +
+                    </button>
+                    <button type="button" className="customer-cart-remove" onClick={() => onRemove(item.product.id)} disabled={busy}>
+                      Remove
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <form className="customer-checkout-form" onSubmit={onCheckout}>
+              <div className="customer-cart-total">
+                <span>Order total</span>
+                <strong>{formatCurrency(total)}</strong>
+              </div>
+              <label>
+                Full name
+                <input
+                  type="text"
+                  value={details.customerName}
+                  placeholder="Customer name"
+                  onChange={(event) => setDetails((current) => ({ ...current, customerName: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Phone number
+                <input
+                  type="tel"
+                  value={details.phone}
+                  placeholder="10-digit mobile number"
+                  onChange={(event) => setDetails((current) => ({ ...current, phone: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={details.email}
+                  placeholder="Optional, for payment receipt"
+                  onChange={(event) => setDetails((current) => ({ ...current, email: event.target.value }))}
+                />
+              </label>
+              <label>
+                Delivery address
+                <textarea
+                  rows="3"
+                  value={details.addressLine1}
+                  placeholder="House / flat, street, landmark"
+                  onChange={(event) => setDetails((current) => ({ ...current, addressLine1: event.target.value }))}
+                  required
+                />
+              </label>
+              <div className="customer-checkout-grid">
+                <label>
+                  City
+                  <input
+                    type="text"
+                    value={details.city}
+                    onChange={(event) => setDetails((current) => ({ ...current, city: event.target.value }))}
+                    required
+                  />
+                </label>
+                <label>
+                  State
+                  <input
+                    type="text"
+                    value={details.state}
+                    onChange={(event) => setDetails((current) => ({ ...current, state: event.target.value }))}
+                    required
+                  />
+                </label>
+                <label>
+                  PIN code
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={details.pincode}
+                    onChange={(event) => setDetails((current) => ({ ...current, pincode: event.target.value }))}
+                    required
+                  />
+                </label>
+              </div>
+              <label>
+                Delivery notes
+                <textarea
+                  rows="2"
+                  value={details.notes}
+                  placeholder="Optional"
+                  onChange={(event) => setDetails((current) => ({ ...current, notes: event.target.value }))}
+                />
+              </label>
+              <button type="submit" className="primary-button customer-checkout-button" disabled={busy}>
+                {busy ? "Opening secure payment..." : `Pay ${formatCurrency(total)}`}
+              </button>
+            </form>
+          </>
+        ) : (
+          <div className="customer-empty-cart">
+            <CartIcon />
+            <h3>Your cart is waiting for its first beat.</h3>
+            <p>Add products from the collection and checkout securely when ready.</p>
+            <button type="button" className="primary-button" onClick={onClose}>
+              Continue browsing
+            </button>
+          </div>
+        )}
       </aside>
     </div>
   );
@@ -4519,6 +4738,13 @@ export default function App() {
   const [purchaseModalError, setPurchaseModalError] = useState("");
   const [paymentBusyProductId, setPaymentBusyProductId] = useState("");
   const [paymentMessage, setPaymentMessage] = useState(null);
+  const [cartItems, setCartItems] = useState([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [checkoutDetails, setCheckoutDetails] = useState(createEmptyCheckoutDetails);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
+  const [checkoutSuccess, setCheckoutSuccess] = useState("");
+  const [cartBusyProductId, setCartBusyProductId] = useState("");
   const [heroSlideForm, setHeroSlideForm] = useState(createEmptyHeroSlideForm);
   const [heroSlideBusy, setHeroSlideBusy] = useState(false);
   const [heroSlideError, setHeroSlideError] = useState("");
@@ -4813,6 +5039,31 @@ export default function App() {
       return left.name.localeCompare(right.name);
     });
   }, [categoryFilter, currentCatalog, customerFacing, search]);
+
+  const cartLines = useMemo(() => {
+    return cartItems
+      .map((item) => {
+        const product = products.find((entry) => String(entry.id) === String(item.productId));
+        const price = parsePrice(product?.pricing?.mrp);
+        if (!product || product.archivedAt || !price) {
+          return null;
+        }
+        const availableQuantity = Math.max(1, Number(product.quantity || 1));
+        const quantity = Math.max(1, Math.min(Number(item.quantity) || 1, availableQuantity));
+        return {
+          product,
+          quantity,
+          price,
+          lineTotal: price * quantity
+        };
+      })
+      .filter(Boolean);
+  }, [cartItems, products]);
+
+  const cartCount = useMemo(
+    () => cartItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0), 0),
+    [cartItems]
+  );
 
   const filteredInquiries = useMemo(() => {
     const statusFiltered =
@@ -6236,6 +6487,245 @@ export default function App() {
     }
   }
 
+  function handleAddToCart(product) {
+    const price = parsePrice(product?.pricing?.mrp);
+    if (!product || !price) {
+      setPaymentMessage({ tone: "error", text: "Add an MRP before this product can be checked out online." });
+      return;
+    }
+
+    const lineId = getCartLineId(product);
+    setCartBusyProductId(lineId);
+    setCheckoutError("");
+    setCheckoutSuccess("");
+    setPaymentMessage({ tone: "success", text: `${product.name} added to cart.` });
+
+    setCartItems((current) => {
+      const existing = current.find((item) => String(item.productId) === lineId);
+      const maxQuantity = Math.max(1, Number(product.quantity || 1));
+      if (existing) {
+        return current.map((item) =>
+          String(item.productId) === lineId
+            ? { ...item, quantity: Math.min(maxQuantity, Math.max(1, Number(item.quantity || 1) + 1)) }
+            : item
+        );
+      }
+      return [...current, { productId: product.id, quantity: 1 }];
+    });
+
+    trackCustomerEvent("Product Added To Cart", {
+      sku: product.sku,
+      product: product.name,
+      amount: price
+    });
+
+    setSelectedId(null);
+    setCartOpen(true);
+    window.setTimeout(() => setCartBusyProductId(""), 350);
+  }
+
+  function handleCartQuantityChange(productId, nextQuantity) {
+    const product = products.find((entry) => String(entry.id) === String(productId));
+    const maxQuantity = Math.max(1, Number(product?.quantity || 1));
+    const quantity = Math.max(1, Math.min(Number(nextQuantity) || 1, maxQuantity));
+    setCartItems((current) =>
+      current.map((item) => (String(item.productId) === String(productId) ? { ...item, quantity } : item))
+    );
+  }
+
+  function handleCartRemove(productId) {
+    setCartItems((current) => current.filter((item) => String(item.productId) !== String(productId)));
+  }
+
+  async function handleCheckoutSubmit(event) {
+    event.preventDefault();
+    if (!cartLines.length) {
+      setCheckoutError("Add at least one product before checkout.");
+      return;
+    }
+
+    const requiredFields = [
+      checkoutDetails.customerName,
+      checkoutDetails.phone,
+      checkoutDetails.addressLine1,
+      checkoutDetails.city,
+      checkoutDetails.state,
+      checkoutDetails.pincode
+    ];
+    if (requiredFields.some((field) => !safeText(field))) {
+      setCheckoutError("Please add name, phone and delivery address before payment.");
+      return;
+    }
+
+    setCheckoutBusy(true);
+    setCheckoutError("");
+    setCheckoutSuccess("");
+
+    try {
+      await loadRazorpayCheckout();
+
+      const orderResponse = await fetch("/api/create-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          items: cartLines.map((line) => ({
+            productId: line.product.id,
+            quantity: line.quantity
+          })),
+          customer: checkoutDetails
+        })
+      });
+      const order = await orderResponse.json();
+      if (!orderResponse.ok) {
+        throw new Error(order?.error || "Could not start payment.");
+      }
+
+      const paymentResponse = await new Promise((resolve, reject) => {
+        let settled = false;
+        const rejectOnce = (error) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          reject(error);
+        };
+        const resolveOnce = (value) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          resolve(value);
+        };
+
+        const checkout = new window.Razorpay({
+          key: order.keyId,
+          amount: order.amount,
+          currency: order.currency,
+          name: "Decorbeats",
+          description: `${cartLines.length} item${cartLines.length === 1 ? "" : "s"} from Decorbeats`,
+          image: `${window.location.origin}${brandLogo}`,
+          order_id: order.order_id,
+          prefill: {
+            name: checkoutDetails.customerName,
+            email: checkoutDetails.email,
+            contact: checkoutDetails.phone
+          },
+          notes: {
+            customer_name: checkoutDetails.customerName,
+            customer_phone: checkoutDetails.phone,
+            item_count: String(cartLines.length)
+          },
+          theme: {
+            color: "#8B4A2A"
+          },
+          handler: async (razorpayResponse) => {
+            try {
+              const verifyResponse = await fetch("/api/verify-payment", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify(razorpayResponse)
+              });
+              const verifyResult = await verifyResponse.json();
+              if (!verifyResponse.ok || !verifyResult.verified) {
+                throw new Error(verifyResult?.error || "Payment could not be verified.");
+              }
+              resolveOnce(razorpayResponse);
+            } catch (error) {
+              rejectOnce(error);
+            }
+          },
+          modal: {
+            ondismiss: () => {
+              const error = new Error("Payment cancelled.");
+              error.cancelled = true;
+              rejectOnce(error);
+            }
+          }
+        });
+
+        checkout.on("payment.failed", (failureResponse) => {
+          const paymentError = failureResponse?.error ?? {};
+          rejectOnce(new Error(paymentError.description || "Payment failed in Razorpay Checkout."));
+        });
+
+        checkout.open();
+      });
+
+      const totalAmount = Number(order.amount || 0) / 100;
+      if (isSupabaseConfigured) {
+        const orderPayload = {
+          customer_name: safeText(checkoutDetails.customerName),
+          customer_phone: safeText(checkoutDetails.phone),
+          customer_email: safeText(checkoutDetails.email) || null,
+          address_line1: safeText(checkoutDetails.addressLine1),
+          address_line2: safeText(checkoutDetails.addressLine2) || null,
+          city: safeText(checkoutDetails.city),
+          state: safeText(checkoutDetails.state),
+          pincode: safeText(checkoutDetails.pincode),
+          delivery_notes: safeText(checkoutDetails.notes) || null,
+          total_amount: totalAmount,
+          currency: order.currency || "INR",
+          payment_status: "paid",
+          order_status: "new",
+          razorpay_order_id: paymentResponse.razorpay_order_id,
+          razorpay_payment_id: paymentResponse.razorpay_payment_id
+        };
+
+        const { data: savedOrder, error: orderError } = await supabase
+          .from("customer_orders")
+          .insert(orderPayload)
+          .select()
+          .single();
+
+        if (orderError) {
+          throw new Error(
+            orderError.message?.includes("customer_orders")
+              ? "Payment succeeded, but the customer order table is missing. Please run the checkout SQL migration."
+              : orderError.message
+          );
+        }
+
+        const itemPayload = cartLines.map((line) => ({
+          order_id: savedOrder.id,
+          product_id: String(line.product.id),
+          product_sku: line.product.sku,
+          product_name: line.product.name,
+          quantity: line.quantity,
+          unit_price: line.price,
+          line_total: line.lineTotal,
+          image_url: line.product.imageUrl || null
+        }));
+
+        const { error: itemsError } = await supabase.from("customer_order_items").insert(itemPayload);
+        if (itemsError) {
+          throw new Error(itemsError.message);
+        }
+      }
+
+      trackCustomerEvent("Customer Checkout Paid", {
+        amount: totalAmount,
+        itemCount: cartLines.length
+      });
+      trackGoogleAdsContactConversion(totalAmount);
+      setCheckoutSuccess("Payment successful. Your order details have been saved.");
+      setCartItems([]);
+      setCheckoutDetails(createEmptyCheckoutDetails());
+    } catch (error) {
+      if (error?.cancelled) {
+        setCheckoutError("Payment was cancelled. Your cart is still saved.");
+      } else {
+        console.error("Checkout failed:", error);
+        setCheckoutError(error.message || "Could not complete checkout. Please try again.");
+      }
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }
+
   async function persistProductImages(product, nextImageUrls) {
     const cleaned = nextImageUrls.map(normalizeUrl).filter(Boolean);
     const primaryImage = cleaned[0] ?? null;
@@ -6905,6 +7395,8 @@ export default function App() {
         onTickerAction={handleTickerAction}
         onAdmin={handleAdminEntry}
         onHome={handleCustomerHome}
+        cartCount={cartCount}
+        onCartOpen={() => setCartOpen(true)}
       />
       <main className="customer-main">
         {adminActive && previewCustomerView ? <CustomerPreviewBanner onBack={() => {
@@ -6955,9 +7447,22 @@ export default function App() {
         onClose={() => setSelectedId(null)}
         onShare={handleShareProduct}
         onWhatsApp={handleCustomerWhatsAppClick}
-        onPayOnline={handlePayOnline}
-        paymentBusy={Boolean(selectedProduct && paymentBusyProductId === selectedProduct.id)}
+        onAddToCart={handleAddToCart}
+        cartBusyProductId={cartBusyProductId}
         paymentMessage={paymentMessage}
+      />
+      <CustomerCartDrawer
+        open={cartOpen}
+        items={cartLines}
+        details={checkoutDetails}
+        setDetails={setCheckoutDetails}
+        busy={checkoutBusy}
+        error={checkoutError}
+        success={checkoutSuccess}
+        onClose={() => setCartOpen(false)}
+        onQuantityChange={handleCartQuantityChange}
+        onRemove={handleCartRemove}
+        onCheckout={handleCheckoutSubmit}
       />
     </div>
   ) : (
