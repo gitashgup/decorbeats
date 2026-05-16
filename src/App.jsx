@@ -1498,8 +1498,11 @@ function HeroSlideSettingsPanel({
   compressionMessage,
   onImageChange,
   onSubmit,
-  onDelete
+  onDelete,
+  onMove
 }) {
+  const sortedSlides = [...slides].sort((left, right) => left.sortOrder - right.sortOrder);
+
   return (
     <section className="panel-card admin-card settings-card hero-slide-settings">
       <div className="section-head">
@@ -1652,7 +1655,7 @@ end $$;`}</pre>
       </form>
       {slides.length ? (
         <div className="hero-slide-list">
-          {slides.map((slide) => (
+          {sortedSlides.map((slide, index) => (
             <article key={slide.id} className="hero-slide-list-item">
               {slide.imageUrl ? <img src={slide.imageUrl} alt="" /> : <div className="hero-slide-list-placeholder">𝄞</div>}
               <div>
@@ -1660,9 +1663,27 @@ end $$;`}</pre>
                 <strong>{slide.title}</strong>
                 <span>{slide.contentPosition} · order {slide.sortOrder}</span>
               </div>
-              <button type="button" className="detail-cancel-link" disabled={busy} onClick={() => onDelete(slide.id)}>
-                Remove
-              </button>
+              <div className="hero-slide-actions">
+                <button
+                  type="button"
+                  className="secondary-button hero-slide-move-button"
+                  disabled={busy || index === 0}
+                  onClick={() => onMove(slide.id, "up")}
+                >
+                  Move Up
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button hero-slide-move-button"
+                  disabled={busy || index === sortedSlides.length - 1}
+                  onClick={() => onMove(slide.id, "down")}
+                >
+                  Move Down
+                </button>
+                <button type="button" className="detail-cancel-link" disabled={busy} onClick={() => onDelete(slide.id)}>
+                  Remove
+                </button>
+              </div>
             </article>
           ))}
         </div>
@@ -5710,6 +5731,50 @@ export default function App() {
     }
   }
 
+  async function handleMoveHeroSlide(slideId, direction) {
+    if (!isSupabaseConfigured || !canManage) {
+      setHeroSlideError("Sign in with Supabase before changing slider order.");
+      return;
+    }
+
+    const orderedSlides = [...heroSlides].sort((left, right) => left.sortOrder - right.sortOrder);
+    const currentIndex = orderedSlides.findIndex((slide) => slide.id === slideId);
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= orderedSlides.length) {
+      return;
+    }
+
+    const reorderedSlides = [...orderedSlides];
+    [reorderedSlides[currentIndex], reorderedSlides[targetIndex]] = [reorderedSlides[targetIndex], reorderedSlides[currentIndex]];
+    const normalizedSlides = reorderedSlides.map((slide, index) => ({ ...slide, sortOrder: index + 1 }));
+
+    setHeroSlideBusy(true);
+    setHeroSlideError("");
+    try {
+      await Promise.all(
+        normalizedSlides.map((slide) =>
+          supabase
+            .from("hero_slides")
+            .update({ sort_order: slide.sortOrder })
+            .eq("id", slide.id)
+            .then(({ error }) => {
+              if (error) {
+                throw error;
+              }
+            })
+        )
+      );
+      setHeroSlides(normalizedSlides);
+      setStatusMessage("Slider order updated ✓");
+    } catch (error) {
+      console.error("Hero slide reorder failed:", error);
+      setHeroSlideError(error?.message || "Could not reorder slides.");
+    } finally {
+      setHeroSlideBusy(false);
+    }
+  }
+
   function startInquiryListening() {
     if (!speechSupported) {
       return;
@@ -7093,6 +7158,7 @@ export default function App() {
               onImageChange={handleHeroSlideImageUpload}
               onSubmit={handleSaveHeroSlide}
               onDelete={handleDeleteHeroSlide}
+              onMove={handleMoveHeroSlide}
             />
             <AccountCard userEmail={userEmail} onSignOut={handleSignOut} />
             <section className="panel-card admin-card settings-card">
