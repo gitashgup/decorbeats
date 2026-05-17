@@ -4605,7 +4605,6 @@ function CatalogSection({
 function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
   const items = [
     { id: "products", label: "Products", icon: <GridIcon /> },
-    { id: "inquiries", label: "Inquiries", icon: <ChatIcon /> },
     { id: "sales", label: "Sales", icon: <ReceiptIcon /> },
     { id: "purchases", label: "Purchases", icon: <BoxIcon /> },
     { id: "low-stock", label: "Low Stock", icon: <WarningIcon />, badge: lowStockCount },
@@ -4614,68 +4613,20 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
 
   return (
     <nav className="bottom-nav" aria-label="Primary">
-      <button
-        type="button"
-        className={activeTab === "products" ? "nav-item active" : "nav-item"}
-        onClick={() => setActiveTab("products")}
-      >
-        <span className="nav-icon">{items[0].icon}</span>
-        <span>Products</span>
-      </button>
-
-      <button
-        type="button"
-        className={activeTab === "inquiries" ? "nav-item active" : "nav-item"}
-        onClick={() => setActiveTab("inquiries")}
-      >
-        <span className="nav-icon">
-          {items[1].icon}
-        </span>
-        <span>Inquiries</span>
-      </button>
-
-      <button
-        type="button"
-        className={activeTab === "sales" ? "nav-item active" : "nav-item"}
-        onClick={() => setActiveTab("sales")}
-      >
-        <span className="nav-icon">
-          {items[2].icon}
-        </span>
-        <span>Sales</span>
-      </button>
-
-      <button
-        type="button"
-        className={activeTab === "purchases" ? "nav-item active" : "nav-item"}
-        onClick={() => setActiveTab("purchases")}
-      >
-        <span className="nav-icon">
-          {items[3].icon}
-        </span>
-        <span>Purchases</span>
-      </button>
-
-      <button
-        type="button"
-        className={activeTab === "low-stock" ? "nav-item active" : "nav-item"}
-        onClick={() => setActiveTab("low-stock")}
-      >
-        <span className="nav-icon nav-icon-alert">
-          {items[4].icon}
-          {lowStockCount ? <small>{lowStockCount}</small> : null}
-        </span>
-        <span>Low Stock</span>
-      </button>
-
-      <button
-        type="button"
-        className={activeTab === "settings" ? "nav-item active" : "nav-item"}
-        onClick={() => setActiveTab("settings")}
-      >
-        <span className="nav-icon">{items[5].icon}</span>
-        <span>Settings</span>
-      </button>
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={activeTab === item.id ? "nav-item active" : "nav-item"}
+          onClick={() => setActiveTab(item.id)}
+        >
+          <span className={item.badge ? "nav-icon nav-icon-alert" : "nav-icon"}>
+            {item.icon}
+            {item.badge ? <small>{item.badge}</small> : null}
+          </span>
+          <span>{item.label}</span>
+        </button>
+      ))}
     </nav>
   );
 }
@@ -7284,6 +7235,12 @@ export default function App() {
     setCategoryFilter("All");
     setSearch("");
   }, [activeTab, publicScreen]);
+
+  useEffect(() => {
+    if (activeTab === "inquiries") {
+      setActiveTab("products");
+    }
+  }, [activeTab]);
 
   const statsItems = [
     { label: "Products", value: stats.totalProducts },
