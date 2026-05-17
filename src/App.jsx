@@ -6727,9 +6727,14 @@ export default function App() {
     setCatalogueBusy(true);
     setCatalogueError("");
     try {
+      const catalogueId = crypto.randomUUID();
+      const nowIso = new Date().toISOString();
       const cataloguePayload = {
+        id: catalogueId,
         title: cleanTitle,
         slug: buildShareCatalogueSlug(cleanTitle),
+        created_at: nowIso,
+        updated_at: nowIso,
         customer_name: safeText(catalogueDraft.customer_name) || null,
         occasion: safeText(catalogueDraft.occasion) || null,
         intro_note: safeText(catalogueDraft.intro_note) || null,
@@ -6739,17 +6744,21 @@ export default function App() {
 
       let savedCatalogue;
       if (isSupabaseConfigured) {
-        const { data: catalogueData, error: catalogueError } = await supabase
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session) {
+          throw new Error("Your admin session expired. Please sign in again, then create the catalogue.");
+        }
+
+        const { error: catalogueError } = await supabase
           .from("share_catalogues")
-          .insert(cataloguePayload)
-          .select()
-          .single();
+          .insert(cataloguePayload);
         if (catalogueError) {
           throw catalogueError;
         }
 
         const itemsPayload = catalogueDraft.items.map((item, index) => ({
-          catalogue_id: catalogueData.id,
+          id: crypto.randomUUID(),
+          catalogue_id: catalogueId,
           product_id: safeText(item.product_id) || null,
           product_sku: safeText(item.product_sku) || null,
           product_name: safeText(item.product_name),
@@ -6760,24 +6769,20 @@ export default function App() {
           sort_order: index + 1
         }));
 
-        const { data: itemData, error: itemError } = await supabase
+        const { error: itemError } = await supabase
           .from("share_catalogue_items")
-          .insert(itemsPayload)
-          .select();
+          .insert(itemsPayload);
         if (itemError) {
           throw itemError;
         }
 
-        savedCatalogue = toShareCatalogue({ ...catalogueData, share_catalogue_items: itemData ?? [] });
+        savedCatalogue = toShareCatalogue({ ...cataloguePayload, share_catalogue_items: itemsPayload });
       } else {
         savedCatalogue = toShareCatalogue({
-          id: crypto.randomUUID(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
           ...cataloguePayload,
           share_catalogue_items: catalogueDraft.items.map((item, index) => ({
             id: crypto.randomUUID(),
-            catalogue_id: "local",
+            catalogue_id: catalogueId,
             product_id: item.product_id,
             product_sku: item.product_sku,
             product_name: item.product_name,
