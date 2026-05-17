@@ -162,6 +162,11 @@ function parseLegacyPath(pathname) {
     return { screen: "admin-auth", type: "admin", slug: "" };
   }
 
+  const catalogueMatch = path.match(/^\/(?:catalogue|catalog)\/([^/]+)\/?$/i);
+  if (catalogueMatch) {
+    return { screen: "catalogue", type: "catalogue", slug: catalogueMatch[1] };
+  }
+
   const categoryMatch = path.match(/^\/category\/([^/]+)\/?$/i);
   if (categoryMatch) {
     return { screen: "customer", type: "category", slug: categoryMatch[1] };
@@ -188,6 +193,15 @@ const emptyInquiryDraft = {
 };
 
 const inquiryStatusOrder = ["new", "quoted", "converted", "lost"];
+const catalogueLeadTimeOptions = [
+  "Ready to ship",
+  "2-3 days",
+  "3-5 days",
+  "5-7 days",
+  "7-10 days",
+  "10-15 days",
+  "Procure on order"
+];
 
 function isHeicLikeFile(file) {
   if (!file) {
@@ -538,6 +552,97 @@ function toPurchase(raw) {
         }))
       : []
   };
+}
+
+function createCatalogueItemDraft(product = null, overrides = {}) {
+  return {
+    client_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `catalogue-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    product_id: product?.id ? String(product.id) : "",
+    product_sku: product?.sku ?? "",
+    product_name: product?.name ?? "",
+    display_price: product?.pricing?.mrp ?? "",
+    display_quantity: product ? Math.max(0, Number(product.quantity || 0)) : "",
+    lead_time: "Ready to ship",
+    customer_note: "",
+    ...overrides
+  };
+}
+
+function createEmptyCatalogueDraft() {
+  return {
+    title: "",
+    customer_name: "",
+    occasion: "",
+    intro_note: "",
+    expires_at: "",
+    items: []
+  };
+}
+
+function toShareCatalogue(raw) {
+  return {
+    id: raw.id,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+    title: safeText(raw.title, "Decorbeats catalogue"),
+    slug: safeText(raw.slug),
+    customerName: safeText(raw.customer_name),
+    occasion: safeText(raw.occasion),
+    introNote: safeText(raw.intro_note),
+    status: safeText(raw.status, "active").toLowerCase(),
+    expiresAt: raw.expires_at ?? null,
+    items: Array.isArray(raw.share_catalogue_items)
+      ? raw.share_catalogue_items
+          .map((item) => ({
+            id: item.id,
+            catalogueId: item.catalogue_id,
+            productId: safeText(item.product_id),
+            productSku: safeText(item.product_sku),
+            productName: safeText(item.product_name),
+            displayPrice: item.display_price == null ? null : Number(item.display_price),
+            displayQuantity: item.display_quantity == null ? null : Number(item.display_quantity),
+            leadTime: safeText(item.lead_time, "Ready to ship"),
+            customerNote: safeText(item.customer_note),
+            sortOrder: Number(item.sort_order ?? 1)
+          }))
+          .sort((left, right) => left.sortOrder - right.sortOrder)
+      : []
+  };
+}
+
+function buildShareCatalogueSlug(title) {
+  const suffix = Math.random().toString(36).slice(2, 7);
+  return `${slugify(title || "decorbeats-catalogue")}-${suffix}`;
+}
+
+function buildShareCatalogueUrl(slug) {
+  const origin = typeof window === "undefined" ? "https://www.decorbeats.com" : window.location.origin;
+  return `${origin}/catalogue/${slug}`;
+}
+
+function getCatalogueProduct(item, products) {
+  return (
+    products.find((product) => String(product.id) === String(item.productId)) ||
+    products.find((product) => product.sku && product.sku === item.productSku) ||
+    null
+  );
+}
+
+function getCatalogueShareMessage(catalogue) {
+  const lines = catalogue.items
+    .slice(0, 8)
+    .map((item) => {
+      const quantity = item.displayQuantity ? ` (${item.displayQuantity} available)` : "";
+      const price = item.displayPrice ? ` - ₹${item.displayPrice}` : "";
+      const leadTime = item.leadTime ? ` - ${item.leadTime}` : "";
+      return `• ${item.productName || item.productSku}${quantity}${price}${leadTime}`;
+    })
+    .join("\n");
+
+  return `Hi Decorbeats! I checked the catalogue "${catalogue.title}".\n\n${lines}\n\nCan you help me with these options?`;
 }
 
 function createEmptySaleDraft() {
@@ -1092,6 +1197,7 @@ function toProduct(raw, index = 0) {
     size: safeText(raw.size),
     weight: safeText(raw.weight),
     notes: raw.notes ?? "",
+    createdAt: raw.created_at ?? raw.createdAt ?? null,
     archivedAt: raw.archivedAt ?? raw.archived_at ?? null,
     pinned: Boolean(raw.pinned),
     marketingTag: safeText(raw.marketingTag ?? raw.marketing_tag),
@@ -1757,6 +1863,374 @@ function AppInfoCard({ lastSyncLabel }) {
       </div>
       <p className="support-copy">Last sync: {lastSyncLabel}</p>
     </section>
+  );
+}
+
+function ShareCataloguesScreen({
+  catalogues,
+  onCreate,
+  onCopyLink,
+  onOpenLink,
+  onArchive,
+  busy
+}) {
+  return (
+    <section className="stack-grid catalogue-admin-stack">
+      <StatusStrip
+        statusMessage="Create a curated catalogue link for a customer with only the products you want to show."
+        items={[
+          { label: "Active catalogues", value: catalogues.filter((catalogue) => catalogue.status === "active").length },
+          { label: "Shared products", value: catalogues.reduce((sum, catalogue) => sum + catalogue.items.length, 0) }
+        ]}
+      />
+      <button type="button" className="primary-button quick-add-button" onClick={onCreate}>
+        Create Customer Catalogue
+      </button>
+      <section className="catalogue-share-list">
+        {catalogues.length ? (
+          catalogues.map((catalogue) => (
+            <article key={catalogue.id} className="catalogue-share-card">
+              <div className="catalogue-share-card-main">
+                <div>
+                  <p className="eyebrow">{catalogue.customerName || "Customer catalogue"}</p>
+                  <h3>{catalogue.title}</h3>
+                  <p>
+                    {catalogue.items.length} product{catalogue.items.length === 1 ? "" : "s"}
+                    {catalogue.occasion ? ` · ${catalogue.occasion}` : ""}
+                  </p>
+                </div>
+                <span className={`catalogue-status ${catalogue.status}`}>{catalogue.status}</span>
+              </div>
+              <ul className="catalogue-share-items">
+                {catalogue.items.slice(0, 3).map((item) => (
+                  <li key={item.id || item.client_id}>
+                    <span>{item.productName}</span>
+                    <strong>{item.displayQuantity ? `${item.displayQuantity} pcs` : item.leadTime}</strong>
+                  </li>
+                ))}
+              </ul>
+              <div className="catalogue-share-actions">
+                <button type="button" className="ghost-button compact-button" onClick={() => onCopyLink(catalogue)}>
+                  Copy Link
+                </button>
+                <button type="button" className="secondary-button compact-button" onClick={() => onOpenLink(catalogue)}>
+                  Open
+                </button>
+                {catalogue.status === "active" ? (
+                  <button
+                    type="button"
+                    className="detail-cancel-link"
+                    disabled={busy}
+                    onClick={() => onArchive(catalogue)}
+                  >
+                    Archive
+                  </button>
+                ) : null}
+              </div>
+            </article>
+          ))
+        ) : (
+          <section className="panel-card admin-card settings-card">
+            <p className="eyebrow">No catalogues yet</p>
+            <h3>Create the first curated link</h3>
+            <p className="support-copy">
+              Add products, set the quantity you want to show, mention lead time, then share one simple link on WhatsApp.
+            </p>
+          </section>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function CatalogueBuilderModal({
+  open,
+  draft,
+  setDraft,
+  products,
+  productSearch,
+  setProductSearch,
+  pickerOpen,
+  setPickerOpen,
+  onAddProduct,
+  onRemoveProduct,
+  onUpdateItem,
+  onSave,
+  onCancel,
+  busy,
+  error
+}) {
+  if (!open) {
+    return null;
+  }
+
+  const searchableProducts = products
+    .filter((product) => !product.archivedAt)
+    .filter((product) => {
+      const haystack = [product.name, product.sku, product.category, product.material].join(" ").toLowerCase();
+      return haystack.includes(productSearch.toLowerCase());
+    })
+    .slice(0, 16);
+
+  return (
+    <div className="inquiry-modal-overlay catalogue-modal-overlay">
+      <section className="inquiry-modal catalogue-modal" role="dialog" aria-modal="true" aria-label="Create catalogue">
+        <ScreenHeader
+          eyebrow="Curated catalogue"
+          title="Share selected products"
+          subtitle="Build a clean customer link with price, availability and lead time."
+          action={
+            <button type="button" className="ghost-button" onClick={onCancel}>
+              Close
+            </button>
+          }
+        />
+        <div className="inquiry-modal-body">
+          {error ? <div className="inline-upload-error">{error}</div> : null}
+          <div className="form-grid catalogue-builder-grid">
+            <label className="span-2">
+              Catalogue title
+              <input
+                value={draft.title}
+                placeholder="e.g. Diwali gifting options for Priya"
+                onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+              />
+            </label>
+            <label>
+              Customer name
+              <input
+                value={draft.customer_name}
+                placeholder="Optional"
+                onChange={(event) => setDraft((current) => ({ ...current, customer_name: event.target.value }))}
+              />
+            </label>
+            <label>
+              Occasion
+              <input
+                value={draft.occasion}
+                placeholder="Diwali, wedding, corporate gifting..."
+                onChange={(event) => setDraft((current) => ({ ...current, occasion: event.target.value }))}
+              />
+            </label>
+            <label className="span-2">
+              Note for customer
+              <textarea
+                rows="3"
+                value={draft.intro_note}
+                placeholder="Add one warm note explaining this curated selection."
+                onChange={(event) => setDraft((current) => ({ ...current, intro_note: event.target.value }))}
+              />
+            </label>
+          </div>
+
+          <section className="catalogue-picker-panel">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Products</p>
+                <h3>Selected items</h3>
+              </div>
+              <button type="button" className="ghost-button" onClick={() => setPickerOpen((current) => !current)}>
+                Add Product
+              </button>
+            </div>
+            {pickerOpen ? (
+              <div className="sale-picker">
+                <input
+                  className="search-input"
+                  type="search"
+                  placeholder="Search product, SKU, category"
+                  value={productSearch}
+                  onChange={(event) => setProductSearch(event.target.value)}
+                />
+                <div className="sale-picker-results">
+                  {searchableProducts.map((product) => (
+                    <button key={product.id} type="button" className="sale-picker-item" onClick={() => onAddProduct(product)}>
+                      <span>
+                        <strong>{product.name}</strong>
+                        <small>
+                          {product.sku} · {product.quantity} in stock
+                        </small>
+                      </span>
+                      <small>{product.pricing.mrp ? formatCurrency(product.pricing.mrp) : "Price not set"}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="catalogue-item-editor-list">
+              {draft.items.length ? (
+                draft.items.map((item, index) => (
+                  <article key={item.client_id || item.id || `${item.product_sku}-${index}`} className="catalogue-item-editor-card">
+                    <div className="sale-item-head">
+                      <div>
+                        <strong>{item.product_name || "Selected product"}</strong>
+                        <span>{item.product_sku || "Manual item"}</span>
+                      </div>
+                      <button type="button" className="detail-cancel-link" onClick={() => onRemoveProduct(index)}>
+                        Remove
+                      </button>
+                    </div>
+                    <div className="form-grid catalogue-item-fields">
+                      <label>
+                        Show quantity
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="How many to show?"
+                          value={item.display_quantity}
+                          onClick={handleNumericInputClick}
+                          onChange={(event) => onUpdateItem(index, "display_quantity", event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Customer price
+                        <div className="rupee-field">
+                          <span>₹</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="Optional"
+                            value={item.display_price}
+                            onClick={handleNumericInputClick}
+                            onChange={(event) => onUpdateItem(index, "display_price", event.target.value)}
+                          />
+                        </div>
+                      </label>
+                      <label>
+                        Lead time
+                        <select value={item.lead_time} onChange={(event) => onUpdateItem(index, "lead_time", event.target.value)}>
+                          {catalogueLeadTimeOptions.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Customer note
+                        <input
+                          value={item.customer_note}
+                          placeholder="e.g. Best for premium gifting"
+                          onChange={(event) => onUpdateItem(index, "customer_note", event.target.value)}
+                        />
+                      </label>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="support-copy">No products selected yet. Add products to build the shareable catalogue.</p>
+              )}
+            </div>
+          </section>
+
+          <button type="button" className="primary-button product-submit-button" disabled={busy} onClick={onSave}>
+            {busy ? "Creating catalogue..." : "Create & Copy Link"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ShareCataloguePage({ catalogue, products, status, error, onHome }) {
+  if (status === "loading") {
+    return (
+      <div className="catalogue-public-page">
+        <div className="catalogue-public-loader">
+          <div className="spinner-ring" />
+          <p>Loading catalogue...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !catalogue) {
+    return (
+      <div className="catalogue-public-page">
+        <header className="catalogue-public-header">
+          <button type="button" className="catalogue-logo-button" onClick={onHome}>
+            <img src={brandLogo} alt="Decorbeats" />
+          </button>
+        </header>
+        <section className="catalogue-public-empty">
+          <p className="eyebrow">Decorbeats catalogue</p>
+          <h1>This catalogue link is not available.</h1>
+          <p>{error || "It may have expired or been archived."}</p>
+          <button type="button" className="primary-button" onClick={onHome}>
+            Visit Decorbeats
+          </button>
+        </section>
+      </div>
+    );
+  }
+
+  const totalItems = catalogue.items.reduce((sum, item) => sum + Number(item.displayQuantity || 0), 0);
+  const shareUrl = buildShareCatalogueUrl(catalogue.slug);
+  const whatsappMessage = `${getCatalogueShareMessage(catalogue)}\n\nCatalogue link: ${shareUrl}`;
+
+  return (
+    <div className="catalogue-public-page">
+      <header className="catalogue-public-header">
+        <button type="button" className="catalogue-logo-button" onClick={onHome}>
+          <img src={brandLogo} alt="Decorbeats" />
+        </button>
+        <a className="catalogue-public-whatsapp" href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappMessage)}`} target="_blank" rel="noreferrer">
+          Discuss on WhatsApp
+        </a>
+      </header>
+      <main className="catalogue-public-main">
+        <section className="catalogue-public-hero">
+          <p className="eyebrow">Decorbeats curated catalogue</p>
+          <h1>{catalogue.title}</h1>
+          {catalogue.introNote ? <p>{catalogue.introNote}</p> : null}
+          <div className="catalogue-public-stats">
+            <span>{catalogue.items.length} styles</span>
+            {totalItems ? <span>{totalItems} units shown</span> : null}
+            {catalogue.occasion ? <span>{catalogue.occasion}</span> : null}
+          </div>
+        </section>
+        <section className="catalogue-public-grid">
+          {catalogue.items.map((item) => {
+            const product = getCatalogueProduct(item, products);
+            const imageUrl = product ? getPrimaryImage(product) : "";
+            return (
+              <article key={item.id || item.productSku} className="catalogue-public-card">
+                <div className="catalogue-public-image">
+                  {imageUrl ? (
+                    <img src={imageUrl} alt={item.productName || product?.name || "Decorbeats product"} loading="lazy" />
+                  ) : (
+                    <div className="catalogue-public-placeholder">
+                      <img src={brandLogo} alt="" />
+                    </div>
+                  )}
+                </div>
+                <div className="catalogue-public-copy">
+                  <span>{item.productSku || product?.sku}</span>
+                  <h2>{item.productName || product?.name}</h2>
+                  <p>
+                    {product?.category || "Decor"}{product?.material ? ` · ${product.material}` : ""}
+                  </p>
+                  <div className="catalogue-public-badges">
+                    {item.displayQuantity != null ? <strong>{item.displayQuantity} available</strong> : null}
+                    {item.leadTime ? <strong>{item.leadTime}</strong> : null}
+                  </div>
+                  {item.displayPrice ? <div className="catalogue-public-price">{formatCurrency(item.displayPrice)}</div> : null}
+                  {item.customerNote ? <p className="catalogue-public-note">{item.customerNote}</p> : null}
+                </div>
+              </article>
+            );
+          })}
+        </section>
+        <section className="catalogue-public-cta">
+          <h2>Want to shortlist these?</h2>
+          <p>Send this catalogue to Megha on WhatsApp and she’ll help with availability, packing and delivery.</p>
+          <a className="whatsapp-btn" href={`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(whatsappMessage)}`} target="_blank" rel="noreferrer">
+            <WhatsAppIcon /> Discuss this catalogue
+          </a>
+        </section>
+      </main>
+    </div>
   );
 }
 
@@ -4637,6 +5111,7 @@ export default function App() {
   const [sales, setSales] = useState([]);
   const [purchases, setPurchases] = useState([]);
   const [heroSlides, setHeroSlides] = useState([]);
+  const [shareCatalogues, setShareCatalogues] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [expandedInquiryId, setExpandedInquiryId] = useState(null);
   const [expandedSaleId, setExpandedSaleId] = useState(null);
@@ -4714,6 +5189,15 @@ export default function App() {
   const [heroSlideForm, setHeroSlideForm] = useState(createEmptyHeroSlideForm);
   const [heroSlideBusy, setHeroSlideBusy] = useState(false);
   const [heroSlideError, setHeroSlideError] = useState("");
+  const [catalogueModalOpen, setCatalogueModalOpen] = useState(false);
+  const [catalogueDraft, setCatalogueDraft] = useState(createEmptyCatalogueDraft());
+  const [catalogueProductSearch, setCatalogueProductSearch] = useState("");
+  const [cataloguePickerOpen, setCataloguePickerOpen] = useState(false);
+  const [catalogueBusy, setCatalogueBusy] = useState(false);
+  const [catalogueError, setCatalogueError] = useState("");
+  const [publicCatalogue, setPublicCatalogue] = useState(null);
+  const [publicCatalogueStatus, setPublicCatalogueStatus] = useState("idle");
+  const [publicCatalogueError, setPublicCatalogueError] = useState("");
   const productGridRef = useRef(null);
   const customerSearchRef = useRef(null);
   const recognitionRef = useRef(null);
@@ -4832,11 +5316,30 @@ export default function App() {
       setHeroSlides((data ?? []).map(toHeroSlide).filter((slide) => slide.active));
     }
 
+    async function loadShareCatalogues() {
+      const { data, error } = await supabase
+        .from("share_catalogues")
+        .select("*, share_catalogue_items(*)")
+        .order("created_at", { ascending: false });
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        console.info("Share catalogues are not configured yet:", error.message);
+        return;
+      }
+
+      setShareCatalogues((data ?? []).map(toShareCatalogue));
+    }
+
     loadProducts();
     loadInquiries();
     loadSales();
     loadPurchases();
     loadHeroSlides();
+    loadShareCatalogues();
 
     return () => {
       cancelled = true;
@@ -4849,11 +5352,11 @@ export default function App() {
   const adminActive = Boolean(userEmail) || !isSupabaseConfigured;
 
   useEffect(() => {
-    if (adminActive) {
+    if (adminActive && routeIntent.type !== "catalogue") {
       setPublicScreen("customer");
       setActiveTab("products");
     }
-  }, [adminActive]);
+  }, [adminActive, routeIntent.type]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -5129,6 +5632,68 @@ export default function App() {
       pendingRouteIntentRef.current = null;
     }
   }, [categories, customerCatalog, isSupabaseConfigured, lastSyncAt]);
+
+  useEffect(() => {
+    if (routeIntent.type !== "catalogue") {
+      setPublicCatalogue(null);
+      setPublicCatalogueStatus("idle");
+      setPublicCatalogueError("");
+      return undefined;
+    }
+
+    setPublicScreen("catalogue");
+    let cancelled = false;
+
+    async function loadPublicCatalogue() {
+      setPublicCatalogueStatus("loading");
+      setPublicCatalogueError("");
+
+      if (!isSupabaseConfigured) {
+        const localMatch = shareCatalogues.find((catalogue) => catalogue.slug === routeIntent.slug) ?? null;
+        if (!cancelled) {
+          setPublicCatalogue(localMatch);
+          setPublicCatalogueStatus(localMatch ? "ready" : "error");
+          setPublicCatalogueError(localMatch ? "" : "This catalogue is not available in local preview mode.");
+        }
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("share_catalogues")
+        .select("*, share_catalogue_items(*)")
+        .eq("slug", routeIntent.slug)
+        .maybeSingle();
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error || !data) {
+        setPublicCatalogue(null);
+        setPublicCatalogueStatus("error");
+        setPublicCatalogueError(error?.message || "This catalogue may have expired or been archived.");
+        return;
+      }
+
+      const normalized = toShareCatalogue(data);
+      const expired = normalized.expiresAt && new Date(normalized.expiresAt) < new Date(new Date().toDateString());
+      if (normalized.status !== "active" || expired) {
+        setPublicCatalogue(null);
+        setPublicCatalogueStatus("error");
+        setPublicCatalogueError("This catalogue has expired or been archived.");
+        return;
+      }
+
+      setPublicCatalogue(normalized);
+      setPublicCatalogueStatus("ready");
+    }
+
+    loadPublicCatalogue();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeIntent.slug, routeIntent.type, shareCatalogues]);
 
   const stats = useMemo(() => {
     return {
@@ -6005,6 +6570,210 @@ export default function App() {
       setHeroSlideError(error?.message || "Could not reorder slides.");
     } finally {
       setHeroSlideBusy(false);
+    }
+  }
+
+  function resetCatalogueBuilder() {
+    setCatalogueModalOpen(false);
+    setCatalogueDraft(createEmptyCatalogueDraft());
+    setCatalogueProductSearch("");
+    setCataloguePickerOpen(false);
+    setCatalogueError("");
+  }
+
+  function handleOpenCatalogueBuilder() {
+    setCatalogueModalOpen(true);
+    setCatalogueDraft(createEmptyCatalogueDraft());
+    setCatalogueProductSearch("");
+    setCataloguePickerOpen(false);
+    setCatalogueError("");
+  }
+
+  function handleAddCatalogueProduct(product) {
+    setCatalogueDraft((current) => {
+      const existingIndex = current.items.findIndex((item) => item.product_sku === product.sku);
+      if (existingIndex >= 0) {
+        const nextItems = [...current.items];
+        nextItems[existingIndex] = {
+          ...nextItems[existingIndex],
+          display_quantity: Math.max(1, Number(nextItems[existingIndex].display_quantity || 0) + 1)
+        };
+        return { ...current, items: nextItems };
+      }
+
+      return {
+        ...current,
+        title: current.title || `${product.category || "Decorbeats"} catalogue`,
+        items: [...current.items, createCatalogueItemDraft(product)]
+      };
+    });
+    setCataloguePickerOpen(false);
+    setCatalogueProductSearch("");
+  }
+
+  function handleUpdateCatalogueItem(index, field, value) {
+    setCatalogueDraft((current) => {
+      const nextItems = [...current.items];
+      const currentItem = nextItems[index];
+      if (!currentItem) {
+        return current;
+      }
+      nextItems[index] = {
+        ...currentItem,
+        [field]: ["display_quantity", "display_price"].includes(field) ? (value === "" ? "" : Number(value)) : value
+      };
+      return { ...current, items: nextItems };
+    });
+  }
+
+  function handleRemoveCatalogueProduct(index) {
+    setCatalogueDraft((current) => ({
+      ...current,
+      items: current.items.filter((_, itemIndex) => itemIndex !== index)
+    }));
+  }
+
+  async function copyShareCatalogueLink(catalogue) {
+    const link = buildShareCatalogueUrl(catalogue.slug);
+    try {
+      await navigator.clipboard?.writeText(link);
+      setStatusMessage("Catalogue link copied ✓");
+    } catch {
+      setStatusMessage(link);
+    }
+  }
+
+  function handleOpenShareCatalogueLink(catalogue) {
+    const link = buildShareCatalogueUrl(catalogue.slug);
+    window.open(link, "_blank", "noopener,noreferrer");
+  }
+
+  async function handleArchiveShareCatalogue(catalogue) {
+    const confirmed = window.confirm("Archive this catalogue? The customer link will stop working.");
+    if (!confirmed) {
+      return;
+    }
+
+    setCatalogueBusy(true);
+    try {
+      if (isSupabaseConfigured) {
+        const { data, error } = await supabase
+          .from("share_catalogues")
+          .update({ status: "archived", updated_at: new Date().toISOString() })
+          .eq("id", catalogue.id)
+          .select("*, share_catalogue_items(*)")
+          .single();
+        if (error) {
+          throw error;
+        }
+        const updatedCatalogue = toShareCatalogue(data);
+        setShareCatalogues((current) =>
+          current.map((entry) => (entry.id === updatedCatalogue.id ? updatedCatalogue : entry))
+        );
+      } else {
+        setShareCatalogues((current) =>
+          current.map((entry) => (entry.id === catalogue.id ? { ...entry, status: "archived" } : entry))
+        );
+      }
+      setStatusMessage("Catalogue archived.");
+    } catch (error) {
+      console.error("Catalogue archive failed:", error);
+      setStatusMessage(error?.message || "Could not archive this catalogue.");
+    } finally {
+      setCatalogueBusy(false);
+    }
+  }
+
+  async function handleSaveShareCatalogue() {
+    const cleanTitle = safeText(catalogueDraft.title);
+    if (!cleanTitle) {
+      setCatalogueError("Add a catalogue title before sharing.");
+      return;
+    }
+    if (!catalogueDraft.items.length) {
+      setCatalogueError("Add at least one product before creating the catalogue.");
+      return;
+    }
+
+    setCatalogueBusy(true);
+    setCatalogueError("");
+    try {
+      const cataloguePayload = {
+        title: cleanTitle,
+        slug: buildShareCatalogueSlug(cleanTitle),
+        customer_name: safeText(catalogueDraft.customer_name) || null,
+        occasion: safeText(catalogueDraft.occasion) || null,
+        intro_note: safeText(catalogueDraft.intro_note) || null,
+        status: "active",
+        expires_at: safeText(catalogueDraft.expires_at) || null
+      };
+
+      let savedCatalogue;
+      if (isSupabaseConfigured) {
+        const { data: catalogueData, error: catalogueError } = await supabase
+          .from("share_catalogues")
+          .insert(cataloguePayload)
+          .select()
+          .single();
+        if (catalogueError) {
+          throw catalogueError;
+        }
+
+        const itemsPayload = catalogueDraft.items.map((item, index) => ({
+          catalogue_id: catalogueData.id,
+          product_id: safeText(item.product_id) || null,
+          product_sku: safeText(item.product_sku) || null,
+          product_name: safeText(item.product_name),
+          display_price: item.display_price === "" ? null : Number(item.display_price),
+          display_quantity: item.display_quantity === "" ? null : Number(item.display_quantity),
+          lead_time: safeText(item.lead_time, "Ready to ship"),
+          customer_note: safeText(item.customer_note) || null,
+          sort_order: index + 1
+        }));
+
+        const { data: itemData, error: itemError } = await supabase
+          .from("share_catalogue_items")
+          .insert(itemsPayload)
+          .select();
+        if (itemError) {
+          throw itemError;
+        }
+
+        savedCatalogue = toShareCatalogue({ ...catalogueData, share_catalogue_items: itemData ?? [] });
+      } else {
+        savedCatalogue = toShareCatalogue({
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          ...cataloguePayload,
+          share_catalogue_items: catalogueDraft.items.map((item, index) => ({
+            id: crypto.randomUUID(),
+            catalogue_id: "local",
+            product_id: item.product_id,
+            product_sku: item.product_sku,
+            product_name: item.product_name,
+            display_price: item.display_price === "" ? null : Number(item.display_price),
+            display_quantity: item.display_quantity === "" ? null : Number(item.display_quantity),
+            lead_time: item.lead_time,
+            customer_note: item.customer_note,
+            sort_order: index + 1
+          }))
+        });
+      }
+
+      setShareCatalogues((current) => [savedCatalogue, ...current]);
+      resetCatalogueBuilder();
+      await copyShareCatalogueLink(savedCatalogue);
+    } catch (error) {
+      console.error("Catalogue save failed:", error);
+      const message = error?.message || "Could not create this catalogue.";
+      setCatalogueError(
+        message.includes("share_catalogues") || message.includes("schema cache")
+          ? "Catalogue tables are missing. Run the catalogue SQL migration in Supabase, then try again."
+          : message
+      );
+    } finally {
+      setCatalogueBusy(false);
     }
   }
 
@@ -7268,6 +8037,8 @@ export default function App() {
           ? "Sales"
           : activeTab === "purchases"
             ? "Purchases"
+            : activeTab === "catalogues"
+              ? "Catalogues"
             : activeTab === "add"
               ? "Add or edit"
               : activeTab === "low-stock"
@@ -7282,6 +8053,8 @@ export default function App() {
           ? "Record completed orders, watch today’s numbers, and keep stock accurate."
           : activeTab === "purchases"
             ? "Track vendor orders, payments, and expected delivery dates."
+            : activeTab === "catalogues"
+              ? "Create curated customer links with selected products, lead time, and pricing."
             : activeTab === "add"
               ? "Create products, update details, and add imagery."
               : activeTab === "low-stock"
@@ -7329,7 +8102,15 @@ export default function App() {
     );
   }
 
-  const rootElement = !adminActive && publicScreen === "admin-auth" ? (
+  const rootElement = publicScreen === "catalogue" ? (
+    <ShareCataloguePage
+      catalogue={publicCatalogue}
+      products={products}
+      status={publicCatalogueStatus}
+      error={publicCatalogueError}
+      onHome={handleCustomerHome}
+    />
+  ) : !adminActive && publicScreen === "admin-auth" ? (
     <div className="app-shell">
       <div className="screen-shell">
         <ScreenHeader
@@ -7449,9 +8230,14 @@ export default function App() {
 
         {activeTab === "products" ? (
           <>
-            <button type="button" className="primary-button quick-add-button" onClick={() => setActiveTab("add")}>
-              Add Product
-            </button>
+            <div className="admin-action-row">
+              <button type="button" className="primary-button quick-add-button" onClick={() => setActiveTab("add")}>
+                Add Product
+              </button>
+              <button type="button" className="ghost-button quick-add-button" onClick={() => setActiveTab("catalogues")}>
+                Create Catalogue
+              </button>
+            </div>
             <StatusStrip statusMessage={statusMessage} />
             <StatStrip items={statsItems} />
             <CatalogSection
@@ -7535,6 +8321,17 @@ export default function App() {
               updatingPurchaseStatusId={updatingPurchaseStatusId}
             />
           </>
+        ) : null}
+
+        {activeTab === "catalogues" ? (
+          <ShareCataloguesScreen
+            catalogues={shareCatalogues}
+            onCreate={handleOpenCatalogueBuilder}
+            onCopyLink={copyShareCatalogueLink}
+            onOpenLink={handleOpenShareCatalogueLink}
+            onArchive={handleArchiveShareCatalogue}
+            busy={catalogueBusy}
+          />
         ) : null}
 
         {activeTab === "add" ? (
@@ -7655,6 +8452,20 @@ export default function App() {
               onDelete={handleDeleteHeroSlide}
               onMove={handleMoveHeroSlide}
             />
+            <section className="panel-card admin-card settings-card">
+              <div className="section-head">
+                <div>
+                  <p className="eyebrow">Customer sharing</p>
+                  <h3>Curated Catalogues</h3>
+                </div>
+              </div>
+              <p className="support-copy">
+                Create a private link with selected products, custom quantities, prices, and lead time for WhatsApp customers.
+              </p>
+              <button type="button" className="ghost-button settings-button" onClick={() => setActiveTab("catalogues")}>
+                Open Catalogues
+              </button>
+            </section>
             <AccountCard userEmail={userEmail} onSignOut={handleSignOut} />
             <section className="panel-card admin-card settings-card">
               <div className="section-head">
@@ -7738,6 +8549,23 @@ export default function App() {
         onRemoveProduct={handleRemovePurchaseProduct}
         onUpdateItem={handleUpdatePurchaseItem}
         onSave={handleSavePurchase}
+      />
+      <CatalogueBuilderModal
+        open={catalogueModalOpen}
+        draft={catalogueDraft}
+        setDraft={setCatalogueDraft}
+        products={products}
+        productSearch={catalogueProductSearch}
+        setProductSearch={setCatalogueProductSearch}
+        pickerOpen={cataloguePickerOpen}
+        setPickerOpen={setCataloguePickerOpen}
+        onAddProduct={handleAddCatalogueProduct}
+        onRemoveProduct={handleRemoveCatalogueProduct}
+        onUpdateItem={handleUpdateCatalogueItem}
+        onSave={handleSaveShareCatalogue}
+        onCancel={resetCatalogueBuilder}
+        busy={catalogueBusy}
+        error={catalogueError}
       />
     </div>
   );

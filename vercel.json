@@ -19,6 +19,14 @@
     {
       "source": "/product/:path*",
       "destination": "/"
+    },
+    {
+      "source": "/catalogue/:path*",
+      "destination": "/"
+    },
+    {
+      "source": "/catalog/:path*",
+      "destination": "/"
     }
   ]
 }
