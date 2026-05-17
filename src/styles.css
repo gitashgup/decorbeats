@@ -120,6 +120,19 @@
   width: min(980px, calc(100vw - 1rem));
 }
 
+.catalogue-modal .screen-header {
+  padding-bottom: 0.75rem;
+}
+
+.catalogue-modal .screen-header h1 {
+  font-size: clamp(2rem, 8vw, 3.5rem);
+}
+
+.catalogue-modal .inquiry-modal-body {
+  display: grid;
+  gap: 1rem;
+}
+
 .catalogue-builder-grid,
 .catalogue-item-fields {
   grid-template-columns: 1fr;
@@ -131,6 +144,59 @@
   padding: 1rem;
   border-radius: 28px;
   background: rgba(245, 237, 227, 0.5);
+}
+
+.compact-copy {
+  margin-top: 0.25rem;
+  font-size: 0.92rem;
+}
+
+.catalogue-product-picker {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.catalogue-picker-count {
+  color: rgba(44, 24, 16, 0.56);
+  font-size: 0.84rem;
+}
+
+.catalogue-picker-results {
+  max-height: min(44vh, 26rem);
+  overflow-y: auto;
+  padding-right: 0.15rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.catalogue-picker-item {
+  align-items: center;
+}
+
+.catalogue-picker-item.selected {
+  border-color: rgba(139, 74, 42, 0.35);
+  background: rgba(139, 74, 42, 0.08);
+}
+
+.catalogue-picker-price {
+  display: grid;
+  gap: 0.15rem;
+  justify-items: end;
+  color: #8b4a2a;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.catalogue-picker-price small {
+  color: rgba(44, 24, 16, 0.48);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.selected-catalogue-head {
+  margin-top: 0.35rem;
 }
 
 .catalogue-item-editor-list {
@@ -145,8 +211,137 @@
   background: rgba(255, 252, 247, 0.9);
 }
 
+.catalogue-item-editor-card .sale-item-head {
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.catalogue-item-editor-card .sale-item-head strong {
+  display: block;
+  line-height: 1.15;
+}
+
+.catalogue-item-editor-card .detail-cancel-link {
+  flex: 0 0 auto;
+}
+
 .catalogue-item-fields label {
   font-size: 0.82rem;
+}
+
+.catalogue-item-fields input,
+.catalogue-item-fields select,
+.catalogue-item-fields .rupee-field {
+  min-height: 2.9rem;
+}
+
+@media (max-width: 767px) {
+  .catalogue-modal {
+    width: 100vw;
+    min-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .catalogue-modal .screen-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .catalogue-modal .screen-header .brand-card {
+    display: none;
+  }
+
+  .catalogue-modal .screen-header h1 {
+    font-size: 2rem;
+    line-height: 0.95;
+  }
+
+  .catalogue-modal .screen-header p {
+    font-size: 1rem;
+    line-height: 1.35;
+  }
+
+  .catalogue-modal .screen-header .ghost-button {
+    min-height: 2.75rem;
+    padding: 0 1rem;
+  }
+
+  .catalogue-modal .inquiry-modal-body {
+    padding: 0.85rem 1rem calc(6rem + env(safe-area-inset-bottom));
+  }
+
+  .catalogue-builder-grid {
+    gap: 0.75rem;
+  }
+
+  .catalogue-builder-grid label,
+  .catalogue-item-fields label {
+    gap: 0.35rem;
+    font-size: 0.82rem;
+  }
+
+  .catalogue-builder-grid input,
+  .catalogue-builder-grid textarea,
+  .catalogue-builder-grid select,
+  .catalogue-builder-grid .rupee-field {
+    min-height: 3.15rem;
+    border-radius: 18px;
+    font-size: 1rem;
+  }
+
+  .catalogue-picker-panel {
+    padding: 0.8rem;
+    border-radius: 24px;
+  }
+
+  .catalogue-picker-results {
+    max-height: 18rem;
+  }
+
+  .catalogue-picker-item {
+    padding: 0.75rem;
+    border-radius: 18px;
+  }
+
+  .catalogue-picker-item strong {
+    font-size: 0.96rem;
+    line-height: 1.15;
+  }
+
+  .catalogue-picker-item small {
+    line-height: 1.25;
+  }
+
+  .catalogue-picker-price {
+    font-size: 0.88rem;
+  }
+
+  .catalogue-item-editor-card {
+    padding: 0.85rem;
+    border-radius: 22px;
+  }
+
+  .catalogue-item-fields {
+    gap: 0.7rem;
+  }
+
+  .catalogue-item-fields input,
+  .catalogue-item-fields select,
+  .catalogue-item-fields .rupee-field {
+    border-radius: 17px;
+    font-size: 0.98rem;
+  }
+
+  .catalogue-modal .product-submit-button {
+    position: sticky;
+    bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    z-index: 5;
+    min-height: 3.6rem;
+    box-shadow: 0 18px 36px rgba(83, 45, 24, 0.24);
+  }
 }
 
 @media (min-width: 768px) {

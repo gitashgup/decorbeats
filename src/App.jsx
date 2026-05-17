@@ -1964,13 +1964,19 @@ function CatalogueBuilderModal({
     return null;
   }
 
+  const selectedSkus = new Set(draft.items.map((item) => item.product_sku).filter(Boolean));
   const searchableProducts = products
     .filter((product) => !product.archivedAt)
     .filter((product) => {
       const haystack = [product.name, product.sku, product.category, product.material].join(" ").toLowerCase();
       return haystack.includes(productSearch.toLowerCase());
     })
-    .slice(0, 16);
+    .sort((first, second) => {
+      if (selectedSkus.has(first.sku) !== selectedSkus.has(second.sku)) {
+        return selectedSkus.has(first.sku) ? 1 : -1;
+      }
+      return Number(second.quantity || 0) - Number(first.quantity || 0);
+    });
 
   return (
     <div className="inquiry-modal-overlay catalogue-modal-overlay">
@@ -2027,36 +2033,59 @@ function CatalogueBuilderModal({
             <div className="section-head">
               <div>
                 <p className="eyebrow">Products</p>
-                <h3>Selected items</h3>
+                <h3>Choose products</h3>
+                <p className="support-copy compact-copy">
+                  {draft.items.length ? `${draft.items.length} selected. Tap a product again to add one more.` : "Search or scroll, then tap products to add them."}
+                </p>
               </div>
-              <button type="button" className="ghost-button" onClick={() => setPickerOpen((current) => !current)}>
-                Add Product
-              </button>
             </div>
-            {pickerOpen ? (
-              <div className="sale-picker">
-                <input
-                  className="search-input"
-                  type="search"
-                  placeholder="Search product, SKU, category"
-                  value={productSearch}
-                  onChange={(event) => setProductSearch(event.target.value)}
-                />
-                <div className="sale-picker-results">
-                  {searchableProducts.map((product) => (
-                    <button key={product.id} type="button" className="sale-picker-item" onClick={() => onAddProduct(product)}>
-                      <span>
-                        <strong>{product.name}</strong>
-                        <small>
-                          {product.sku} · {product.quantity} in stock
-                        </small>
-                      </span>
-                      <small>{product.pricing.mrp ? formatCurrency(product.pricing.mrp) : "Price not set"}</small>
-                    </button>
-                  ))}
-                </div>
+            <div className="sale-picker catalogue-product-picker">
+              <input
+                className="search-input"
+                type="search"
+                placeholder="Search all products by name, SKU or category"
+                value={productSearch}
+                onChange={(event) => setProductSearch(event.target.value)}
+              />
+              <div className="catalogue-picker-count">
+                Showing {searchableProducts.length} product{searchableProducts.length === 1 ? "" : "s"}
               </div>
-            ) : null}
+              <div className="sale-picker-results catalogue-picker-results">
+                {searchableProducts.length ? (
+                  searchableProducts.map((product) => {
+                    const selected = selectedSkus.has(product.sku);
+                    return (
+                      <button
+                        key={product.id}
+                        type="button"
+                        className={`sale-picker-item catalogue-picker-item ${selected ? "selected" : ""}`}
+                        onClick={() => onAddProduct(product)}
+                      >
+                        <span>
+                          <strong>{product.name}</strong>
+                          <small>
+                            {product.sku} · {product.category || "No category"} · {product.quantity} in stock
+                          </small>
+                        </span>
+                        <span className="catalogue-picker-price">
+                          {product.pricing.mrp ? formatCurrency(product.pricing.mrp) : "Price not set"}
+                          <small>{selected ? "Selected" : "Tap to add"}</small>
+                        </span>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="support-copy">No products match this search.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="section-head selected-catalogue-head">
+              <div>
+                <p className="eyebrow">Customer catalogue</p>
+                <h3>Review selected items</h3>
+              </div>
+            </div>
 
             <div className="catalogue-item-editor-list">
               {draft.items.length ? (
@@ -6770,6 +6799,8 @@ export default function App() {
       setCatalogueError(
         message.includes("share_catalogues") || message.includes("schema cache")
           ? "Catalogue tables are missing. Run the catalogue SQL migration in Supabase, then try again."
+          : message.includes("Load failed") || error?.name === "TypeError"
+            ? "Could not connect to Supabase to save this catalogue. Please confirm the catalogue SQL migration and RLS policies were run, then try again."
           : message
       );
     } finally {
