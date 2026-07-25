@@ -89,10 +89,10 @@ const customerBeatStories = [
 const defaultHeroSlides = [
   {
     id: "default-credibility",
-    eyebrow: "Decorbeats Trust",
-    title: "See the craft|gift with confidence.",
-    body: "Bengaluru experience center, GST presence across KA, TN & MH, and bulk gifting support from 50 to 400+ units.",
-    ctaLabel: "Enquire on WhatsApp",
+    eyebrow: "Objects with soul · Made in India",
+    title: "The art of|meaningful gifting.",
+    body: "Sculptural brass and artisanal décor, chosen for homes, celebrations and gestures that deserve to be remembered.",
+    ctaLabel: "Explore the collection",
     ctaAction: "whatsapp",
     contentPosition: "left",
     imageUrl: "/assets/images/slider-credibility-studio.svg",
@@ -101,10 +101,10 @@ const defaultHeroSlides = [
   },
   {
     id: "default-hero",
-    eyebrow: "Decorbeats",
-    title: "Handcrafted for every celebration.",
-    body: "Brass, metal & artisanal decor - made in India, gifted with rhythm.",
-    ctaLabel: "Shop the Collection",
+    eyebrow: "A modern Indian atelier",
+    title: "Crafted to become|part of your story.",
+    body: "Heirloom-inspired objects in brass and metal, hand-finished in India and curated for contemporary living.",
+    ctaLabel: "Discover Decorbeats",
     ctaAction: "collection",
     contentPosition: "left",
     imageUrl: "",
@@ -3625,8 +3625,8 @@ function CustomerBeatStories() {
   return (
     <section className="customer-beat-stories desktop-reveal" aria-label="The Decorbeats rhythm">
       <div className="customer-beat-intro">
-        <p className="eyebrow">The Decorbeats rhythm</p>
-        <h2>Every gift has a beat.</h2>
+        <p className="eyebrow">Our point of view</p>
+        <h2>Beauty lives in the details.</h2>
       </div>
       <div className="customer-beat-list">
         {customerBeatStories.map((story) => (
@@ -3741,11 +3741,11 @@ function EditorialSection() {
         </div>
       </div>
       <div className="editorial-copy">
-        <p className="eyebrow">Decorbeats Studio</p>
-        <h2>Gifting, reimagined.</h2>
-        <p>Thoughtfully crafted brass, metal and artisanal decor pieces for celebrations, events and elevated gifting.</p>
-        <p>Designed to feel personal, finished by hand, and ready for meaningful moments across homes and occasions.</p>
-        <p>From intimate gifting to large-format corporate orders, each piece is made to carry warmth and story.</p>
+        <p className="eyebrow">The Decorbeats edit</p>
+        <h2>Objects that make a room—and a moment.</h2>
+        <p>We curate expressive brass, metal and artisanal pieces that bring warmth, ritual and character into everyday life.</p>
+        <p>Each object is selected for its form, finish and ability to feel personal—from a single thoughtful gift to a beautifully coordinated celebration.</p>
+        <p>For corporate and occasion gifting, our studio helps shape collections that feel considered, memorable and distinctly yours.</p>
         <a
           className="customer-whatsapp-button editorial-whatsapp"
           href={getBulkWhatsAppUrl()}
