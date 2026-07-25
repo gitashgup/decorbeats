@@ -933,6 +933,25 @@ function safeText(value, fallback = "") {
   return String(value ?? "").trim() || fallback;
 }
 
+const productNameCorrections = new Map([
+  ["braas shiva head heavy", "Brass Shiva Head Heavy"],
+  ["brass bowl spoon in gift bax set of 2", "Brass Bowl & Spoon Gift Box — Set of 2"],
+  ["coffe cup set", "Coffee Cup Set"],
+  ["coffe cup set premium", "Coffee Cup Set Premium"],
+  ["brass gamesha 4 inch", "Brass Ganesha — 4 inch"],
+  ["brass urli diya design", "Brass Urli Diya Design"]
+]);
+
+function normalizeProductName(value) {
+  const name = safeText(value);
+  return productNameCorrections.get(name.toLowerCase()) ?? name;
+}
+
+function normalizeProductCategory(value) {
+  const category = safeText(value, "Uncategorized");
+  return category.toLowerCase() === "urli" ? "Urli" : category;
+}
+
 function normalizeUrl(value) {
   const url = safeText(value);
   if (!url || url === "[URL]") {
@@ -1185,8 +1204,8 @@ function toProduct(raw, index = 0) {
     id: raw.id ?? index + 1,
     slug: raw.slug ?? slugify(`${raw.sku}-${raw.name}`),
     sku: raw.sku ?? "",
-    name: raw.name ?? "",
-    category: raw.category ?? "Uncategorized",
+    name: normalizeProductName(raw.name),
+    category: normalizeProductCategory(raw.category),
     material: raw.material ?? "Unspecified",
     quantity,
     stockStatus: quantity <= 0 ? "Out of stock" : quantity <= 10 ? "Low stock" : "In stock",
@@ -3779,7 +3798,9 @@ function CustomerProductCard({ product, onSelect }) {
       <div className="customer-product-copy">
         <h3>{product.name}</h3>
         <p className="customer-product-category">{product.category}</p>
-        {hasDisplayValue(product.pricing.mrp) ? <p className="customer-price">{formatCurrency(product.pricing.mrp)}</p> : null}
+        <p className="customer-price">
+          {hasDisplayValue(product.pricing.mrp) ? formatCurrency(product.pricing.mrp) : "Price on request"}
+        </p>
       </div>
     </button>
   );
@@ -3895,7 +3916,9 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
             {isNewProduct ? <span className="customer-sheet-new-badge">New Arrival</span> : null}
             {!isNewProduct && product.marketingTag ? <span className="customer-sheet-new-badge">{product.marketingTag}</span> : null}
           </div>
-          {hasDisplayValue(product.pricing.mrp) ? <p className="customer-sheet-price">{formatCurrency(product.pricing.mrp)}</p> : null}
+          <p className="customer-sheet-price">
+            {hasDisplayValue(product.pricing.mrp) ? formatCurrency(product.pricing.mrp) : "Price on request"}
+          </p>
           {occasionLine ? <p className="customer-sheet-occasion">{occasionLine}</p> : null}
           <div className="customer-sheet-meta">
             <span>{product.category}</span>
@@ -4201,7 +4224,7 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
       </div>
       <div className="customer-footer-divider" aria-hidden="true" />
       <div className="customer-footer-bottom">
-        <span>© 2025 Decorbeats.</span>
+        <span>© {new Date().getFullYear()} Decorbeats.</span>
         <span className="customer-footer-bottom-tagline">BRASS EXPERTS FROM PITAL NAGRI</span>
         <span>Moradabad, India</span>
       </div>
