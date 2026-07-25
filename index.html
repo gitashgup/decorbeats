@@ -26,19 +26,33 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="shortcut icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
+    <link rel="preconnect" href="https://ckmujewooiwplfhjcjdz.supabase.co" crossorigin />
+    <link rel="preconnect" href="https://nktvlahwvdcyuj4w.public.blob.vercel-storage.com" crossorigin />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <!-- Google tag (gtag.js) for Google Ads conversion tracking -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18084439764"></script>
+    <!-- Load Google Ads after the first render so it never competes with storefront content. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
       gtag('config', 'AW-18084439764');
+      function loadGoogleAds() {
+        if (document.querySelector('script[data-decorbeats-google-ads]')) return;
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=AW-18084439764';
+        script.dataset.decorbeatsGoogleAds = 'true';
+        document.head.appendChild(script);
+      }
+      if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(loadGoogleAds, { timeout: 4000 });
+      } else {
+        window.setTimeout(loadGoogleAds, 3000);
+      }
     </script>
   </head>
   <body>

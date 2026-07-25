@@ -960,6 +960,25 @@ function normalizeUrl(value) {
   return url;
 }
 
+function getOptimizedImageUrl(value, width = 720, quality = 72) {
+  const url = normalizeUrl(value);
+  if (!url || !url.includes(".supabase.co/storage/v1/object/public/")) {
+    return url;
+  }
+
+  try {
+    const optimizedUrl = new URL(
+      url.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/")
+    );
+    optimizedUrl.searchParams.set("width", String(width));
+    optimizedUrl.searchParams.set("quality", String(quality));
+    optimizedUrl.searchParams.set("resize", "cover");
+    return optimizedUrl.toString();
+  } catch (_error) {
+    return url;
+  }
+}
+
 function normalizeImageUrls(value) {
   if (Array.isArray(value)) {
     return value.map(normalizeUrl).filter(Boolean);
@@ -3599,7 +3618,17 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
         </div>
       </div>
       <div className="customer-hero-media" aria-hidden="true">
-        {slideImage ? <img src={slideImage} alt={activeSlide.title || featuredProduct?.name || "Decorbeats collection"} loading="lazy" /> : null}
+        {slideImage ? (
+          <img
+            src={getOptimizedImageUrl(slideImage, 1200, 78)}
+            alt={activeSlide.title || featuredProduct?.name || "Decorbeats collection"}
+            width="1200"
+            height="1400"
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
+          />
+        ) : null}
       </div>
       {preparedSlides.length > 1 ? (
         <div className="customer-hero-dots" aria-label="Hero slides">
@@ -3684,7 +3713,16 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
               onShop();
             }}
           >
-            {occasion.image ? <img src={occasion.image} alt="" loading="lazy" /> : null}
+            {occasion.image ? (
+              <img
+                src={getOptimizedImageUrl(occasion.image, 520, 72)}
+                alt=""
+                width="520"
+                height="700"
+                loading="lazy"
+                decoding="async"
+              />
+            ) : null}
             <em>{occasion.beat}</em>
             <span>{occasion.label}</span>
             <small>{occasion.note}</small>
@@ -3724,7 +3762,14 @@ function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
             onShop();
           }}
         >
-          <img src={tile.image} alt={tile.label} loading="lazy" />
+          <img
+            src={getOptimizedImageUrl(tile.image, 520, 72)}
+            alt={tile.label}
+            width="520"
+            height="640"
+            loading="lazy"
+            decoding="async"
+          />
           <span>{tile.label}</span>
         </button>
       ))}
@@ -3787,7 +3832,15 @@ function CustomerProductCard({ product, onSelect }) {
         {isNewProduct ? <span className="customer-new-badge">NEW</span> : null}
         {product.marketingTag ? <span className="customer-marketing-tag">{product.marketingTag}</span> : null}
         {primaryImage ? (
-          <img className="customer-product-image" src={primaryImage} alt={product.name} loading="lazy" />
+          <img
+            className="customer-product-image"
+            src={getOptimizedImageUrl(primaryImage, 640, 72)}
+            alt={product.name}
+            width="640"
+            height="780"
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <div className="customer-product-image customer-product-fallback">
             <img src={brandLogo} alt="Decorbeats" className="customer-placeholder-logo" loading="lazy" />
@@ -4402,7 +4455,15 @@ function CustomerImageCarousel({ product }) {
         <div className="customer-carousel-track" style={{ transform: `translateX(-${activeIndex * 100}%)` }}>
           {images.map((url, index) => (
             <div key={`${url}-${index}`} className="customer-carousel-slide">
-              <img className="customer-sheet-image" src={url} alt={`${product.name} ${index + 1}`} loading="lazy" />
+              <img
+                className="customer-sheet-image"
+                src={getOptimizedImageUrl(url, 1000, 78)}
+                alt={`${product.name} ${index + 1}`}
+                width="1000"
+                height="1000"
+                loading={index === activeIndex ? "eager" : "lazy"}
+                decoding="async"
+              />
             </div>
           ))}
         </div>
@@ -4420,7 +4481,14 @@ function CustomerImageCarousel({ product }) {
                 className={index === activeIndex ? "customer-carousel-thumb active" : "customer-carousel-thumb"}
                 onClick={() => setActiveIndex(index)}
               >
-                <img src={url} alt={`${product.name} thumbnail ${index + 1}`} loading="lazy" />
+                <img
+                  src={getOptimizedImageUrl(url, 180, 64)}
+                  alt={`${product.name} thumbnail ${index + 1}`}
+                  width="180"
+                  height="180"
+                  loading="lazy"
+                  decoding="async"
+                />
               </button>
             ))}
           </div>
@@ -5170,6 +5238,7 @@ export default function App() {
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
+  const [visibleCustomerProductCount, setVisibleCustomerProductCount] = useState(18);
   const [inquiryStatusFilter, setInquiryStatusFilter] = useState("all");
   const [statusMessage, setStatusMessage] = useState(
     isSupabaseConfigured
@@ -5310,45 +5379,6 @@ export default function App() {
       }
     }
 
-    async function loadInquiries() {
-      const { data, error } = await supabase
-        .from("inquiries")
-        .select("*, inquiry_items(*)")
-        .order("created_at", { ascending: false });
-
-      if (cancelled || error) {
-        return;
-      }
-
-      setInquiries((data ?? []).map(toInquiry));
-    }
-
-    async function loadSales() {
-      const { data, error } = await supabase
-        .from("sales")
-        .select("*, sale_items(*)")
-        .order("created_at", { ascending: false });
-
-      if (cancelled || error) {
-        return;
-      }
-
-      setSales((data ?? []).map(toSale));
-    }
-
-    async function loadPurchases() {
-      const { data, error } = await supabase
-        .from("purchases")
-        .select("*, purchase_items(*)")
-        .order("created_at", { ascending: false });
-
-      if (cancelled || error) {
-        return;
-      }
-
-      setPurchases((data ?? []).map(toPurchase));
-    }
-
     async function loadHeroSlides() {
       const { data, error } = await supabase
         .from("hero_slides")
@@ -5368,30 +5398,8 @@ export default function App() {
       setHeroSlides((data ?? []).map(toHeroSlide).filter((slide) => slide.active));
     }
 
-    async function loadShareCatalogues() {
-      const { data, error } = await supabase
-        .from("share_catalogues")
-        .select("*, share_catalogue_items(*)")
-        .order("created_at", { ascending: false });
-
-      if (cancelled) {
-        return;
-      }
-
-      if (error) {
-        console.info("Share catalogues are not configured yet:", error.message);
-        return;
-      }
-
-      setShareCatalogues((data ?? []).map(toShareCatalogue));
-    }
-
     loadProducts();
-    loadInquiries();
-    loadSales();
-    loadPurchases();
     loadHeroSlides();
-    loadShareCatalogues();
 
     return () => {
       cancelled = true;
@@ -5402,6 +5410,48 @@ export default function App() {
   const userEmail = session?.user?.email ?? "";
   const canManage = Boolean(userEmail) || !isSupabaseConfigured;
   const adminActive = Boolean(userEmail) || !isSupabaseConfigured;
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !session?.user?.id) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function loadAdminData() {
+      const [inquiryResult, salesResult, purchaseResult, catalogueResult] = await Promise.all([
+        supabase.from("inquiries").select("*, inquiry_items(*)").order("created_at", { ascending: false }),
+        supabase.from("sales").select("*, sale_items(*)").order("created_at", { ascending: false }),
+        supabase.from("purchases").select("*, purchase_items(*)").order("created_at", { ascending: false }),
+        supabase
+          .from("share_catalogues")
+          .select("*, share_catalogue_items(*)")
+          .order("created_at", { ascending: false })
+      ]);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (!inquiryResult.error) {
+        setInquiries((inquiryResult.data ?? []).map(toInquiry));
+      }
+      if (!salesResult.error) {
+        setSales((salesResult.data ?? []).map(toSale));
+      }
+      if (!purchaseResult.error) {
+        setPurchases((purchaseResult.data ?? []).map(toPurchase));
+      }
+      if (!catalogueResult.error) {
+        setShareCatalogues((catalogueResult.data ?? []).map(toShareCatalogue));
+      }
+    }
+
+    loadAdminData();
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (adminActive && routeIntent.type !== "catalogue") {
@@ -5560,6 +5610,15 @@ export default function App() {
       return left.name.localeCompare(right.name);
     });
   }, [categoryFilter, currentCatalog, customerFacing, search]);
+
+  useEffect(() => {
+    setVisibleCustomerProductCount(18);
+  }, [categoryFilter, search]);
+
+  const visibleCustomerProducts = useMemo(
+    () => filteredProducts.slice(0, visibleCustomerProductCount),
+    [filteredProducts, visibleCustomerProductCount]
+  );
 
   const cartLines = useMemo(() => {
     return cartItems
@@ -8247,10 +8306,24 @@ export default function App() {
           />
           <EditorialSection />
           <section className="customer-product-grid">
-            {filteredProducts.map((product) => (
+            {visibleCustomerProducts.map((product) => (
               <CustomerProductCard key={product.id} product={product} onSelect={handleProductSelect} />
             ))}
           </section>
+          {visibleCustomerProductCount < filteredProducts.length ? (
+            <div className="customer-load-more-wrap">
+              <button
+                type="button"
+                className="customer-load-more"
+                onClick={() => setVisibleCustomerProductCount((current) => current + 18)}
+              >
+                Show more pieces
+              </button>
+              <span>
+                Showing {visibleCustomerProducts.length} of {filteredProducts.length}
+              </span>
+            </div>
+          ) : null}
         </section>
         <CustomerFooter onAdmin={handleAdminEntry} showAdminLink={!adminActive} />
       </main>

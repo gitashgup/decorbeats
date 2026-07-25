@@ -6,11 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "migrate:images:supabase:dry-run": "node --env-file-if-exists=.env scripts/migrate-vercel-blob-images-to-supabase.mjs",
+    "migrate:images:supabase": "node --env-file-if-exists=.env scripts/migrate-vercel-blob-images-to-supabase.mjs --apply"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.1",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
     "razorpay": "^2.9.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
