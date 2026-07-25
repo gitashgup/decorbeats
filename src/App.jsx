@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { track } from "@vercel/analytics";
-import { products as seedProducts } from "./data/products";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 const brandLogo = "/assets/brand/decorbeats-logo.svg";
@@ -977,6 +976,17 @@ function getOptimizedImageUrl(value, width = 720, quality = 72) {
   } catch (_error) {
     return url;
   }
+}
+
+function getOptimizedImageSrcSet(value, widths, quality = 72) {
+  const url = normalizeUrl(value);
+  if (!url || !url.includes(".supabase.co/storage/v1/object/public/")) {
+    return undefined;
+  }
+
+  return widths
+    .map((width) => `${getOptimizedImageUrl(url, width, quality)} ${width}w`)
+    .join(", ");
 }
 
 function normalizeImageUrls(value) {
@@ -3620,7 +3630,9 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
       <div className="customer-hero-media" aria-hidden="true">
         {slideImage ? (
           <img
-            src={getOptimizedImageUrl(slideImage, 1200, 78)}
+            src={getOptimizedImageUrl(slideImage, 1200, 72)}
+            srcSet={getOptimizedImageSrcSet(slideImage, [480, 768, 1200], 72)}
+            sizes="(max-width: 767px) 100vw, 50vw"
             alt={activeSlide.title || featuredProduct?.name || "Decorbeats collection"}
             width="1200"
             height="1400"
@@ -3716,6 +3728,8 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
             {occasion.image ? (
               <img
                 src={getOptimizedImageUrl(occasion.image, 520, 72)}
+                srcSet={getOptimizedImageSrcSet(occasion.image, [320, 520, 720], 72)}
+                sizes="(max-width: 767px) 76vw, 25vw"
                 alt=""
                 width="520"
                 height="700"
@@ -3764,6 +3778,8 @@ function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
         >
           <img
             src={getOptimizedImageUrl(tile.image, 520, 72)}
+            srcSet={getOptimizedImageSrcSet(tile.image, [320, 520, 720], 72)}
+            sizes="(max-width: 767px) 50vw, 25vw"
             alt={tile.label}
             width="520"
             height="640"
@@ -3835,6 +3851,8 @@ function CustomerProductCard({ product, onSelect }) {
           <img
             className="customer-product-image"
             src={getOptimizedImageUrl(primaryImage, 640, 72)}
+            srcSet={getOptimizedImageSrcSet(primaryImage, [320, 480, 640], 72)}
+            sizes="(max-width: 767px) 50vw, (max-width: 1199px) 33vw, 25vw"
             alt={product.name}
             width="640"
             height="780"
@@ -3856,6 +3874,20 @@ function CustomerProductCard({ product, onSelect }) {
         </p>
       </div>
     </button>
+  );
+}
+
+function CustomerProductSkeletonGrid() {
+  return (
+    <div className="customer-product-skeleton-grid" aria-hidden="true">
+      {Array.from({ length: 6 }, (_, index) => (
+        <div className="customer-product-skeleton" key={index}>
+          <div className="customer-product-skeleton-image" />
+          <div className="customer-product-skeleton-line" />
+          <div className="customer-product-skeleton-line short" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -4457,7 +4489,9 @@ function CustomerImageCarousel({ product }) {
             <div key={`${url}-${index}`} className="customer-carousel-slide">
               <img
                 className="customer-sheet-image"
-                src={getOptimizedImageUrl(url, 1000, 78)}
+                src={getOptimizedImageUrl(url, 1000, 74)}
+                srcSet={getOptimizedImageSrcSet(url, [480, 720, 1000], 74)}
+                sizes="(max-width: 767px) 100vw, 50vw"
                 alt={`${product.name} ${index + 1}`}
                 width="1000"
                 height="1000"
@@ -5226,7 +5260,8 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
 }
 
 export default function App() {
-  const [products, setProducts] = useState(seedProducts.map(toProduct));
+  const [products, setProducts] = useState([]);
+  const [storefrontLoading, setStorefrontLoading] = useState(isSupabaseConfigured);
   const [inquiries, setInquiries] = useState([]);
   const [sales, setSales] = useState([]);
   const [purchases, setPurchases] = useState([]);
@@ -5330,6 +5365,23 @@ export default function App() {
     typeof window !== "undefined" && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
 
   useEffect(() => {
+    if (isSupabaseConfigured) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    import("./data/products").then(({ products: localProducts }) => {
+      if (!cancelled) {
+        setProducts(localProducts.map(toProduct));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isSupabaseConfigured) {
       return;
     }
@@ -5356,50 +5408,61 @@ export default function App() {
       setAuthReady(true);
     });
 
-    async function loadProducts() {
-      const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false });
+    async function loadStorefront() {
+      let productData;
+      let heroData;
+
+      try {
+        const response = await fetch("/api/catalog", {
+          headers: { Accept: "application/json" }
+        });
+        if (!response.ok) {
+          throw new Error("Catalogue cache is unavailable");
+        }
+        const payload = await response.json();
+        productData = payload.products;
+        heroData = payload.heroSlides;
+      } catch {
+        const [productResult, heroResult] = await Promise.all([
+          supabase.from("products").select("*").order("created_at", { ascending: false }),
+          supabase
+            .from("hero_slides")
+            .select("*")
+            .eq("is_active", true)
+            .order("sort_order", { ascending: true })
+        ]);
+
+        if (productResult.error) {
+          throw productResult.error;
+        }
+        productData = productResult.data;
+        heroData = heroResult.error ? [] : heroResult.data;
+      }
+
       if (cancelled) {
         return;
       }
-      if (error) {
+
+      const nextProducts = (productData ?? []).map(toProduct);
+      setProducts(nextProducts);
+      setSelectedId(null);
+      setLastSyncAt(new Date().toISOString());
+      setHeroSlides((heroData ?? []).map(toHeroSlide).filter((slide) => slide.active));
+      setStatusMessage(
+        nextProducts.length
+          ? `Loaded ${nextProducts.length} products from Supabase.`
+          : "Supabase is connected. Add products manually or import your CSV."
+      );
+      setStorefrontLoading(false);
+    }
+
+    loadStorefront().catch((error) => {
+      if (!cancelled) {
+        console.error("Could not load storefront:", error);
         setStatusMessage("Supabase is configured, but product data could not be loaded.");
-        return;
+        setStorefrontLoading(false);
       }
-      if (data?.length) {
-        const nextProducts = data.map(toProduct);
-        setProducts(nextProducts);
-        setSelectedId(null);
-        setLastSyncAt(new Date().toISOString());
-        setStatusMessage(`Loaded ${nextProducts.length} products from Supabase.`);
-      } else {
-        setProducts([]);
-        setSelectedId(null);
-        setLastSyncAt(new Date().toISOString());
-        setStatusMessage("Supabase is connected. Add products manually or import your CSV.");
-      }
-    }
-
-    async function loadHeroSlides() {
-      const { data, error } = await supabase
-        .from("hero_slides")
-        .select("*")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-
-      if (cancelled) {
-        return;
-      }
-
-      if (error) {
-        console.info("Hero slides are not configured yet:", error.message);
-        return;
-      }
-
-      setHeroSlides((data ?? []).map(toHeroSlide).filter((slide) => slide.active));
-    }
-
-    loadProducts();
-    loadHeroSlides();
+    });
 
     return () => {
       cancelled = true;
@@ -5419,7 +5482,8 @@ export default function App() {
     let cancelled = false;
 
     async function loadAdminData() {
-      const [inquiryResult, salesResult, purchaseResult, catalogueResult] = await Promise.all([
+      const [productResult, inquiryResult, salesResult, purchaseResult, catalogueResult] = await Promise.all([
+        supabase.from("products").select("*").order("created_at", { ascending: false }),
         supabase.from("inquiries").select("*, inquiry_items(*)").order("created_at", { ascending: false }),
         supabase.from("sales").select("*, sale_items(*)").order("created_at", { ascending: false }),
         supabase.from("purchases").select("*, purchase_items(*)").order("created_at", { ascending: false }),
@@ -5433,6 +5497,9 @@ export default function App() {
         return;
       }
 
+      if (!productResult.error) {
+        setProducts((productResult.data ?? []).map(toProduct));
+      }
       if (!inquiryResult.error) {
         setInquiries((inquiryResult.data ?? []).map(toInquiry));
       }
@@ -8210,7 +8277,7 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  if (!authReady) {
+  if (!authReady && publicScreen === "admin-auth") {
     return (
       <div className="app-shell">
         <div className="screen-shell">
@@ -8310,6 +8377,7 @@ export default function App() {
               <CustomerProductCard key={product.id} product={product} onSelect={handleProductSelect} />
             ))}
           </section>
+          {storefrontLoading ? <CustomerProductSkeletonGrid /> : null}
           {visibleCustomerProductCount < filteredProducts.length ? (
             <div className="customer-load-more-wrap">
               <button

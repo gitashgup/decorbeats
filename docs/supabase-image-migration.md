@@ -1,7 +1,13 @@
 # Supabase image migration
 
 The storefront now uses Supabase Image Transformations to request appropriately
-sized images. This reduces transfer size without changing the source catalogue.
+sized, responsive WebP images. This reduces transfer size without changing the
+source catalogue.
+
+The public storefront reads products and hero slides through `/api/catalog`.
+Vercel caches that response for 60 seconds and can serve stale data for up to
+five minutes while refreshing it. Checkout still re-reads current prices and
+availability from Supabase before creating a Razorpay order.
 
 ## Safe migration
 
