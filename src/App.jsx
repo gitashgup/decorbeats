@@ -3622,9 +3622,9 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
     ? slides
     : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: heroImage }));
   const activeSlide = preparedSlides[activeIndex] ?? preparedSlides[0] ?? defaultHeroSlides[0];
-  const slideImage = activeSlide.imageUrl || heroImage;
+  const slideImage = activeSlide.imageUrl || heroImage || defaultHeroSlides[0].imageUrl;
   const titleLines = getHeroTitleLines(activeSlide.title);
-  const isPosterSlide = Boolean(activeSlide.imageUrl);
+  const isPosterSlide = Boolean(slideImage);
   const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}${isPosterSlide ? " hero-poster-slide" : ""}`;
 
   useEffect(() => {
