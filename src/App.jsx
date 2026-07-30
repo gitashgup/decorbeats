@@ -88,13 +88,13 @@ const customerBeatStories = [
 const defaultHeroSlides = [
   {
     id: "default-credibility",
-    eyebrow: "Objects with soul · Made in India",
-    title: "The art of|meaningful gifting.",
-    body: "Sculptural brass and artisanal décor, chosen for homes, celebrations and gestures that deserve to be remembered.",
-    ctaLabel: "Explore the collection",
-    ctaAction: "whatsapp",
+    eyebrow: "The new heirlooms · Handcrafted in India",
+    title: "Objects of beauty.|Gifts with meaning.",
+    body: "Discover expressive brass and artisanal décor for contemporary homes, joyful gatherings and gestures worth remembering.",
+    ctaLabel: "Shop the collection",
+    ctaAction: "collection",
     contentPosition: "left",
-    imageUrl: "/assets/images/slider-credibility-studio.svg",
+    imageUrl: "/assets/images/decorbeats-atelier-campaign.jpg",
     active: true,
     sortOrder: 1
   },
@@ -1259,6 +1259,11 @@ function toProduct(raw, index = 0) {
 }
 
 function toHeroSlide(raw, index = 0) {
+  const rawImageUrl = normalizeUrl(raw.image_url ?? raw.imageUrl);
+  const imageUrl =
+    rawImageUrl === "/assets/images/slider-credibility-studio.svg"
+      ? "/assets/images/decorbeats-atelier-campaign.jpg"
+      : rawImageUrl;
   return {
     id: raw.id ?? `hero-slide-${index}`,
     eyebrow: safeText(raw.eyebrow, "Decorbeats"),
@@ -1267,7 +1272,7 @@ function toHeroSlide(raw, index = 0) {
     ctaLabel: safeText(raw.cta_label ?? raw.ctaLabel, "Shop the Collection"),
     ctaAction: safeText(raw.cta_action ?? raw.ctaAction, "collection"),
     contentPosition: safeText(raw.content_position ?? raw.contentPosition, "left"),
-    imageUrl: normalizeUrl(raw.image_url ?? raw.imageUrl),
+    imageUrl,
     active: raw.active ?? raw.is_active ?? true,
     sortOrder: Number(raw.sort_order ?? raw.sortOrder ?? index + 1),
     createdAt: raw.created_at ?? raw.createdAt ?? null
@@ -1813,7 +1818,7 @@ on hero_slides for all to authenticated using (true) with check (true);
 do $$
 begin
   if not exists (
-    select 1 from hero_slides where image_url = '/assets/images/slider-credibility-studio.svg'
+    select 1 from hero_slides where image_url = '/assets/images/decorbeats-atelier-campaign.jpg'
   ) then
     update hero_slides
     set sort_order = coalesce(sort_order, 1) + 1
@@ -1829,7 +1834,7 @@ begin
       'Enquire on WhatsApp',
       'whatsapp',
       'left',
-      '/assets/images/slider-credibility-studio.svg',
+      '/assets/images/decorbeats-atelier-campaign.jpg',
       1,
       true
     );
@@ -3504,6 +3509,55 @@ function AnnouncementBar() {
   );
 }
 
+function CustomerUtilityBar() {
+  return (
+    <div className="customer-utility-bar" aria-label="Store information">
+      <span>Handcrafted in Moradabad</span>
+      <div>
+        <span>Secure online checkout</span>
+        <span>Shipping across India</span>
+        <a href="tel:+919811133661">Customer care: +91 98111 33661</a>
+      </div>
+    </div>
+  );
+}
+
+function CustomerNavigation({ onSelectCategory, onShop }) {
+  const items = [
+    { label: "New Arrivals", category: "All" },
+    { label: "Brass Décor", category: "Decor" },
+    { label: "Diyas & Lamps", category: "Diya" },
+    { label: "Table & Serveware", category: "Bowl" },
+    { label: "Wall Décor", category: "Wall Decor" },
+    { label: "Gifting", category: "Box" }
+  ];
+
+  return (
+    <nav className="customer-primary-nav" aria-label="Shop collections">
+      {items.map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          onClick={() => {
+            onSelectCategory(item.category, "primary_navigation");
+            onShop();
+          }}
+        >
+          {item.label}
+        </button>
+      ))}
+      <a
+        href={getBulkWhatsAppUrl()}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => trackBulkWhatsAppClick("primary_navigation")}
+      >
+        Corporate Gifting
+      </a>
+    </nav>
+  );
+}
+
 function CartIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -3662,6 +3716,26 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
   );
 }
 
+function CustomerCommercePromise() {
+  const items = [
+    ["Original craft", "Hand-finished pieces from India’s brass city"],
+    ["Secure payments", "Protected checkout powered by Razorpay"],
+    ["Thoughtful delivery", "Carefully packed and shipped across India"],
+    ["Personal assistance", "Real help before and after your purchase"]
+  ];
+
+  return (
+    <section className="customer-commerce-promise" aria-label="Why shop with Decorbeats">
+      {items.map(([title, detail]) => (
+        <article key={title}>
+          <strong>{title}</strong>
+          <span>{detail}</span>
+        </article>
+      ))}
+    </section>
+  );
+}
+
 function CustomerBeatStories() {
   return (
     <section className="customer-beat-stories desktop-reveal" aria-label="The Decorbeats rhythm">
@@ -3711,8 +3785,8 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
   return (
     <section className="customer-occasion-rail" aria-label="Shop by occasion">
       <div className="customer-occasion-head">
-        <p className="eyebrow">Shop by need</p>
-        <h2>Find the right gift faster</h2>
+        <p className="eyebrow">Popular categories</p>
+        <h2>Begin with what moves you</h2>
       </div>
       <div className="customer-occasion-list">
         {occasions.map((occasion) => (
@@ -3797,9 +3871,14 @@ function EditorialSection() {
   return (
     <section className="editorial-section desktop-reveal">
       <div className="editorial-media">
-        <div className="editorial-placeholder" aria-hidden="true">
-          <img src={brandLogo} alt="" className="editorial-watermark" loading="lazy" />
-        </div>
+        <img
+          src="/assets/images/decorbeats-atelier-campaign.jpg"
+          alt="Handcrafted brass décor styled in a serene Indian interior"
+          width="1672"
+          height="941"
+          loading="lazy"
+          decoding="async"
+        />
       </div>
       <div className="editorial-copy">
         <p className="eyebrow">The Decorbeats edit</p>
@@ -3839,12 +3918,13 @@ function CustomerCategoryBar({ categories, categoryFilter, setCategoryFilter }) 
   );
 }
 
-function CustomerProductCard({ product, onSelect }) {
+function CustomerProductCard({ product, onSelect, onAddToCart, busy }) {
   const primaryImage = getPrimaryImage(product);
   const isNewProduct = isNewArrival(product.createdAt);
   return (
-    <button type="button" className="customer-product-card desktop-reveal" onClick={() => onSelect(product)}>
-      <div className="customer-product-image-wrap">
+    <article className="customer-product-card desktop-reveal">
+      <button type="button" className="customer-product-card-main" onClick={() => onSelect(product)}>
+        <div className="customer-product-image-wrap">
         {isNewProduct ? <span className="customer-new-badge">NEW</span> : null}
         {product.marketingTag ? <span className="customer-marketing-tag">{product.marketingTag}</span> : null}
         {primaryImage ? (
@@ -3864,16 +3944,31 @@ function CustomerProductCard({ product, onSelect }) {
             <img src={brandLogo} alt="Decorbeats" className="customer-placeholder-logo" loading="lazy" />
           </div>
         )}
-        <span className="customer-card-hover-text">View Details</span>
-      </div>
-      <div className="customer-product-copy">
-        <h3>{product.name}</h3>
-        <p className="customer-product-category">{product.category}</p>
-        <p className="customer-price">
-          {hasDisplayValue(product.pricing.mrp) ? formatCurrency(product.pricing.mrp) : "Price on request"}
-        </p>
-      </div>
-    </button>
+          <span className="customer-card-hover-text">View Details</span>
+        </div>
+        <div className="customer-product-copy">
+          <h3>{product.name}</h3>
+          <p className="customer-product-category">{product.category}</p>
+          <p className="customer-price">
+            {hasDisplayValue(product.pricing.mrp) ? formatCurrency(product.pricing.mrp) : "Price on request"}
+          </p>
+        </div>
+      </button>
+      {hasDisplayValue(product.pricing.mrp) ? (
+        <button
+          type="button"
+          className="customer-quick-add"
+          onClick={() => onAddToCart(product)}
+          disabled={busy}
+        >
+          {busy ? "Adding…" : "Add to bag"}
+        </button>
+      ) : (
+        <button type="button" className="customer-quick-add" onClick={() => onSelect(product)}>
+          Enquire
+        </button>
+      )}
+    </article>
   );
 }
 
@@ -8322,8 +8417,9 @@ export default function App() {
       </div>
     </div>
   ) : !adminActive || previewCustomerView ? (
-    <div className="customer-page">
+    <div className="customer-page customer-shell">
       <AnnouncementBar />
+      <CustomerUtilityBar />
       <CustomerHeader
         scrolled={customerHeaderElevated}
         tickerMessage={activeTicker.text}
@@ -8336,12 +8432,17 @@ export default function App() {
         cartCount={cartCount}
         onCartOpen={() => setCartOpen(true)}
       />
+      <CustomerNavigation
+        onSelectCategory={handleCustomerCategorySelect}
+        onShop={handleScrollToCollection}
+      />
       <main className="customer-main">
         {adminActive && previewCustomerView ? <CustomerPreviewBanner onBack={() => {
           setPreviewCustomerView(false);
           setActiveTab("products");
         }} /> : null}
         <CustomerHero slides={heroSlides} featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
+        <CustomerCommercePromise />
         <CustomerOccasionRail products={customerCatalog} onSelectCategory={handleCustomerCategorySelect} onShop={handleScrollToCollection} />
         <CustomerBeatStories />
         <TrustStrip productCount={stats.totalProducts} />
@@ -8374,7 +8475,13 @@ export default function App() {
           <EditorialSection />
           <section className="customer-product-grid">
             {visibleCustomerProducts.map((product) => (
-              <CustomerProductCard key={product.id} product={product} onSelect={handleProductSelect} />
+              <CustomerProductCard
+                key={product.id}
+                product={product}
+                onSelect={handleProductSelect}
+                onAddToCart={handleAddToCart}
+                busy={String(cartBusyProductId) === String(product.id)}
+              />
             ))}
           </section>
           {storefrontLoading ? <CustomerProductSkeletonGrid /> : null}
