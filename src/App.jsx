@@ -1260,17 +1260,30 @@ function toProduct(raw, index = 0) {
 
 function toHeroSlide(raw, index = 0) {
   const rawImageUrl = normalizeUrl(raw.image_url ?? raw.imageUrl);
+  const isLegacyLeadSlide =
+    rawImageUrl === "/assets/images/slider-credibility-studio.svg" ||
+    rawImageUrl.includes("/hero-slides/1778733194643.jpg");
   const imageUrl =
-    rawImageUrl === "/assets/images/slider-credibility-studio.svg"
+    isLegacyLeadSlide
       ? "/assets/images/decorbeats-atelier-campaign.jpg"
       : rawImageUrl;
   return {
     id: raw.id ?? `hero-slide-${index}`,
-    eyebrow: safeText(raw.eyebrow, "Decorbeats"),
-    title: safeText(raw.title, "Handcrafted for every celebration."),
-    body: safeText(raw.body, "Brass, metal & artisanal decor - made in India, gifted with rhythm."),
-    ctaLabel: safeText(raw.cta_label ?? raw.ctaLabel, "Shop the Collection"),
-    ctaAction: safeText(raw.cta_action ?? raw.ctaAction, "collection"),
+    eyebrow: isLegacyLeadSlide
+      ? defaultHeroSlides[0].eyebrow
+      : safeText(raw.eyebrow, "Decorbeats"),
+    title: isLegacyLeadSlide
+      ? defaultHeroSlides[0].title
+      : safeText(raw.title, "Handcrafted for every celebration."),
+    body: isLegacyLeadSlide
+      ? defaultHeroSlides[0].body
+      : safeText(raw.body, "Brass, metal & artisanal decor - made in India, gifted with rhythm."),
+    ctaLabel: isLegacyLeadSlide
+      ? defaultHeroSlides[0].ctaLabel
+      : safeText(raw.cta_label ?? raw.ctaLabel, "Shop the Collection"),
+    ctaAction: isLegacyLeadSlide
+      ? defaultHeroSlides[0].ctaAction
+      : safeText(raw.cta_action ?? raw.ctaAction, "collection"),
     contentPosition: safeText(raw.content_position ?? raw.contentPosition, "left"),
     imageUrl,
     active: raw.active ?? raw.is_active ?? true,
