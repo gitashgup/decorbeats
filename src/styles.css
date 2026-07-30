@@ -192,7 +192,7 @@ body:has(.customer-shell) {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: minmax(420px, 0.9fr) minmax(0, 1.35fr);
+  grid-template-columns: minmax(420px, 0.9fr) minmax(0, 1.35fr) !important;
   gap: 0;
   overflow: hidden;
   border: 0;
@@ -290,8 +290,12 @@ body:has(.customer-shell) {
 .customer-shell .customer-hero-media,
 .customer-shell .customer-hero.hero-poster-slide .customer-hero-media {
   position: relative;
+  order: 0;
+  grid-column: 2;
+  grid-row: 1;
   min-height: inherit;
   display: block;
+  aspect-ratio: auto;
   overflow: hidden;
   border-radius: 0;
   box-shadow: none;
@@ -624,7 +628,7 @@ body:has(.customer-shell) {
   .customer-shell .customer-hero,
   .customer-shell .customer-hero.hero-poster-slide {
     min-height: auto;
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .customer-shell .customer-hero-copy,
@@ -641,6 +645,8 @@ body:has(.customer-shell) {
 
   .customer-shell .customer-hero-media,
   .customer-shell .customer-hero.hero-poster-slide .customer-hero-media {
+    grid-column: 1;
+    grid-row: 2;
     min-height: min(72svh, 620px);
   }
 
