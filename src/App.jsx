@@ -959,7 +959,7 @@ function normalizeUrl(value) {
   return url;
 }
 
-function getOptimizedImageUrl(value, width = 720, quality = 72) {
+function getOptimizedImageUrl(value, width = 720, quality = 72, resize = "cover") {
   const url = normalizeUrl(value);
   if (!url || !url.includes(".supabase.co/storage/v1/object/public/")) {
     return url;
@@ -971,21 +971,21 @@ function getOptimizedImageUrl(value, width = 720, quality = 72) {
     );
     optimizedUrl.searchParams.set("width", String(width));
     optimizedUrl.searchParams.set("quality", String(quality));
-    optimizedUrl.searchParams.set("resize", "cover");
+    optimizedUrl.searchParams.set("resize", resize);
     return optimizedUrl.toString();
   } catch (_error) {
     return url;
   }
 }
 
-function getOptimizedImageSrcSet(value, widths, quality = 72) {
+function getOptimizedImageSrcSet(value, widths, quality = 72, resize = "cover") {
   const url = normalizeUrl(value);
   if (!url || !url.includes(".supabase.co/storage/v1/object/public/")) {
     return undefined;
   }
 
   return widths
-    .map((width) => `${getOptimizedImageUrl(url, width, quality)} ${width}w`)
+    .map((width) => `${getOptimizedImageUrl(url, width, quality, resize)} ${width}w`)
     .join(", ");
 }
 
@@ -3703,8 +3703,13 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
       <div className="customer-hero-media" aria-hidden="true">
         {slideImage ? (
           <img
-            src={getOptimizedImageUrl(slideImage, 1200, 72)}
-            srcSet={getOptimizedImageSrcSet(slideImage, [480, 768, 1200], 72)}
+            src={getOptimizedImageUrl(slideImage, 1200, 72, isPosterOnly ? "contain" : "cover")}
+            srcSet={getOptimizedImageSrcSet(
+              slideImage,
+              [480, 768, 1200],
+              72,
+              isPosterOnly ? "contain" : "cover"
+            )}
             sizes="(max-width: 767px) 100vw, 50vw"
             alt={activeSlide.title || featuredProduct?.name || "Decorbeats collection"}
             width="1200"
