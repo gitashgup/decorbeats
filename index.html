@@ -18,7 +18,8 @@
       property="og:description"
       content="Brass décor, pooja essentials, serveware and gifts—curated by specialists rooted in Moradabad, India’s brass city."
     />
-    <meta property="og:image" content="https://decorbeats.in/og.png" />
+    <meta property="og:image" content="https://decorbeats.in/og-v2.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Decorbeats — The Brass House of India" />
@@ -28,18 +29,27 @@
       name="twitter:description"
       content="Brass décor, pooja essentials, serveware and gifts, rooted in Moradabad and delivered across India."
     />
-    <meta name="twitter:image" content="https://decorbeats.in/og.png" />
+    <meta name="twitter:image" content="https://decorbeats.in/og-v2.jpg" />
     <title>Decorbeats | Brass Décor, Diyas & Gifts from Moradabad</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="shortcut icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
-    <link rel="preconnect" href="https://ckmujewooiwplfhjcjdz.supabase.co" crossorigin />
+    <link rel="preconnect" href="https://nktvlahwvdcyuj4w.public.blob.vercel-storage.com" crossorigin />
     <link
       rel="preload"
       as="image"
-      href="/assets/images/decorbeats-varalakshmi-gifting-v2.jpg"
+      href="/assets/images/decorbeats-varalakshmi-gifting-mobile-v3.jpg"
       type="image/jpeg"
       fetchpriority="high"
+      media="(max-width: 767px)"
+    />
+    <link
+      rel="preload"
+      as="image"
+      href="/assets/images/decorbeats-varalakshmi-gifting-v3.jpg"
+      type="image/jpeg"
+      fetchpriority="high"
+      media="(min-width: 768px)"
     />
     <script type="application/ld+json">
       {
@@ -82,7 +92,10 @@
         script.dataset.decorbeatsGoogleAds = 'true';
         document.head.appendChild(script);
       }
-      if ('requestIdleCallback' in window) {
+      var paidClick = /(?:^|[?&])(gclid|gbraid|wbraid)=/i.test(window.location.search);
+      if (paidClick) {
+        loadGoogleAds();
+      } else if ('requestIdleCallback' in window) {
         window.requestIdleCallback(loadGoogleAds, { timeout: 4000 });
       } else {
         window.setTimeout(loadGoogleAds, 3000);

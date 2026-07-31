@@ -65,12 +65,120 @@ const customerOccasions = [
     category: "Diya",
     note: "Diyas, lamps and sacred accents",
     beat: "For everyday devotion",
-    preferredImageProducts: ["Hanging peacock diya with chain heavy"]
+    preferredImageProducts: ["Hanging Peacock Brass Diya"]
   },
   { label: "Brass for Home", category: "Decor", note: "Objects that warm every room", beat: "For considered spaces" },
   { label: "Festive Gifts", category: "Box", note: "Meaningful keepsakes and gift sets", beat: "For generous moments" },
   { label: "Statement Walls", category: "Wall Decor", note: "Sculptural details with presence", beat: "For memorable rooms" }
 ];
+const CUSTOMER_COLLECTIONS = [
+  { id: "all", label: "Shop All", path: "/" },
+  {
+    id: "varalakshmi",
+    label: "Varalakshmi Gifts",
+    path: "/category/varalakshmi",
+    categories: ["Diya", "Urli"],
+    terms: ["diya", "deepam", "lamp", "urli", "lakshmi", "kamakshi"]
+  },
+  {
+    id: "pooja-diyas",
+    label: "Pooja & Diyas",
+    path: "/category/pooja-diyas",
+    categories: ["Diya"],
+    terms: ["diya", "deepam", "lamp", "ghanti", "loban", "pooja", "puja", "shankh", "shakh", "chakra"]
+  },
+  {
+    id: "urlis-serveware",
+    label: "Urlis & Serveware",
+    path: "/category/urlis-serveware",
+    categories: ["Urli", "Bowl", "Plate", "Jars"],
+    terms: ["urli", "bowl", "plate", "tray", "serve", "cup", "jar", "basket"]
+  },
+  {
+    id: "idols-spiritual",
+    label: "Idols & Spiritual",
+    path: "/category/idols-spiritual",
+    categories: ["Idol"],
+    terms: ["ganesh", "ganesha", "krishna", "lakshmi", "kamakshi", "durga", "saraswati", "ram darbar", "hanuman", "buddha", "avatar"]
+  },
+  {
+    id: "wall-home",
+    label: "Wall & Hanging",
+    path: "/category/wall-home",
+    categories: ["Wall Decor", "Bell"],
+    terms: ["wall", "hanging", "bell", "ghanti"]
+  },
+  {
+    id: "festive-gifts",
+    label: "Festive Gifts",
+    path: "/category/festive-gifts",
+    categories: ["Box"],
+    terms: ["gift", "festive", "boxed", "box set"]
+  },
+  {
+    id: "home-accents",
+    label: "Décor & Accents",
+    path: "/category/home-accents",
+    categories: ["Decor", "Planter", "Tree", "Misc"],
+    terms: ["planter", "tree", "candle", "decor", "accent"]
+  }
+];
+const CUSTOMER_COLLECTION_ALIASES = new Map([
+  ["", "all"],
+  ["all", "all"],
+  ["shop-all", "all"],
+  ["diya", "pooja-diyas"],
+  ["pooja-and-diyas", "pooja-diyas"],
+  ["pooja-diyas", "pooja-diyas"],
+  ["urli", "urlis-serveware"],
+  ["bowl", "urlis-serveware"],
+  ["plate", "urlis-serveware"],
+  ["jars", "urlis-serveware"],
+  ["urlis-and-serveware", "urlis-serveware"],
+  ["urlis-serveware", "urlis-serveware"],
+  ["idol", "idols-spiritual"],
+  ["idols-and-spiritual", "idols-spiritual"],
+  ["idols-spiritual", "idols-spiritual"],
+  ["wall-decor", "wall-home"],
+  ["bell", "wall-home"],
+  ["wall-and-hanging", "wall-home"],
+  ["wall-home", "wall-home"],
+  ["box", "festive-gifts"],
+  ["gifting", "festive-gifts"],
+  ["festive-gifts", "festive-gifts"],
+  ["decor", "home-accents"],
+  ["planter", "home-accents"],
+  ["tree", "home-accents"],
+  ["misc", "home-accents"],
+  ["home-decor", "home-accents"],
+  ["home-accents", "home-accents"],
+  ["varalakshmi", "varalakshmi"],
+  ["varalakshmi-gifts", "varalakshmi"]
+]);
+const VARALAKSHMI_EDIT_NAMES = [
+  "Small Brass Diyas in Gift Box — Set of 2",
+  "Designer Brass Diya",
+  "Brass Urli Diya Design",
+  "Peacock Rim Brass Diya",
+  "Hanging Peacock Brass Diya",
+  "Copper & Brass Diya in Gift Box",
+  "Brass Diyas in Red Gift Box — Set of 3",
+  "Peacock Three-Step Brass Diya"
+];
+const CUSTOMER_FEATURED_PRODUCT_NAMES = [
+  ...VARALAKSHMI_EDIT_NAMES,
+  "Brass Bowl & Spoon Gift Box — Set of 2",
+  "Elephant Urli Pair",
+  "Ganesha Brass Murti",
+  "Big Kamal wall",
+  "Brass Coconut Tree Décor — Set of 2",
+  "Brass Deer Candle Stand",
+  "Coffee Cup Set Premium",
+  "Hanging peacock bell"
+];
+const CUSTOMER_FEATURED_PRODUCT_RANK = new Map(
+  CUSTOMER_FEATURED_PRODUCT_NAMES.map((name, index) => [name.toLowerCase(), index])
+);
 const defaultHeroSlides = [
   {
     id: "default-varalakshmi",
@@ -79,8 +187,10 @@ const defaultHeroSlides = [
     body: "Auspicious diyas and meaningful gifts, handpicked in Moradabad and delivered across India for homes filled with light and abundance.",
     ctaLabel: "Shop Varalakshmi gifts",
     ctaAction: "collection",
+    collectionId: "varalakshmi",
     contentPosition: "left",
-    imageUrl: "/assets/images/decorbeats-varalakshmi-gifting-v2.jpg",
+    imageUrl: "/assets/images/decorbeats-varalakshmi-gifting-v3.jpg",
+    mobileImageUrl: "/assets/images/decorbeats-varalakshmi-gifting-mobile-v3.jpg",
     active: true,
     sortOrder: 0
   },
@@ -91,8 +201,10 @@ const defaultHeroSlides = [
     body: "Brass décor, pooja essentials, serveware and gifts—sourced, finished and curated by specialists with roots in Pital Nagri.",
     ctaLabel: "Explore brass collection",
     ctaAction: "collection",
+    collectionId: "all",
     contentPosition: "left",
-    imageUrl: "/assets/images/decorbeats-atelier-campaign.jpg",
+    imageUrl: "/assets/images/decorbeats-atelier-campaign-v2.jpg",
+    mobileImageUrl: "/assets/images/decorbeats-atelier-campaign-mobile-v2.jpg",
     active: true,
     sortOrder: 1
   }
@@ -397,6 +509,8 @@ function openWhatsAppChat(message) {
 
 const BULK_WHATSAPP_MESSAGE =
   "Hi Decorbeats! I am interested in placing a bulk order of 50+ units. Please share your catalogue, pricing and delivery details.";
+const RETAIL_WHATSAPP_MESSAGE =
+  "Hi Decorbeats! I am choosing a brass piece for my home or an occasion. Could a brass specialist help me find the right product?";
 
 function trackCustomerEvent(eventName, properties = {}) {
   void import("@vercel/analytics")
@@ -449,6 +563,11 @@ function trackBulkWhatsAppClick(source) {
   trackGoogleAdsContactConversion();
 }
 
+function trackRetailWhatsAppClick(source) {
+  trackCustomerEvent("Retail WhatsApp Clicked", { source });
+  trackGoogleAdsContactConversion();
+}
+
 function openBulkWhatsApp(source = "direct") {
   trackBulkWhatsAppClick(source);
   openWhatsAppChat(BULK_WHATSAPP_MESSAGE);
@@ -456,6 +575,10 @@ function openBulkWhatsApp(source = "direct") {
 
 function getBulkWhatsAppUrl() {
   return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(BULK_WHATSAPP_MESSAGE)}`;
+}
+
+function getRetailWhatsAppUrl() {
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(RETAIL_WHATSAPP_MESSAGE)}`;
 }
 
 function getProductWhatsAppUrl(product) {
@@ -962,12 +1085,28 @@ function safeText(value, fallback = "") {
 }
 
 const productNameCorrections = new Map([
-  ["braas shiva head heavy", "Brass Shiva Head Heavy"],
+  ["braas shiva head heavy", "Heavy Brass Shiva Head"],
   ["brass bowl spoon in gift bax set of 2", "Brass Bowl & Spoon Gift Box — Set of 2"],
+  ["brass coconut tree home decor set of 2", "Brass Coconut Tree Décor — Set of 2"],
+  ["brass diya big designer", "Designer Brass Diya"],
+  ["brass shakh", "Decorative Brass Shankh"],
+  ["copper and brass diya big in box", "Copper & Brass Diya in Gift Box"],
   ["coffe cup set", "Coffee Cup Set"],
   ["coffe cup set premium", "Coffee Cup Set Premium"],
+  ["dasavatar gift set", "Dashavatara Brass Gift Set"],
+  ["dus avatar set", "Dashavatara Brass Set"],
+  ["elephant urli set", "Elephant Urli Pair"],
   ["brass gamesha 4 inch", "Brass Ganesha — 4 inch"],
-  ["brass urli diya design", "Brass Urli Diya Design"]
+  ["brass urli diya design", "Brass Urli Diya Design"],
+  ["hanging peacock diya with chain heavy", "Hanging Peacock Brass Diya"],
+  ["horse set", "Brass Horse Pair"],
+  ["metal gold plated basket", "Gold-Finish Metal Basket"],
+  ["peacock 3 step diya", "Peacock Three-Step Brass Diya"],
+  ["peacock diya big rim", "Peacock Rim Brass Diya"],
+  ["shakh chakra diya set", "Shankh Chakra Diya Set"],
+  ["small brass diya in gift box set of 2", "Small Brass Diyas in Gift Box — Set of 2"],
+  ["tlight holder", "Tealight Holder"],
+  ["3 diya in a red gift box", "Brass Diyas in Red Gift Box — Set of 3"]
 ]);
 
 function normalizeProductName(value) {
@@ -977,7 +1116,105 @@ function normalizeProductName(value) {
 
 function normalizeProductCategory(value) {
   const category = safeText(value, "Uncategorized");
-  return category.toLowerCase() === "urli" ? "Urli" : category;
+  return categoryOptions.find((option) => option.toLowerCase() === category.toLowerCase()) ?? category;
+}
+
+function resolveCustomerCollectionId(value) {
+  const normalized = slugify(safeText(value)).toLowerCase();
+  return (
+    CUSTOMER_COLLECTIONS.find((collection) => collection.id === normalized)?.id ??
+    CUSTOMER_COLLECTION_ALIASES.get(normalized) ??
+    null
+  );
+}
+
+function getCustomerCollectionById(value) {
+  const collectionId = resolveCustomerCollectionId(value) ?? "all";
+  return CUSTOMER_COLLECTIONS.find((collection) => collection.id === collectionId) ?? CUSTOMER_COLLECTIONS[0];
+}
+
+function getCustomerProductHaystack(product) {
+  return [
+    product?.name,
+    product?.category,
+    product?.material,
+    product?.marketingTag,
+    getCustomerProductStory(product)
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function matchesCustomerCollection(product, value) {
+  const collection = getCustomerCollectionById(value);
+  if (collection.id === "all") {
+    return true;
+  }
+
+  const normalizedCategory = safeText(product?.category).toLowerCase();
+  const categoryMatch = (collection.categories ?? []).some(
+    (category) => category.toLowerCase() === normalizedCategory
+  );
+  const haystack = getCustomerProductHaystack(product);
+  const termMatch = (collection.terms ?? []).some((term) => haystack.includes(term));
+
+  if (collection.id === "varalakshmi") {
+    const curatedMatch = VARALAKSHMI_EDIT_NAMES.some(
+      (name) => name.toLowerCase() === safeText(product?.name).toLowerCase()
+    );
+    return safeText(product?.material).toLowerCase() === "brass" && (curatedMatch || categoryMatch || termMatch);
+  }
+
+  return categoryMatch || termMatch;
+}
+
+function isCustomerSellReady(product) {
+  return Boolean(
+    product &&
+      getPrimaryImage(product) &&
+      parsePrice(product?.pricing?.mrp) &&
+      Number(product?.quantity || 0) > 0
+  );
+}
+
+function getCustomerFeaturedRank(product) {
+  return CUSTOMER_FEATURED_PRODUCT_RANK.get(safeText(product?.name).toLowerCase()) ?? Number.POSITIVE_INFINITY;
+}
+
+function getCustomerProductCollectionLabel(product) {
+  const preferredOrder = [
+    "pooja-diyas",
+    "urlis-serveware",
+    "idols-spiritual",
+    "wall-home",
+    "festive-gifts",
+    "home-accents"
+  ];
+  const matchedId = preferredOrder.find((collectionId) => matchesCustomerCollection(product, collectionId));
+  return getCustomerCollectionById(matchedId ?? "home-accents").label;
+}
+
+function getProductExpertNote(product) {
+  const collectionId = resolveCustomerCollectionId(
+    CUSTOMER_COLLECTIONS.find((collection) => collection.label === getCustomerProductCollectionLabel(product))?.id
+  );
+  const notes = {
+    "pooja-diyas": "A meaningful choice for pooja rooms, festive rituals and gifts that bring warmth to the home.",
+    "urlis-serveware": "A decorative centrepiece selected for tables, entrances and festive styling with presence.",
+    "idols-spiritual": "A devotional accent chosen to bring material richness and quiet presence to a sacred corner.",
+    "wall-home": "A sculptural detail selected to add dimension, warmth and a distinctly Indian character to the room.",
+    "festive-gifts": "A memorable keepsake selected for thoughtful festive, wedding and housewarming gifting.",
+    "home-accents": "Selected by the Decorbeats team for proportion, material presence and its place in a considered home."
+  };
+  return notes[collectionId] ?? notes["home-accents"];
+}
+
+function pushCustomerPath(path) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.history.pushState({}, "", `${path}${window.location.search}`);
 }
 
 function getCustomerProductStory(product) {
@@ -1328,8 +1565,10 @@ function toHeroSlide(raw, index = 0) {
     ctaAction: campaignSlide
       ? campaignSlide.ctaAction
       : safeText(raw.cta_action ?? raw.ctaAction, "collection"),
+    collectionId: campaignSlide?.collectionId ?? resolveCustomerCollectionId(raw.collection_id ?? raw.collectionId) ?? "all",
     contentPosition: safeText(raw.content_position ?? raw.contentPosition, "left"),
     imageUrl,
+    mobileImageUrl: campaignSlide?.mobileImageUrl ?? normalizeUrl(raw.mobile_image_url ?? raw.mobileImageUrl),
     posterOnly: Boolean(raw.poster_only ?? raw.posterOnly ?? isLegacyPosterSlide),
     active: raw.active ?? raw.is_active ?? true,
     sortOrder: isVaralakshmiCampaignSlide
@@ -3587,12 +3826,12 @@ function CustomerUtilityBar() {
 
 function CustomerNavigation({ onSelectCategory, onShop }) {
   const items = [
-    { label: "New & Noteworthy", category: "All" },
-    { label: "Pooja & Diyas", category: "Diya" },
-    { label: "Home Décor", category: "Decor" },
-    { label: "Urlis & Serveware", category: "Urli" },
-    { label: "Wall Statements", category: "Wall Decor" },
-    { label: "Festive Gifts", category: "Box" }
+    getCustomerCollectionById("varalakshmi"),
+    getCustomerCollectionById("pooja-diyas"),
+    getCustomerCollectionById("urlis-serveware"),
+    getCustomerCollectionById("idols-spiritual"),
+    getCustomerCollectionById("wall-home"),
+    getCustomerCollectionById("home-accents")
   ];
 
   return (
@@ -3600,10 +3839,10 @@ function CustomerNavigation({ onSelectCategory, onShop }) {
       {items.map((item) => (
         <a
           key={item.label}
-          href={item.category === "All" ? "/" : `/category/${slugify(item.category)}`}
+          href={item.path}
           onClick={(event) => {
             event.preventDefault();
-            onSelectCategory(item.category, "primary_navigation");
+            onSelectCategory(item.id, "primary_navigation");
             onShop();
           }}
         >
@@ -3674,10 +3913,10 @@ function CustomerHeader({
       </button>
       <a
         className="customer-header-concierge"
-        href={getBulkWhatsAppUrl()}
+        href={getRetailWhatsAppUrl()}
         target="_blank"
         rel="noopener noreferrer"
-        onClick={() => trackBulkWhatsAppClick("header_concierge")}
+        onClick={() => trackRetailWhatsAppClick("header_concierge")}
       >
         Talk to a brass expert
       </a>
@@ -3702,6 +3941,7 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
   ).slice(0, 2);
   const activeSlide = preparedSlides[activeIndex] ?? preparedSlides[0] ?? defaultHeroSlides[0];
   const slideImage = activeSlide.imageUrl || heroImage || defaultHeroSlides[0].imageUrl;
+  const mobileSlideImage = activeSlide.mobileImageUrl || slideImage;
   const titleLines = getHeroTitleLines(activeSlide.title);
   const isPosterOnly = Boolean(activeSlide.posterOnly);
   const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}${isPosterOnly ? " hero-poster-slide hero-poster-only" : ""}`;
@@ -3729,9 +3969,7 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
       openBulkWhatsApp("hero-slider");
       return;
     }
-    if (slideImage.includes("varalakshmi")) {
-      onSelectCategory?.("Diya", "varalakshmi_hero");
-    }
+    onSelectCategory?.(activeSlide.collectionId || (slideImage.includes("varalakshmi") ? "varalakshmi" : "all"), "hero");
     onShop();
   }
 
@@ -3767,10 +4005,10 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
           </button>
           <a
             className="customer-hero-link"
-            href={getBulkWhatsAppUrl()}
+            href={getRetailWhatsAppUrl()}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => trackBulkWhatsAppClick("hero")}
+            onClick={() => trackRetailWhatsAppClick("hero")}
           >
             Talk to a brass expert
           </a>
@@ -3783,22 +4021,25 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
       </div>
       <div className="customer-hero-media">
         {slideImage ? (
-          <img
-            src={getOptimizedImageUrl(slideImage, 1200, 72, isPosterOnly ? "contain" : "cover")}
-            srcSet={getOptimizedImageSrcSet(
-              slideImage,
-              [480, 768, 1200],
-              72,
-              isPosterOnly ? "contain" : "cover"
-            )}
-            sizes="(max-width: 767px) 100vw, 50vw"
-            alt={activeSlide.title || featuredProduct?.name || "Decorbeats collection"}
-            width="1200"
-            height="800"
-            loading="eager"
-            fetchPriority="high"
-            decoding="async"
-          />
+          <picture>
+            <source media="(max-width: 767px)" srcSet={mobileSlideImage} />
+            <img
+              src={getOptimizedImageUrl(slideImage, 1200, 72, isPosterOnly ? "contain" : "cover")}
+              srcSet={getOptimizedImageSrcSet(
+                slideImage,
+                [768, 1200],
+                72,
+                isPosterOnly ? "contain" : "cover"
+              )}
+              sizes="(max-width: 767px) 100vw, 62vw"
+              alt={safeText(activeSlide.title, featuredProduct?.name || "Decorbeats collection").replaceAll("|", " ")}
+              width="1600"
+              height="800"
+              loading="eager"
+              fetchpriority="high"
+              decoding="async"
+            />
+          </picture>
         ) : null}
       </div>
       {preparedSlides.length > 1 ? (
@@ -3848,6 +4089,92 @@ function CustomerCommercePromise() {
           <span>{detail}</span>
         </article>
       ))}
+    </section>
+  );
+}
+
+function CustomerCampaignEdit({
+  products,
+  onSelect,
+  onAddToCart,
+  busyProductId,
+  onViewAll
+}) {
+  const curated = VARALAKSHMI_EDIT_NAMES.flatMap((name) => {
+    const match = products.find(
+      (product) => safeText(product.name).toLowerCase() === name.toLowerCase() && isCustomerSellReady(product)
+    );
+    return match ? [match] : [];
+  });
+  const curatedIds = new Set(curated.map((product) => String(product.id)));
+  const fallback = products.filter(
+    (product) =>
+      !curatedIds.has(String(product.id)) &&
+      isCustomerSellReady(product) &&
+      matchesCustomerCollection(product, "varalakshmi")
+  );
+  const edit = [...curated, ...fallback].slice(0, 6);
+
+  if (!edit.length) {
+    return null;
+  }
+
+  return (
+    <section className="customer-campaign-edit" aria-labelledby="varalakshmi-edit-title">
+      <div className="customer-campaign-edit-head">
+        <div>
+          <p className="eyebrow">The Varalakshmi edit</p>
+          <h2 id="varalakshmi-edit-title">Auspicious brass, ready to gift.</h2>
+          <p>In-stock diyas and ritual accents selected for homes filled with light and abundance.</p>
+        </div>
+        <button type="button" className="customer-text-link" onClick={onViewAll}>
+          View the full edit <span aria-hidden="true">→</span>
+        </button>
+      </div>
+      <div className="customer-campaign-products">
+        {edit.map((product) => {
+          const image = getPrimaryImage(product);
+          const busy = String(busyProductId) === String(product.id);
+          return (
+            <article className="customer-campaign-card" key={product.id}>
+              <button
+                type="button"
+                className="customer-campaign-card-main"
+                aria-label={`View ${product.name}`}
+                onClick={() => onSelect(product)}
+              >
+                <span className="customer-campaign-card-image">
+                  <img
+                    src={getOptimizedImageUrl(image, 520, 72)}
+                    srcSet={getOptimizedImageSrcSet(image, [320, 520], 72)}
+                    sizes="(max-width: 767px) 52vw, 22vw"
+                    alt={product.name}
+                    width="520"
+                    height="620"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <em>Festive selection</em>
+                </span>
+                <span className="customer-campaign-card-copy">
+                  <strong>{product.name}</strong>
+                  <small>{getCustomerProductCollectionLabel(product)}</small>
+                  <b>{formatCurrency(product.pricing.mrp)}</b>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="customer-campaign-card-add"
+                onClick={() => onAddToCart(product)}
+                disabled={busy}
+                aria-label={`Add to bag: ${product.name}`}
+              >
+                {busy ? "Adding…" : "Add to bag"}
+              </button>
+            </article>
+          );
+        })}
+      </div>
     </section>
   );
 }
@@ -3983,14 +4310,17 @@ function EditorialSection({ onShop }) {
   return (
     <section className="editorial-section desktop-reveal" aria-labelledby="pital-nagri-title">
       <div className="editorial-media">
-        <img
-          src="/assets/images/decorbeats-atelier-campaign.jpg"
-          alt="Decorbeats brass décor styled in a contemporary Indian interior"
-          width="1672"
-          height="941"
-          loading="lazy"
-          decoding="async"
-        />
+        <picture>
+          <source media="(max-width: 767px)" srcSet="/assets/images/decorbeats-atelier-campaign-mobile-v2.jpg" />
+          <img
+            src="/assets/images/decorbeats-atelier-campaign-v2.jpg"
+            alt="Decorbeats brass décor styled in a contemporary Indian interior"
+            width="1600"
+            height="901"
+            loading="lazy"
+            decoding="async"
+          />
+        </picture>
       </div>
       <div className="editorial-copy">
         <p className="eyebrow">From Pital Nagri to your home</p>
@@ -4014,10 +4344,10 @@ function EditorialSection({ onShop }) {
           </button>
           <a
             className="customer-text-link"
-            href={getBulkWhatsAppUrl()}
+            href={getRetailWhatsAppUrl()}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => trackBulkWhatsAppClick("editorial")}
+            onClick={() => trackRetailWhatsAppClick("editorial")}
           >
             Ask a brass specialist <span aria-hidden="true">→</span>
           </a>
@@ -4140,19 +4470,19 @@ function CustomerFaq() {
 function CustomerMobileDock({ cartCount, onShop, onCartOpen }) {
   return (
     <nav className="customer-mobile-dock" aria-label="Quick shopping actions">
-      <button type="button" onClick={onShop}>
-        <span>Shop</span>
-        <small>Explore brass</small>
-      </button>
       <a
-        href={getBulkWhatsAppUrl()}
+        href={getRetailWhatsAppUrl()}
         target="_blank"
         rel="noopener noreferrer"
-        onClick={() => trackBulkWhatsAppClick("mobile_dock")}
+        onClick={() => trackRetailWhatsAppClick("mobile_dock")}
       >
         <WhatsAppIcon />
-        <span>Ask an expert</span>
+        <span>Expert</span>
       </a>
+      <button type="button" className="customer-mobile-shop" onClick={onShop}>
+        <span>Shop brass</span>
+        <small>Explore the edit</small>
+      </button>
       <button type="button" onClick={onCartOpen}>
         <CartIcon />
         <span>Bag{cartCount ? ` (${cartCount})` : ""}</span>
@@ -4161,20 +4491,45 @@ function CustomerMobileDock({ cartCount, onShop, onCartOpen }) {
   );
 }
 
-function CustomerCategoryBar({ categories, categoryFilter, setCategoryFilter }) {
+function CustomerCategoryBar({ collectionFilter, setCollectionFilter }) {
   return (
-    <section className="customer-category-row" aria-label="Browse categories">
-      {categories.map((category) => (
+    <section className="customer-category-row" aria-label="Browse brass collections">
+      {CUSTOMER_COLLECTIONS.map((collection) => (
         <button
-          key={category}
+          key={collection.id}
           type="button"
-          className={category === categoryFilter ? "customer-category-chip active" : "customer-category-chip"}
-          onClick={() => setCategoryFilter(category, "category_bar")}
+          className={collection.id === collectionFilter ? "customer-category-chip active" : "customer-category-chip"}
+          aria-pressed={collection.id === collectionFilter}
+          onClick={() => setCollectionFilter(collection.id, "category_bar")}
         >
-          {category}
+          {collection.label}
         </button>
       ))}
     </section>
+  );
+}
+
+function CustomerEmptyCollection({ onClear }) {
+  return (
+    <div className="customer-empty-results" role="status">
+      <p className="eyebrow">Nothing matched this search</p>
+      <h3>Let’s find the right brass piece another way.</h3>
+      <p>Clear the filters to explore the full collection, or ask our team for a personal shortlist.</p>
+      <div>
+        <button type="button" className="primary-button" onClick={onClear}>
+          Clear filters
+        </button>
+        <a
+          className="customer-text-link"
+          href={getRetailWhatsAppUrl()}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => trackRetailWhatsAppClick("empty_collection")}
+        >
+          Ask a brass expert
+        </a>
+      </div>
+    </div>
   );
 }
 
@@ -4265,24 +4620,62 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
   const [dragOffset, setDragOffset] = useState(0);
   const closeTimerRef = useRef(null);
   const dragStateRef = useRef({ startY: 0, deltaY: 0, dragging: false });
+  const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
+  const onCloseRef = useRef(onClose);
   const videos = getProductVideos(product);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     setClosing(false);
     setDragOffset(0);
+    if (!product) {
+      return undefined;
+    }
+    previousFocusRef.current = document.activeElement;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => dialogRef.current?.focus({ preventScroll: true }));
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key === "Tab" && dialogRef.current) {
+        const focusable = Array.from(
+          dialogRef.current.querySelectorAll(
+            'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+        if (!focusable.length) {
+          event.preventDefault();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousBodyOverflow;
       if (closeTimerRef.current) {
         window.clearTimeout(closeTimerRef.current);
       }
       window.removeEventListener("keydown", handleKeyDown);
+      previousFocusRef.current?.focus?.({ preventScroll: true });
     };
-  }, [onClose, product?.id]);
+  }, [product?.id]);
 
   if (!product) {
     return (
@@ -4320,11 +4713,13 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
   return (
     <div className={closing ? "customer-sheet-overlay open closing" : "customer-sheet-overlay open"} onClick={dismissSheet}>
       <aside
+        ref={dialogRef}
         className={closing ? "customer-sheet open closing" : "customer-sheet open"}
         style={sheetStyle}
         role="dialog"
         aria-modal="true"
         aria-labelledby="customer-product-title"
+        tabIndex="-1"
         onClick={(event) => event.stopPropagation()}
       >
         <div
@@ -4367,7 +4762,7 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
           }}
           onTouchCancel={resetDrag}
         >
-          <button type="button" className="customer-sheet-handle" aria-label="Close product details" onClick={dismissSheet} />
+          <span className="customer-sheet-handle" aria-hidden="true" />
         </div>
         <button type="button" className="customer-sheet-close" aria-label="Close product details" onClick={dismissSheet}>
           ×
@@ -4384,13 +4779,32 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
             {hasDisplayValue(product.pricing.mrp) ? formatCurrency(product.pricing.mrp) : "Price on request"}
           </p>
           {occasionLine ? <p className="customer-sheet-occasion">{occasionLine}</p> : null}
-          <div className="customer-sheet-meta">
-            <span>{product.category}</span>
-            <span>{product.material}</span>
-            <span>{outOfStock ? "Sold out" : product.stockStatus}</span>
-            {product.size ? <span>{product.size}</span> : null}
-            {product.weight ? <span>{product.weight}</span> : null}
-          </div>
+          <dl className="customer-sheet-meta" aria-label="Verified product details">
+            <div>
+              <dt>Collection</dt>
+              <dd>{getCustomerProductCollectionLabel(product)}</dd>
+            </div>
+            <div>
+              <dt>Material</dt>
+              <dd>{product.material}</dd>
+            </div>
+            <div>
+              <dt>Availability</dt>
+              <dd>{outOfStock ? "Sold out" : product.stockStatus}</dd>
+            </div>
+            {product.size ? (
+              <div>
+                <dt>Dimensions</dt>
+                <dd>{product.size}</dd>
+              </div>
+            ) : null}
+            {product.weight ? (
+              <div>
+                <dt>Weight</dt>
+                <dd>{product.weight}</dd>
+              </div>
+            ) : null}
+          </dl>
           {videos.length ? (
             <div className="customer-sheet-videos">
               <p>Product video</p>
@@ -4458,6 +4872,20 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
               </p>
             ) : null}
           </div>
+          <div className="customer-product-expert-note">
+            <p className="eyebrow">The specialist’s view</p>
+            <h3>Why this piece belongs.</h3>
+            <p>{getProductExpertNote(product)}</p>
+            <p className="customer-product-disclosure">
+              Material is listed as {product.material}. Ask our team to confirm composition, finish, dimensions or care
+              before ordering whenever those details are important to your intended use.
+            </p>
+          </div>
+          <div className="customer-product-assurance" aria-label="Order reassurance">
+            <span>Material disclosed</span>
+            <span>Secure Razorpay checkout</span>
+            <span>Pan-India assistance</span>
+          </div>
         </div>
       </aside>
     </div>
@@ -4479,19 +4907,58 @@ function CustomerCartDrawer({
 }) {
   const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const [checkoutStage, setCheckoutStage] = useState("cart");
+  const cartDialogRef = useRef(null);
+  const cartPreviousFocusRef = useRef(null);
+  const cartCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    cartCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) {
+      setCheckoutStage("cart");
       return undefined;
     }
+    cartPreviousFocusRef.current = document.activeElement;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => cartDialogRef.current?.focus({ preventScroll: true }));
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
-        onClose();
+        cartCloseRef.current();
+        return;
+      }
+      if (event.key === "Tab" && cartDialogRef.current) {
+        const focusable = Array.from(
+          cartDialogRef.current.querySelectorAll(
+            'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+        if (!focusable.length) {
+          event.preventDefault();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, open]);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+      cartPreviousFocusRef.current?.focus?.({ preventScroll: true });
+    };
+  }, [open]);
 
   if (!open) {
     return null;
@@ -4500,17 +4967,23 @@ function CustomerCartDrawer({
   return (
     <div className="customer-cart-overlay open" onClick={onClose}>
       <aside
+        ref={cartDialogRef}
         className="customer-cart-drawer"
         role="dialog"
         aria-modal="true"
         aria-labelledby="customer-cart-title"
+        tabIndex="-1"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="customer-cart-head">
           <div>
             <p className="eyebrow">Decorbeats checkout</p>
-            <h2 id="customer-cart-title">Your cart</h2>
-            <span>{itemCount ? `${itemCount} item${itemCount === 1 ? "" : "s"}` : "No items yet"}</span>
+            <h2 id="customer-cart-title">{checkoutStage === "cart" ? "Your cart" : "Delivery details"}</h2>
+            <span>
+              {itemCount
+                ? `${checkoutStage === "cart" ? "Step 1 of 2" : "Step 2 of 2"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`
+                : "No items yet"}
+            </span>
           </div>
           <button type="button" className="customer-sheet-close" aria-label="Close cart" onClick={onClose}>
             ×
@@ -4522,47 +4995,67 @@ function CustomerCartDrawer({
 
         {items.length ? (
           <>
-            <div className="customer-cart-items">
-              {items.map((item) => (
-                <article key={item.product.id} className="customer-cart-item">
-                  <img
-                    src={getOptimizedImageUrl(item.product.imageUrl, 180, 72)}
-                    alt=""
-                    width="90"
-                    height="112"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                  <div>
-                    <strong>{item.product.name}</strong>
-                    <span>{item.product.sku}</span>
-                    <b>{formatCurrency(item.price)}</b>
-                  </div>
-                  <div className="customer-cart-qty">
-                    <button type="button" onClick={() => onQuantityChange(item.product.id, item.quantity - 1)} disabled={busy}>
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min="1"
-                      value={item.quantity}
-                      onClick={handleNumericInputClick}
-                      onChange={(event) => onQuantityChange(item.product.id, Number(event.target.value) || 1)}
-                      disabled={busy}
+            {checkoutStage === "cart" ? (
+              <div className="customer-cart-items">
+                {items.map((item) => (
+                  <article key={item.product.id} className="customer-cart-item">
+                    <img
+                      src={getOptimizedImageUrl(item.product.imageUrl, 180, 72)}
+                      alt=""
+                      width="90"
+                      height="112"
+                      loading="lazy"
+                      decoding="async"
                     />
-                    <button type="button" onClick={() => onQuantityChange(item.product.id, item.quantity + 1)} disabled={busy}>
-                      +
-                    </button>
-                    <button type="button" className="customer-cart-remove" onClick={() => onRemove(item.product.id)} disabled={busy}>
-                      Remove
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
+                    <div>
+                      <strong>{item.product.name}</strong>
+                      <span>{item.product.sku}</span>
+                      <b>{formatCurrency(item.price)}</b>
+                    </div>
+                    <div className="customer-cart-qty">
+                      <button type="button" onClick={() => onQuantityChange(item.product.id, item.quantity - 1)} disabled={busy}>
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        value={item.quantity}
+                        onClick={handleNumericInputClick}
+                        onChange={(event) => onQuantityChange(item.product.id, Number(event.target.value) || 1)}
+                        disabled={busy}
+                      />
+                      <button type="button" onClick={() => onQuantityChange(item.product.id, item.quantity + 1)} disabled={busy}>
+                        +
+                      </button>
+                      <button type="button" className="customer-cart-remove" onClick={() => onRemove(item.product.id)} disabled={busy}>
+                        Remove
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
 
-            <form className="customer-checkout-form" onSubmit={onCheckout}>
+            {checkoutStage === "cart" ? (
+              <div className="customer-cart-stage-footer">
+                <div className="customer-cart-total">
+                  <span>Order total</span>
+                  <strong>{formatCurrency(total)}</strong>
+                </div>
+                <button type="button" className="primary-button" onClick={() => setCheckoutStage("delivery")}>
+                  Continue to delivery
+                </button>
+                <small>Secure online payment through Razorpay</small>
+              </div>
+            ) : (
+              <button type="button" className="customer-cart-back" onClick={() => setCheckoutStage("cart")}>
+                ← Back to your bag
+              </button>
+            )}
+
+            {checkoutStage === "delivery" ? (
+              <form className="customer-checkout-form" onSubmit={onCheckout}>
               <div className="customer-cart-total">
                 <span>Order total</span>
                 <strong>{formatCurrency(total)}</strong>
@@ -4588,6 +5081,8 @@ function CustomerCartDrawer({
                   autoComplete="tel"
                   inputMode="tel"
                   maxLength="15"
+                  pattern="[0-9+ -]{10,15}"
+                  title="Enter a valid 10 to 15 digit phone number"
                   value={details.phone}
                   placeholder="10-digit mobile number"
                   onChange={(event) => setDetails((current) => ({ ...current, phone: event.target.value }))}
@@ -4673,7 +5168,8 @@ function CustomerCartDrawer({
               <button type="submit" className="primary-button customer-checkout-button" disabled={busy}>
                 {busy ? "Opening secure payment..." : `Pay ${formatCurrency(total)}`}
               </button>
-            </form>
+              </form>
+            ) : null}
           </>
         ) : (
           <div className="customer-empty-cart">
@@ -4945,7 +5441,7 @@ function CustomerImageCarousel({ product }) {
       </div>
       {hasCarousel ? (
         <>
-          <div className="customer-carousel-count">
+          <div className="customer-carousel-count" aria-live="polite">
             {activeIndex + 1}/{images.length}
           </div>
           <div className="customer-carousel-thumbs">
@@ -4954,6 +5450,8 @@ function CustomerImageCarousel({ product }) {
                 key={`${url}-thumb-${index}`}
                 type="button"
                 className={index === activeIndex ? "customer-carousel-thumb active" : "customer-carousel-thumb"}
+                aria-label={`Show ${product.name} image ${index + 1} of ${images.length}`}
+                aria-pressed={index === activeIndex}
                 onClick={() => setActiveIndex(index)}
               >
                 <img
@@ -5714,6 +6212,7 @@ export default function App() {
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
+  const [customerCollection, setCustomerCollection] = useState("all");
   const [visibleCustomerProductCount, setVisibleCustomerProductCount] = useState(12);
   const [inquiryStatusFilter, setInquiryStatusFilter] = useState("all");
   const [statusMessage, setStatusMessage] = useState(
@@ -6061,7 +6560,8 @@ export default function App() {
   }, [adminActive]);
 
   useEffect(() => {
-    if (adminActive || !customerHeaderElevated) {
+    const tickerIsVisible = typeof window !== "undefined" && !window.matchMedia("(max-width: 1100px)").matches;
+    if (adminActive || !customerHeaderElevated || !tickerIsVisible) {
       setHeaderTickerVisible(true);
       return undefined;
     }
@@ -6096,8 +6596,27 @@ export default function App() {
     return [...products]
       .filter((product) => !product.archivedAt)
       .sort((left, right) => {
+        const sellReadyDelta = Number(isCustomerSellReady(right)) - Number(isCustomerSellReady(left));
+        if (sellReadyDelta !== 0) {
+          return sellReadyDelta;
+        }
+        const leftFeaturedRank = getCustomerFeaturedRank(left);
+        const rightFeaturedRank = getCustomerFeaturedRank(right);
+        if (leftFeaturedRank !== rightFeaturedRank) {
+          return leftFeaturedRank - rightFeaturedRank;
+        }
         if (left.pinned !== right.pinned) {
           return Number(right.pinned) - Number(left.pinned);
+        }
+        const brassDelta =
+          Number(safeText(right.material).toLowerCase() === "brass") -
+          Number(safeText(left.material).toLowerCase() === "brass");
+        if (brassDelta !== 0) {
+          return brassDelta;
+        }
+        const marketingDelta = Number(Boolean(right.marketingTag)) - Number(Boolean(left.marketingTag));
+        if (marketingDelta !== 0) {
+          return marketingDelta;
         }
         const rightCreatedAt = new Date(right.createdAt || 0).getTime();
         const leftCreatedAt = new Date(left.createdAt || 0).getTime();
@@ -6137,7 +6656,9 @@ export default function App() {
     const visibleProducts = currentCatalog.filter((product) => {
       const haystack = [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase();
       const matchesSearch = haystack.includes(search.toLowerCase());
-      const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
+      const matchesCategory = customerFacing
+        ? matchesCustomerCollection(product, customerCollection)
+        : categoryFilter === "All" || product.category === categoryFilter;
       return matchesSearch && matchesCategory;
     });
 
@@ -6152,11 +6673,11 @@ export default function App() {
       }
       return left.name.localeCompare(right.name);
     });
-  }, [categoryFilter, currentCatalog, customerFacing, search]);
+  }, [categoryFilter, currentCatalog, customerCollection, customerFacing, search]);
 
   useEffect(() => {
     setVisibleCustomerProductCount(12);
-  }, [categoryFilter, search]);
+  }, [categoryFilter, customerCollection, search]);
 
   const visibleCustomerProducts = useMemo(
     () => filteredProducts.slice(0, visibleCustomerProductCount),
@@ -6229,32 +6750,6 @@ export default function App() {
     return [...filtered].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
   }, [purchaseStatusFilter, purchases]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || window.innerWidth < 768) {
-      return undefined;
-    }
-
-    const nodes = Array.from(document.querySelectorAll(".desktop-reveal"));
-    if (!nodes.length) {
-      return undefined;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.16 }
-    );
-
-    nodes.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
-  }, [adminActive, previewCustomerView, filteredProducts.length, categoryFilter]);
-
   const selectedProduct =
     filteredProducts.find((product) => product.id === selectedId) ||
     currentCatalog.find((product) => product.id === selectedId) ||
@@ -6276,18 +6771,20 @@ export default function App() {
     }
 
     if (pendingRoute.type === "home") {
+      setCustomerCollection("all");
       pendingRouteIntentRef.current = null;
       return;
     }
 
     if (pendingRoute.type === "category") {
-      const matchedCategory = categories.find((category) => slugify(category) === pendingRoute.slug) ?? null;
+      const matchedCollection = resolveCustomerCollectionId(pendingRoute.slug);
       setSelectedId(null);
-      if (matchedCategory) {
-        setCategoryFilter(matchedCategory);
+      setCategoryFilter("All");
+      if (matchedCollection) {
+        setCustomerCollection(matchedCollection);
         setSearch("");
       } else {
-        setCategoryFilter("All");
+        setCustomerCollection("all");
         setSearch(humanizeSlug(pendingRoute.slug));
       }
       pendingRouteIntentRef.current = null;
@@ -6303,16 +6800,18 @@ export default function App() {
 
       if (matchedProduct) {
         setCategoryFilter("All");
+        setCustomerCollection("all");
         setSearch("");
         setSelectedId(matchedProduct.id);
       } else {
         setSelectedId(null);
         setCategoryFilter("All");
+        setCustomerCollection("all");
         setSearch(humanizeSlug(pendingRoute.slug));
       }
       pendingRouteIntentRef.current = null;
     }
-  }, [categories, customerCatalog, isSupabaseConfigured, lastSyncAt]);
+  }, [customerCatalog, isSupabaseConfigured, lastSyncAt, routeIntent.slug, routeIntent.type]);
 
   useEffect(() => {
     if (routeIntent.type !== "catalogue") {
@@ -6479,11 +6978,9 @@ export default function App() {
       });
       if (typeof window !== "undefined") {
         const nextPath = willClose
-          ? categoryFilter === "All"
-            ? "/"
-            : `/category/${slugify(categoryFilter)}`
+          ? getCustomerCollectionById(customerCollection).path
           : `/product/${product.slug}`;
-        window.history.pushState({}, "", nextPath);
+        pushCustomerPath(nextPath);
       }
     }
     setSelectedId(willClose ? null : product.id);
@@ -6495,9 +6992,9 @@ export default function App() {
   function handleCustomerProductClose() {
     setSelectedId(null);
     if (customerFacing && typeof window !== "undefined") {
-      const nextPath = categoryFilter === "All" ? "/" : `/category/${slugify(categoryFilter)}`;
+      const nextPath = getCustomerCollectionById(customerCollection).path;
       if (window.location.pathname !== nextPath) {
-        window.history.pushState({}, "", nextPath);
+        pushCustomerPath(nextPath);
       }
     }
   }
@@ -7701,13 +8198,15 @@ export default function App() {
     });
   }
 
-  function handleCustomerCategorySelect(category, source = "category_bar") {
-    trackCustomerEvent("Category Selected", { category, source });
-    setCategoryFilter(category);
+  function handleCustomerCategorySelect(value, source = "category_bar") {
+    const collection = getCustomerCollectionById(value);
+    trackCustomerEvent("Collection Selected", { collection: collection.label, collectionId: collection.id, source });
+    setCategoryFilter("All");
+    setCustomerCollection(collection.id);
     if (customerFacing && typeof window !== "undefined") {
-      const nextPath = category === "All" ? "/" : `/category/${slugify(category)}`;
+      const nextPath = collection.path;
       if (window.location.pathname !== nextPath) {
-        window.history.pushState({}, "", nextPath);
+        pushCustomerPath(nextPath);
       }
     }
   }
@@ -7992,9 +8491,21 @@ export default function App() {
       items: [toCommerceItem(product)]
     });
 
-    setSelectedId(null);
+    if (selectedId != null) {
+      handleCustomerProductClose();
+    }
     setCartOpen(true);
+    void loadRazorpayCheckout().catch(() => {
+      // Checkout reports a useful error if the provider is unavailable at payment time.
+    });
     window.setTimeout(() => setCartBusyProductId(""), 350);
+  }
+
+  function handleCartOpen() {
+    setCartOpen(true);
+    void loadRazorpayCheckout().catch(() => {
+      // Keep browsing and cart editing available if the payment script cannot preload.
+    });
   }
 
   function handleCartQuantityChange(productId, nextQuantity) {
@@ -8718,6 +9229,7 @@ export default function App() {
 
   useEffect(() => {
     setCategoryFilter("All");
+    setCustomerCollection("all");
     setSearch("");
   }, [activeTab, publicScreen]);
 
@@ -8742,6 +9254,7 @@ export default function App() {
     : "Not synced yet";
 
   const featuredCustomerProduct = customerCatalog.find((product) => getProductImages(product).length) || customerCatalog[0] || null;
+  const activeCustomerCollection = getCustomerCollectionById(customerCollection);
   const generatedSku = form.id ? selectedProduct?.sku || "" : getNextSku(products, form.material, form.category);
   const activeTicker = TICKER_MESSAGES[headerTickerIndex];
   const adminTitle =
@@ -8780,7 +9293,7 @@ export default function App() {
   function handleTickerAction(action) {
     if (action === "collection") {
       if (activeTicker.text.includes("VARALAKSHMI")) {
-        handleCustomerCategorySelect("Diya", "campaign_ticker");
+        handleCustomerCategorySelect("varalakshmi", "campaign_ticker");
       }
       handleScrollToCollection();
       return;
@@ -8802,12 +9315,13 @@ export default function App() {
   function handleCustomerHome() {
     setPublicScreen("customer");
     setCategoryFilter("All");
+    setCustomerCollection("all");
     setSearch("");
     setSelectedId(null);
     setRouteIntent({ screen: "customer", type: "home", slug: "" });
     pendingRouteIntentRef.current = { screen: "customer", type: "home", slug: "" };
     if (typeof window !== "undefined") {
-      window.history.pushState({}, "", "/");
+      pushCustomerPath("/");
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -8858,7 +9372,12 @@ export default function App() {
     </div>
   ) : !adminActive || previewCustomerView ? (
     <div className="customer-page customer-shell">
-      <AnnouncementBar onShop={handleScrollToCollection} />
+      <AnnouncementBar
+        onShop={() => {
+          handleCustomerCategorySelect("varalakshmi", "announcement");
+          handleScrollToCollection();
+        }}
+      />
       <CustomerUtilityBar />
       <CustomerHeader
         scrolled={customerHeaderElevated}
@@ -8870,7 +9389,7 @@ export default function App() {
         onAdmin={handleAdminEntry}
         onHome={handleCustomerHome}
         cartCount={cartCount}
-        onCartOpen={() => setCartOpen(true)}
+        onCartOpen={handleCartOpen}
       />
       <CustomerNavigation
         onSelectCategory={handleCustomerCategorySelect}
@@ -8888,17 +9407,40 @@ export default function App() {
           onSelectCategory={handleCustomerCategorySelect}
         />
         <CustomerCommercePromise />
+        {customerCollection === "all" || customerCollection === "varalakshmi" ? (
+          <CustomerCampaignEdit
+            products={customerCatalog}
+            onSelect={handleProductSelect}
+            onAddToCart={handleAddToCart}
+            busyProductId={cartBusyProductId}
+            onViewAll={() => {
+              handleCustomerCategorySelect("varalakshmi", "campaign_edit");
+              handleScrollToCollection();
+            }}
+          />
+        ) : null}
         <section className="customer-catalog-shell" ref={productGridRef} aria-labelledby="brass-edit-title">
           <div className="customer-collections-head desktop-reveal">
             <div>
-              <p className="eyebrow">Curated by brass specialists</p>
-              <h2 id="brass-edit-title">The Decorbeats Brass Edit</h2>
-              <p>Pieces with presence—for rituals, rooms, tables and gifts worth remembering.</p>
+              <p className="eyebrow">
+                {activeCustomerCollection.id === "all" ? "Curated by brass specialists" : "Your selected brass collection"}
+              </p>
+              <h2 id="brass-edit-title">
+                {activeCustomerCollection.id === "all" ? "The Decorbeats Brass Edit" : activeCustomerCollection.label}
+              </h2>
+              <p>
+                {activeCustomerCollection.id === "all"
+                  ? "Pieces with presence—for rituals, rooms, tables and gifts worth remembering."
+                  : "A focused edit of available pieces, with material and pricing shown clearly."}
+              </p>
             </div>
             <span>{filteredProducts.length} pieces</span>
           </div>
           <div className="customer-filter-bar">
-            <CustomerCategoryBar categories={categories} categoryFilter={categoryFilter} setCategoryFilter={handleCustomerCategorySelect} />
+            <CustomerCategoryBar
+              collectionFilter={customerCollection}
+              setCollectionFilter={handleCustomerCategorySelect}
+            />
             <div className="customer-search-row">
               <input
                 ref={customerSearchRef}
@@ -8923,6 +9465,14 @@ export default function App() {
             ))}
           </section>
           {storefrontLoading ? <CustomerProductSkeletonGrid /> : null}
+          {!storefrontLoading && !visibleCustomerProducts.length ? (
+            <CustomerEmptyCollection
+              onClear={() => {
+                setSearch("");
+                handleCustomerCategorySelect("all", "empty_state");
+              }}
+            />
+          ) : null}
           {visibleCustomerProductCount < filteredProducts.length ? (
             <div className="customer-load-more-wrap">
               <button
@@ -8946,7 +9496,9 @@ export default function App() {
         <CustomerFaq />
         <CustomerFooter onAdmin={handleAdminEntry} showAdminLink={false} />
       </main>
-      <CustomerMobileDock cartCount={cartCount} onShop={handleScrollToCollection} onCartOpen={() => setCartOpen(true)} />
+      {!selectedProduct && !cartOpen ? (
+        <CustomerMobileDock cartCount={cartCount} onShop={handleScrollToCollection} onCartOpen={handleCartOpen} />
+      ) : null}
       <CustomerSheet
         product={selectedProduct}
         onClose={handleCustomerProductClose}
