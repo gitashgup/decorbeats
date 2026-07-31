@@ -1263,6 +1263,10 @@ function toHeroSlide(raw, index = 0) {
   const isLegacyLeadSlide =
     rawImageUrl === "/assets/images/slider-credibility-studio.svg" ||
     rawImageUrl.includes("/hero-slides/1778733194643.jpg");
+  const isLegacyPosterSlide = [
+    "/hero-slides/1778948763595.jpg",
+    "/hero-slides/1778697872686.jpg"
+  ].some((imagePath) => rawImageUrl.includes(imagePath));
   const imageUrl =
     isLegacyLeadSlide
       ? "/assets/images/decorbeats-atelier-campaign.jpg"
@@ -1286,6 +1290,7 @@ function toHeroSlide(raw, index = 0) {
       : safeText(raw.cta_action ?? raw.ctaAction, "collection"),
     contentPosition: safeText(raw.content_position ?? raw.contentPosition, "left"),
     imageUrl,
+    posterOnly: Boolean(raw.poster_only ?? raw.posterOnly ?? isLegacyPosterSlide),
     active: raw.active ?? raw.is_active ?? true,
     sortOrder: Number(raw.sort_order ?? raw.sortOrder ?? index + 1),
     createdAt: raw.created_at ?? raw.createdAt ?? null
@@ -3637,8 +3642,9 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
   const activeSlide = preparedSlides[activeIndex] ?? preparedSlides[0] ?? defaultHeroSlides[0];
   const slideImage = activeSlide.imageUrl || heroImage || defaultHeroSlides[0].imageUrl;
   const titleLines = getHeroTitleLines(activeSlide.title);
+  const isPosterOnly = Boolean(activeSlide.posterOnly);
   const isPosterSlide = Boolean(slideImage);
-  const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}${isPosterSlide ? " hero-poster-slide" : ""}`;
+  const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}${isPosterSlide ? " hero-poster-slide" : ""}${isPosterOnly ? " hero-poster-only" : ""}`;
 
   useEffect(() => {
     if (preparedSlides.length <= 1) {

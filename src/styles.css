@@ -335,6 +335,64 @@ body:has(.customer-shell) {
   background: var(--commerce-red);
 }
 
+.customer-shell .customer-hero.hero-poster-only {
+  width: 100%;
+  min-height: 0;
+  display: block;
+  padding: 0 0 44px;
+  background: #eee7dc;
+  grid-template-columns: 1fr !important;
+}
+
+.customer-shell .customer-hero.hero-poster-only .customer-hero-copy,
+.customer-shell .customer-hero.hero-poster-only .customer-hero-notes,
+.customer-shell .customer-hero.hero-poster-only .customer-scroll-indicator {
+  display: none;
+}
+
+.customer-shell .customer-hero.hero-poster-only .customer-hero-media {
+  position: relative;
+  width: 100%;
+  height: min(50vw, 720px);
+  min-height: 0 !important;
+  display: grid;
+  place-items: center;
+  aspect-ratio: auto;
+  background: #21140d;
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.customer-shell .customer-hero.hero-poster-only .customer-hero-media::after {
+  display: none;
+}
+
+.customer-shell .customer-hero.hero-poster-only .customer-hero-media img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  background: #21140d;
+  filter: none;
+}
+
+.customer-shell .customer-hero.hero-poster-only .customer-hero-dots {
+  right: auto;
+  bottom: 19px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.customer-shell .customer-hero.hero-poster-only .customer-hero-dots button {
+  background: rgba(57, 37, 27, 0.24);
+}
+
+.customer-shell .customer-hero.hero-poster-only .customer-hero-dots button.active {
+  background: var(--commerce-red);
+}
+
 .customer-commerce-promise {
   width: min(1440px, calc(100% - 48px));
   display: grid;
@@ -648,6 +706,43 @@ body:has(.customer-shell) {
     grid-column: 1;
     grid-row: 2;
     min-height: min(72svh, 620px);
+  }
+
+  .customer-shell .customer-hero.hero-poster-only .customer-hero-media {
+    height: 56.25vw;
+    min-height: 0 !important;
+    grid-row: 1;
+  }
+
+  .customer-shell .customer-hero-dots,
+  .customer-shell .customer-hero.hero-poster-slide .customer-hero-dots {
+    right: auto;
+    bottom: 10px;
+    left: 50%;
+    display: flex;
+    transform: translateX(-50%);
+  }
+
+  .customer-shell .customer-hero-dots button {
+    width: 32px;
+    height: 28px;
+    min-height: 28px;
+    background:
+      linear-gradient(
+        transparent 12px,
+        rgba(57, 37, 27, 0.25) 12px 15px,
+        transparent 15px
+      );
+  }
+
+  .customer-shell .customer-hero-dots button.active {
+    width: 48px;
+    background:
+      linear-gradient(
+        transparent 12px,
+        var(--commerce-red) 12px 15px,
+        transparent 15px
+      );
   }
 
   .customer-commerce-promise {
