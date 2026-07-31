@@ -25,50 +25,20 @@ async function getSupabaseClient() {
 const brandLogo = "/assets/brand/decorbeats-logo.svg";
 const WHATSAPP_NUMBER = "919811133661";
 const PRODUCT_STORAGE_BUCKET = "products";
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+const CART_STORAGE_KEY = "decorbeats-cart-v1";
 const RAZORPAY_CHECKOUT_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
 const GOOGLE_ADS_CONTACT_CONVERSION = "AW-18084439764/kF1hCNnLiK4cENTNqq9D";
 const ANNOUNCEMENTS = [
-  "✦ Varalakshmi gifting — Brass diyas and blessings, beautifully given",
-  "𝄞 Decorbeats — where every gift finds its rhythm",
-  "♪ Bulk orders welcome · 50 to 400+ units",
-  "♫ Handcrafted in India · Shipped across the country",
-  "✦ WhatsApp us for custom gifting solutions",
-  "𝄞 New arrivals added weekly"
+  "Varalakshmi gifts now live",
+  "Handpicked in Moradabad",
+  "Pan-India delivery"
 ];
 const TICKER_MESSAGES = [
-  { text: "✦  VARALAKSHMI GIFTS — BLESSINGS, BEAUTIFULLY GIVEN", action: "collection" },
-  { text: "𝄞  DECORBEATS — WHERE EVERY GIFT FINDS ITS RHYTHM  𝄞", action: null },
-  { text: "🚚  SAME-DAY DELIVERY ACROSS BANGALORE — ORDER BEFORE 2PM", action: "collection" },
-  { text: "✦  BRASS NEVER LIES. NEITHER DOES OUR CRAFTSMANSHIP.", action: null },
-  { text: "📦  OVERNIGHT TO MUMBAI · CHENNAI · PUNE · HYDERABAD VIA AMAZON", action: "collection" },
-  { text: "🎁  50 TO 400 UNITS — BULK GIFTING IS OUR FORTE", action: "whatsapp" },
-  { text: "✦  SAND-BLASTED. HAND-FINISHED. MADE TO BE REMEMBERED.", action: null },
-  { text: "𝄞  THE BEAT OF GOOD GIFTING — DECORBEATS STUDIO", action: null },
-  { text: "⭐  CUSTOM CORPORATE GIFTING — TELL US YOUR OCCASION", action: null },
-  { text: "✦  ARTISANAL DECOR · GIFTED WITH LOVE · SINCE INDIA BEGAN CELEBRATING", action: null }
+  { text: "VARALAKSHMI GIFTS · AUSPICIOUS BRASS FOR BEAUTIFUL HOMES", action: "collection" },
+  { text: "THE BRASS HOUSE OF INDIA · ROOTED IN MORADABAD", action: null },
+  { text: "50–400+ PIECES · CUSTOM BUSINESS & OCCASION GIFTING", action: "whatsapp" },
+  { text: "PAN-INDIA DELIVERY · PERSONAL HELP FROM A BRASS SPECIALIST", action: "whatsapp" }
 ];
-const INQUIRY_SYSTEM_PROMPT = `You are a data extraction assistant for Decorbeats, an Indian gifting and decor business. Extract structured information from this sales inquiry transcript. Return ONLY a valid JSON object, no explanation, no markdown.
-
-Fields to extract:
-{
-  "customer_name": string or null,
-  "customer_phone": string or null,
-  "source": "phone" | "whatsapp" | "walkin",
-  "occasion": string or null,
-  "required_by_date": string or null,
-  "budget_per_unit": number or null,
-  "total_budget": number or null,
-  "notes": string or null,
-  "products": [
-    {
-      "product_name": string,
-      "quantity_requested": number or null,
-      "quoted_price": number or null
-    }
-  ]
-}`;
-
 const emptyForm = {
   id: "",
   name: "",
@@ -91,35 +61,35 @@ const materialOptions = ["Brass", "Metal", "Ceramic", "Wood", "Glass", "Clay", "
 const marketingTagOptions = ["", "Featured", "New Arrival", "Best for Gifting", "Festive Pick", "Handpicked", "Limited Edition"];
 const customerOccasions = [
   {
-    label: "Festive Gifting",
+    label: "Pooja & Ritual",
     category: "Diya",
-    note: "Diyas, urlis and pooja accents",
-    beat: "Raaga of light",
+    note: "Diyas, lamps and sacred accents",
+    beat: "For everyday devotion",
     preferredImageProducts: ["Hanging peacock diya with chain heavy"]
   },
-  { label: "Home Decor", category: "Decor", note: "Statement pieces for warm corners", beat: "A room with rhythm" },
-  { label: "Corporate Orders", category: "Box", note: "Bulk-ready gifts and keepsakes", beat: "Gifting in harmony" },
-  { label: "Wall Stories", category: "Wall Decor", note: "Brass details for beautiful walls", beat: "Notes for your walls" }
+  { label: "Brass for Home", category: "Decor", note: "Objects that warm every room", beat: "For considered spaces" },
+  { label: "Festive Gifts", category: "Box", note: "Meaningful keepsakes and gift sets", beat: "For generous moments" },
+  { label: "Statement Walls", category: "Wall Decor", note: "Sculptural details with presence", beat: "For memorable rooms" }
 ];
 const defaultHeroSlides = [
   {
     id: "default-varalakshmi",
-    eyebrow: "Varalakshmi gifting · Handcrafted in India",
-    title: "Blessings,|beautifully given.",
-    body: "Discover auspicious brass diyas and meaningful gifts, chosen for homes filled with light, abundance and celebration.",
-    ctaLabel: "Shop festive gifts",
+    eyebrow: "Varalakshmi gifting · Curated by brass specialists",
+    title: "Bring home|blessings in brass.",
+    body: "Auspicious diyas and meaningful gifts, handpicked in Moradabad and delivered across India for homes filled with light and abundance.",
+    ctaLabel: "Shop Varalakshmi gifts",
     ctaAction: "collection",
     contentPosition: "left",
-    imageUrl: "/assets/images/decorbeats-varalakshmi-gifting.jpg",
+    imageUrl: "/assets/images/decorbeats-varalakshmi-gifting-v2.jpg",
     active: true,
     sortOrder: 0
   },
   {
     id: "default-credibility",
-    eyebrow: "The new heirlooms · Handcrafted in India",
-    title: "Objects of beauty.|Gifts with meaning.",
-    body: "Discover expressive brass and artisanal décor for contemporary homes, joyful gatherings and gestures worth remembering.",
-    ctaLabel: "Shop the collection",
+    eyebrow: "From Moradabad · India’s brass city",
+    title: "India’s home|of brass.",
+    body: "Brass décor, pooja essentials, serveware and gifts—sourced, finished and curated by specialists with roots in Pital Nagri.",
+    ctaLabel: "Explore brass collection",
     ctaAction: "collection",
     contentPosition: "left",
     imageUrl: "/assets/images/decorbeats-atelier-campaign.jpg",
@@ -127,6 +97,25 @@ const defaultHeroSlides = [
     sortOrder: 1
   }
 ];
+
+function getStoredCartItems() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) || "[]");
+    return Array.isArray(stored)
+      ? stored
+          .filter((item) => item && item.productId != null)
+          .map((item) => ({
+            productId: item.productId,
+            quantity: Math.max(1, Math.min(Number(item.quantity || 1) || 1, 25))
+          }))
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 const materialSkuCodes = {
   Brass: "BR",
@@ -431,6 +420,28 @@ function trackGoogleAdsContactConversion(value = 1) {
     value: Number(value) || 1,
     currency: "INR"
   });
+}
+
+function trackCommerceEvent(eventName, { transactionId, value, items = [] } = {}) {
+  if (typeof window === "undefined" || typeof window.gtag !== "function") {
+    return;
+  }
+  window.gtag("event", eventName, {
+    ...(transactionId ? { transaction_id: transactionId } : {}),
+    ...(Number.isFinite(Number(value)) ? { value: Number(value) } : {}),
+    currency: "INR",
+    items
+  });
+}
+
+function toCommerceItem(product, quantity = 1) {
+  return {
+    item_id: product?.sku || String(product?.id || ""),
+    item_name: product?.name || "Decorbeats product",
+    item_category: product?.category || "",
+    price: parsePrice(product?.pricing?.mrp) || 0,
+    quantity
+  };
 }
 
 function trackBulkWhatsAppClick(source) {
@@ -967,6 +978,17 @@ function normalizeProductName(value) {
 function normalizeProductCategory(value) {
   const category = safeText(value, "Uncategorized");
   return category.toLowerCase() === "urli" ? "Urli" : category;
+}
+
+function getCustomerProductStory(product) {
+  const note = safeText(product?.notes);
+  if (!note || note.toLowerCase() === safeText(product?.name).toLowerCase()) {
+    return "";
+  }
+
+  const internalNotePattern =
+    /\b(qc|quality check|requires? review|pending|internal|inventory|stock|cost|photo|image|amazon|listing)\b/i;
+  return internalNotePattern.test(note) ? "" : note;
 }
 
 function normalizeUrl(value) {
@@ -3531,17 +3553,20 @@ function CustomerPreviewBanner({ onBack }) {
   );
 }
 
-function AnnouncementBar() {
-  const items = [...ANNOUNCEMENTS, ...ANNOUNCEMENTS];
-
+function AnnouncementBar({ onShop }) {
   return (
     <section className="announcement-bar" aria-label="Store announcements">
-      <div className="announcement-track">
-        {items.map((message, index) => (
-          <span key={`${message}-${index}`} className="announcement-item">
-            {message}
-          </span>
-        ))}
+      <div className="announcement-inner">
+        <p>
+          {ANNOUNCEMENTS.map((message) => (
+            <span key={message} className="announcement-item">
+              {message}
+            </span>
+          ))}
+        </p>
+        <button type="button" onClick={onShop}>
+          Shop the festive edit
+        </button>
       </div>
     </section>
   );
@@ -3550,11 +3575,11 @@ function AnnouncementBar() {
 function CustomerUtilityBar() {
   return (
     <div className="customer-utility-bar" aria-label="Store information">
-      <span>Handcrafted in Moradabad</span>
+      <span>Rooted in Moradabad, India’s brass city</span>
       <div>
-        <span>Secure online checkout</span>
-        <span>Shipping across India</span>
-        <a href="tel:+919811133661">Customer care: +91 98111 33661</a>
+        <span>Razorpay-secured checkout</span>
+        <span>Pan-India delivery</span>
+        <a href="tel:+919811133661">Brass concierge: +91 98111 33661</a>
       </div>
     </div>
   );
@@ -3562,27 +3587,28 @@ function CustomerUtilityBar() {
 
 function CustomerNavigation({ onSelectCategory, onShop }) {
   const items = [
-    { label: "New Arrivals", category: "All" },
-    { label: "Brass Décor", category: "Decor" },
-    { label: "Diyas & Lamps", category: "Diya" },
-    { label: "Table & Serveware", category: "Bowl" },
-    { label: "Wall Décor", category: "Wall Decor" },
-    { label: "Gifting", category: "Box" }
+    { label: "New & Noteworthy", category: "All" },
+    { label: "Pooja & Diyas", category: "Diya" },
+    { label: "Home Décor", category: "Decor" },
+    { label: "Urlis & Serveware", category: "Urli" },
+    { label: "Wall Statements", category: "Wall Decor" },
+    { label: "Festive Gifts", category: "Box" }
   ];
 
   return (
     <nav className="customer-primary-nav" aria-label="Shop collections">
       {items.map((item) => (
-        <button
+        <a
           key={item.label}
-          type="button"
-          onClick={() => {
+          href={item.category === "All" ? "/" : `/category/${slugify(item.category)}`}
+          onClick={(event) => {
+            event.preventDefault();
             onSelectCategory(item.category, "primary_navigation");
             onShop();
           }}
         >
           {item.label}
-        </button>
+        </a>
       ))}
       <a
         href={getBulkWhatsAppUrl()}
@@ -3590,7 +3616,7 @@ function CustomerNavigation({ onSelectCategory, onShop }) {
         rel="noopener noreferrer"
         onClick={() => trackBulkWhatsAppClick("primary_navigation")}
       >
-        Corporate Gifting
+        Business Gifting
       </a>
     </nav>
   );
@@ -3624,6 +3650,10 @@ function CustomerHeader({
     <header className={scrolled ? "customer-header scrolled" : "customer-header"}>
       <button type="button" className="customer-header-home" aria-label="Go to Decorbeats home" onClick={onHome}>
         <img src={brandLogo} alt="Decorbeats" className="customer-header-logo" />
+        <span className="customer-header-lockup">
+          <strong>DECORBEATS</strong>
+          <small>THE BRASS HOUSE OF INDIA</small>
+        </span>
       </button>
       {tickerAction ? (
         <button
@@ -3642,6 +3672,15 @@ function CustomerHeader({
       <button type="button" className="customer-header-admin-link" onClick={onAdmin}>
         Admin
       </button>
+      <a
+        className="customer-header-concierge"
+        href={getBulkWhatsAppUrl()}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => trackBulkWhatsAppClick("header_concierge")}
+      >
+        Talk to a brass expert
+      </a>
       <button type="button" className="customer-header-cart" aria-label={`Open cart, ${cartCount} items`} onClick={onCartOpen}>
         <CartIcon />
         {cartCount ? <span>{cartCount}</span> : null}
@@ -3653,28 +3692,31 @@ function CustomerHeader({
   );
 }
 
-function CustomerHero({ slides, featuredProduct, onShop }) {
+function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isHovering, setIsHovering] = useState(false);
   const heroImage = getPrimaryImage(featuredProduct);
-  const preparedSlides = slides.length
-    ? slides
-    : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: slide.imageUrl || heroImage }));
+  const preparedSlides = (
+    slides.length ? slides : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: slide.imageUrl || heroImage }))
+  ).slice(0, 2);
   const activeSlide = preparedSlides[activeIndex] ?? preparedSlides[0] ?? defaultHeroSlides[0];
   const slideImage = activeSlide.imageUrl || heroImage || defaultHeroSlides[0].imageUrl;
   const titleLines = getHeroTitleLines(activeSlide.title);
   const isPosterOnly = Boolean(activeSlide.posterOnly);
-  const isPosterSlide = Boolean(slideImage);
-  const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}${isPosterSlide ? " hero-poster-slide" : ""}${isPosterOnly ? " hero-poster-only" : ""}`;
+  const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}${isPosterOnly ? " hero-poster-slide hero-poster-only" : ""}`;
 
   useEffect(() => {
-    if (preparedSlides.length <= 1) {
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const mobileViewport = window.matchMedia?.("(max-width: 767px)").matches;
+    if (preparedSlides.length <= 1 || isPaused || isHovering || reduceMotion || mobileViewport) {
       return undefined;
     }
     const intervalId = window.setInterval(() => {
       setActiveIndex((current) => (current + 1) % preparedSlides.length);
-    }, 5200);
+    }, 6800);
     return () => window.clearInterval(intervalId);
-  }, [preparedSlides.length]);
+  }, [isHovering, isPaused, preparedSlides.length]);
 
   useEffect(() => {
     if (activeIndex > preparedSlides.length - 1) {
@@ -3687,17 +3729,31 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
       openBulkWhatsApp("hero-slider");
       return;
     }
+    if (slideImage.includes("varalakshmi")) {
+      onSelectCategory?.("Diya", "varalakshmi_hero");
+    }
     onShop();
   }
 
+  function selectSlide(index) {
+    setActiveIndex(index);
+    setIsPaused(true);
+  }
+
+  function moveSlide(direction) {
+    setActiveIndex((current) => (current + direction + preparedSlides.length) % preparedSlides.length);
+    setIsPaused(true);
+  }
+
   return (
-    <section className={heroClassName}>
-      <div className="customer-hero-notes" aria-hidden="true">
-        <span>𝄞</span>
-        <span>♪</span>
-        <span>♫</span>
-      </div>
-      <div className="customer-hero-copy">
+    <section
+      className={heroClassName}
+      aria-label="Decorbeats featured collection"
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+      onFocusCapture={() => setIsPaused(true)}
+    >
+      <div className="customer-hero-copy" aria-live="polite">
         <p className="eyebrow">{activeSlide.eyebrow}</p>
         <h1>
           {titleLines.map((line) => (
@@ -3716,11 +3772,16 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
             rel="noopener noreferrer"
             onClick={() => trackBulkWhatsAppClick("hero")}
           >
-            Enquire for bulk orders →
+            Talk to a brass expert
           </a>
         </div>
+        <div className="customer-hero-proof" aria-label="Shopping assurances">
+          <span>Moradabad roots</span>
+          <span>Secure checkout</span>
+          <span>Pan-India delivery</span>
+        </div>
       </div>
-      <div className="customer-hero-media" aria-hidden="true">
+      <div className="customer-hero-media">
         {slideImage ? (
           <img
             src={getOptimizedImageUrl(slideImage, 1200, 72, isPosterOnly ? "contain" : "cover")}
@@ -3733,39 +3794,50 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
             sizes="(max-width: 767px) 100vw, 50vw"
             alt={activeSlide.title || featuredProduct?.name || "Decorbeats collection"}
             width="1200"
-            height="1400"
+            height="800"
             loading="eager"
-            fetchpriority="high"
+            fetchPriority="high"
             decoding="async"
           />
         ) : null}
       </div>
       {preparedSlides.length > 1 ? (
-        <div className="customer-hero-dots" aria-label="Hero slides">
-          {preparedSlides.map((slide, index) => (
-            <button
-              key={slide.id}
+        <div className="customer-hero-controls">
+          <button type="button" className="customer-hero-arrow" aria-label="Previous campaign" onClick={() => moveSlide(-1)}>
+            ←
+          </button>
+          <div className="customer-hero-dots" aria-label="Featured campaigns">
+            {preparedSlides.map((slide, index) => (
+              <button
+                key={slide.id}
+                type="button"
+                className={index === activeIndex ? "active" : ""}
+                aria-label={`Show campaign ${index + 1}: ${safeText(slide.title).replaceAll("|", " ")}`}
+                aria-current={index === activeIndex ? "true" : undefined}
+                onClick={() => selectSlide(index)}
+              />
+            ))}
+          </div>
+          <button
               type="button"
-              className={index === activeIndex ? "active" : ""}
-              aria-label={`Show slide ${index + 1}`}
-              onClick={() => setActiveIndex(index)}
-            />
-          ))}
+              className="customer-hero-arrow"
+              aria-label="Next campaign"
+              onClick={() => moveSlide(1)}
+            >
+              →
+            </button>
         </div>
       ) : null}
-      <div className="customer-scroll-indicator" aria-hidden="true">
-        <span />
-      </div>
     </section>
   );
 }
 
 function CustomerCommercePromise() {
   const items = [
-    ["Original craft", "Hand-finished pieces from India’s brass city"],
-    ["Secure payments", "Protected checkout powered by Razorpay"],
-    ["Thoughtful delivery", "Carefully packed and shipped across India"],
-    ["Personal assistance", "Real help before and after your purchase"]
+    ["Moradabad expertise", "Selected with roots in India’s brass city"],
+    ["Secure checkout", "Protected online payments through Razorpay"],
+    ["Pan-India delivery", "Carefully packed for brass and handcrafted décor"],
+    ["Human guidance", "Real help from selection through delivery"]
   ];
 
   return (
@@ -3780,19 +3852,34 @@ function CustomerCommercePromise() {
   );
 }
 
-function TrustStrip({ productCount }) {
-  const items = [
-    "𝄞 Handcrafted in India",
-    "♪ Bulk orders welcome",
-    `♫ ${productCount}+ products`,
-    "𝄞 WhatsApp enquiry in minutes"
-  ];
-
+function BrandAuthorityIntro({ productCount, onShop }) {
   return (
-    <section className="trust-strip desktop-reveal" aria-label="Decorbeats trust markers">
-      {items.map((item) => (
-        <span key={item}>{item}</span>
-      ))}
+    <section className="customer-authority-intro desktop-reveal" aria-labelledby="brass-house-title">
+      <div className="customer-authority-copy">
+        <p className="eyebrow">Decorbeats · The Brass House of India</p>
+        <h2 id="brass-house-title">One destination. Every expression of brass.</h2>
+        <p>
+          Our roots are in Moradabad—Pital Nagri—where generations have cast, engraved and finished brass by hand.
+          We bring that specialist eye to pieces for prayer, beautiful homes, generous gifting and memorable hospitality.
+        </p>
+        <button type="button" className="customer-text-link" onClick={onShop}>
+          Explore the brass collection <span aria-hidden="true">→</span>
+        </button>
+      </div>
+      <div className="customer-authority-facts" aria-label="Decorbeats expertise">
+        <article>
+          <strong>Moradabad</strong>
+          <span>Roots in India’s brass city</span>
+        </article>
+        <article>
+          <strong>{productCount}+</strong>
+          <span>Live pieces across the brass universe</span>
+        </article>
+        <article>
+          <strong>50–400+</strong>
+          <span>Custom gifting runs with human support</span>
+        </article>
+      </div>
     </section>
   );
 }
@@ -3807,10 +3894,11 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
   });
 
   return (
-    <section className="customer-occasion-rail" aria-label="Shop by occasion">
+    <section className="customer-occasion-rail" aria-label="Shop the brass universe">
       <div className="customer-occasion-head">
-        <p className="eyebrow">Popular categories</p>
-        <h2>Begin with what moves you</h2>
+        <p className="eyebrow">Shop the brass universe</p>
+        <h2>Begin with the moment you are creating.</h2>
+        <p>From a daily diya to a room-defining statement, find brass with purpose and presence.</p>
       </div>
       <div className="customer-occasion-list">
         {occasions.map((occasion) => (
@@ -3828,7 +3916,7 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
                 src={getOptimizedImageUrl(occasion.image, 520, 72)}
                 srcSet={getOptimizedImageSrcSet(occasion.image, [320, 520, 720], 72)}
                 sizes="(max-width: 767px) 76vw, 25vw"
-                alt=""
+                alt={`${occasion.label} from Decorbeats`}
                 width="520"
                 height="700"
                 loading="lazy"
@@ -3891,13 +3979,13 @@ function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
   );
 }
 
-function EditorialSection() {
+function EditorialSection({ onShop }) {
   return (
-    <section className="editorial-section desktop-reveal">
+    <section className="editorial-section desktop-reveal" aria-labelledby="pital-nagri-title">
       <div className="editorial-media">
         <img
           src="/assets/images/decorbeats-atelier-campaign.jpg"
-          alt="Handcrafted brass décor styled in a serene Indian interior"
+          alt="Decorbeats brass décor styled in a contemporary Indian interior"
           width="1672"
           height="941"
           loading="lazy"
@@ -3905,23 +3993,171 @@ function EditorialSection() {
         />
       </div>
       <div className="editorial-copy">
-        <p className="eyebrow">The Decorbeats edit</p>
-        <h2>Objects that make a room—and a moment.</h2>
-        <p>We curate expressive brass, metal and artisanal pieces that bring warmth, ritual and character into everyday life.</p>
-        <p>Each object is selected for its form, finish and ability to feel personal—from a single thoughtful gift to a beautifully coordinated celebration.</p>
-        <p>For corporate and occasion gifting, our studio helps shape collections that feel considered, memorable and distinctly yours.</p>
-        <a
-          className="customer-whatsapp-button editorial-whatsapp"
-          href={getBulkWhatsAppUrl()}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => trackBulkWhatsAppClick("editorial")}
-        >
-          <WhatsAppIcon />
-          <span>Enquire on WhatsApp</span>
-        </a>
+        <p className="eyebrow">From Pital Nagri to your home</p>
+        <h2 id="pital-nagri-title">Brass is not a trend here. It is our language.</h2>
+        <p>
+          In Moradabad, brass knowledge is passed through hands—how a piece is cast, where weight matters, how engraving
+          catches light and how a finish will age.
+        </p>
+        <p>
+          Decorbeats brings that specialist eye to modern Indian homes. We select for material, proportion, finish and
+          meaning, so every object feels beautiful today and worth keeping tomorrow.
+        </p>
+        <ul className="editorial-expertise">
+          <li>Pooja and temple brass</li>
+          <li>Home, wall and hospitality décor</li>
+          <li>Festive, wedding and business gifting</li>
+        </ul>
+        <div className="editorial-actions">
+          <button type="button" className="primary-button" onClick={onShop}>
+            Discover the collection
+          </button>
+          <a
+            className="customer-text-link"
+            href={getBulkWhatsAppUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => trackBulkWhatsAppClick("editorial")}
+          >
+            Ask a brass specialist <span aria-hidden="true">→</span>
+          </a>
+        </div>
       </div>
     </section>
+  );
+}
+
+function KnowYourBrass() {
+  const guides = [
+    {
+      number: "01",
+      title: "Solid brass or brass finish?",
+      copy: "We name the material on every piece. Solid brass has depth and natural weight; brass-finished pieces offer a lighter decorative expression."
+    },
+    {
+      number: "02",
+      title: "Let the patina become personal.",
+      copy: "Brass naturally deepens with air and touch. Keep the patina for character, or revive the glow gently with a soft dry cloth and brass-safe care."
+    },
+    {
+      number: "03",
+      title: "Choose for use, not only looks.",
+      copy: "For flame, food or pooja use, follow the care note for that specific piece. Our team can help you choose the right material and finish."
+    }
+  ];
+
+  return (
+    <section className="customer-brass-guide desktop-reveal" aria-labelledby="know-brass-title">
+      <div className="customer-brass-guide-head">
+        <p className="eyebrow">The brass library</p>
+        <h2 id="know-brass-title">Know your brass.</h2>
+        <p>Good buying begins with good material knowledge. A few notes from the specialists.</p>
+      </div>
+      <div className="customer-brass-guide-grid">
+        {guides.map((guide) => (
+          <article key={guide.number}>
+            <span>{guide.number}</span>
+            <h3>{guide.title}</h3>
+            <p>{guide.copy}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CorporateGiftingSection() {
+  return (
+    <section className="customer-gifting-studio desktop-reveal" aria-labelledby="gifting-studio-title">
+      <div>
+        <p className="eyebrow">Decorbeats gifting studio</p>
+        <h2 id="gifting-studio-title">Brass gifting, made effortless.</h2>
+        <p>
+          From 50 to 400+ pieces, we help businesses, wedding families and event teams curate memorable brass gifts with
+          thoughtful packaging, practical timelines and one human point of contact.
+        </p>
+      </div>
+      <div className="customer-gifting-steps" aria-label="Gifting service">
+        <span><strong>01</strong> Share your occasion, quantity and budget</span>
+        <span><strong>02</strong> Receive a curated brass shortlist</span>
+        <span><strong>03</strong> Confirm packaging, branding and delivery</span>
+      </div>
+      <a
+        className="customer-gifting-cta"
+        href={getBulkWhatsAppUrl()}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => trackBulkWhatsAppClick("gifting_studio")}
+      >
+        <WhatsAppIcon />
+        <span>Plan your gifting with us</span>
+      </a>
+    </section>
+  );
+}
+
+function CustomerFaq() {
+  const questions = [
+    [
+      "Is every Decorbeats piece solid brass?",
+      "Our collection includes solid brass as well as selected metal pieces with brass finishes. The material is stated on each product, and our team can help confirm composition before you order."
+    ],
+    [
+      "Will brass change colour over time?",
+      "Yes. Natural brass develops a deeper patina with air and touch—many collectors value this character. A soft dry cloth keeps daily dust away; use only brass-safe care when you want a brighter finish."
+    ],
+    [
+      "Can you help with wedding or corporate gifting?",
+      "Yes. We support curated orders from 50 to 400+ pieces, including product selection, packaging coordination, branding discussions and delivery planning."
+    ],
+    [
+      "Where does Decorbeats deliver?",
+      "We ship across India. Every order is packed with the needs of brass and handcrafted décor in mind, and our team is available if you need help before or after delivery."
+    ]
+  ];
+
+  return (
+    <section className="customer-faq desktop-reveal" aria-labelledby="customer-faq-title">
+      <div>
+        <p className="eyebrow">Before you choose</p>
+        <h2 id="customer-faq-title">Questions, answered by brass people.</h2>
+      </div>
+      <div className="customer-faq-list">
+        {questions.map(([question, answer], index) => (
+          <details key={question}>
+            <summary>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              {question}
+            </summary>
+            <p>{answer}</p>
+          </details>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CustomerMobileDock({ cartCount, onShop, onCartOpen }) {
+  return (
+    <nav className="customer-mobile-dock" aria-label="Quick shopping actions">
+      <button type="button" onClick={onShop}>
+        <span>Shop</span>
+        <small>Explore brass</small>
+      </button>
+      <a
+        href={getBulkWhatsAppUrl()}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => trackBulkWhatsAppClick("mobile_dock")}
+      >
+        <WhatsAppIcon />
+        <span>Ask an expert</span>
+      </a>
+      <button type="button" onClick={onCartOpen}>
+        <CartIcon />
+        <span>Bag{cartCount ? ` (${cartCount})` : ""}</span>
+      </button>
+    </nav>
   );
 }
 
@@ -3945,11 +4181,18 @@ function CustomerCategoryBar({ categories, categoryFilter, setCategoryFilter }) 
 function CustomerProductCard({ product, onSelect, onAddToCart, busy }) {
   const primaryImage = getPrimaryImage(product);
   const isNewProduct = isNewArrival(product.createdAt);
+  const outOfStock = Number(product.quantity || 0) <= 0;
   return (
     <article className="customer-product-card desktop-reveal">
-      <button type="button" className="customer-product-card-main" onClick={() => onSelect(product)}>
+      <button
+        type="button"
+        className="customer-product-card-main"
+        aria-label={`View ${product.name}`}
+        onClick={() => onSelect(product)}
+      >
         <div className="customer-product-image-wrap">
         {isNewProduct ? <span className="customer-new-badge">NEW</span> : null}
+        {outOfStock ? <span className="customer-sold-out-badge">SOLD OUT</span> : null}
         {product.marketingTag ? <span className="customer-marketing-tag">{product.marketingTag}</span> : null}
         {primaryImage ? (
           <img
@@ -3972,7 +4215,7 @@ function CustomerProductCard({ product, onSelect, onAddToCart, busy }) {
         </div>
         <div className="customer-product-copy">
           <h3>{product.name}</h3>
-          <p className="customer-product-category">{product.category}</p>
+          <p className="customer-product-category">{product.material} · {product.category}</p>
           <p className="customer-price">
             {hasDisplayValue(product.pricing.mrp) ? formatCurrency(product.pricing.mrp) : "Price on request"}
           </p>
@@ -3983,13 +4226,20 @@ function CustomerProductCard({ product, onSelect, onAddToCart, busy }) {
           type="button"
           className="customer-quick-add"
           onClick={() => onAddToCart(product)}
-          disabled={busy}
+          disabled={busy || outOfStock}
+          aria-label={`${outOfStock ? "Sold out" : "Add to bag"}: ${product.name}`}
         >
-          {busy ? "Adding…" : "Add to bag"}
+          {outOfStock ? "Sold out" : busy ? "Adding…" : "Add to bag"}
         </button>
       ) : (
-        <button type="button" className="customer-quick-add" onClick={() => onSelect(product)}>
-          Enquire
+        <button
+          type="button"
+          className="customer-quick-add"
+          onClick={() => onSelect(product)}
+          disabled={outOfStock}
+          aria-label={`${outOfStock ? "Sold out" : "Enquire about"} ${product.name}`}
+        >
+          {outOfStock ? "Sold out" : "Enquire"}
         </button>
       )}
     </article>
@@ -4020,12 +4270,19 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
   useEffect(() => {
     setClosing(false);
     setDragOffset(0);
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
       if (closeTimerRef.current) {
         window.clearTimeout(closeTimerRef.current);
       }
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [product?.id]);
+  }, [onClose, product?.id]);
 
   if (!product) {
     return (
@@ -4035,9 +4292,9 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
     );
   }
 
-  const showDescription = product.notes && product.notes.trim() !== product.name.trim();
-  const occasionLine = showDescription ? product.notes.trim() : "";
+  const occasionLine = getCustomerProductStory(product);
   const isNewProduct = isNewArrival(product.createdAt);
+  const outOfStock = Number(product.quantity || 0) <= 0;
   const dismissSheet = () => {
     if (closing) {
       return;
@@ -4065,6 +4322,9 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
       <aside
         className={closing ? "customer-sheet open closing" : "customer-sheet open"}
         style={sheetStyle}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="customer-product-title"
         onClick={(event) => event.stopPropagation()}
       >
         <div
@@ -4116,7 +4376,7 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
         <div className="customer-sheet-copy">
           <p className="customer-sheet-kicker">Decorbeats collection</p>
           <div className="customer-sheet-title-row">
-            <h2>{product.name}</h2>
+            <h2 id="customer-product-title">{product.name}</h2>
             {isNewProduct ? <span className="customer-sheet-new-badge">New Arrival</span> : null}
             {!isNewProduct && product.marketingTag ? <span className="customer-sheet-new-badge">{product.marketingTag}</span> : null}
           </div>
@@ -4127,6 +4387,7 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
           <div className="customer-sheet-meta">
             <span>{product.category}</span>
             <span>{product.material}</span>
+            <span>{outOfStock ? "Sold out" : product.stockStatus}</span>
             {product.size ? <span>{product.size}</span> : null}
             {product.weight ? <span>{product.weight}</span> : null}
           </div>
@@ -4156,10 +4417,16 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
                   type="button"
                   className="customer-pay-button"
                   onClick={() => onAddToCart(product)}
-                  disabled={String(cartBusyProductId) === String(product.id)}
+                  disabled={outOfStock || String(cartBusyProductId) === String(product.id)}
                 >
-                  <span>{String(cartBusyProductId) === String(product.id) ? "Adding to cart..." : "Add to cart"}</span>
-                  <small>Secure checkout with Razorpay</small>
+                  <span>
+                    {outOfStock
+                      ? "Currently sold out"
+                      : String(cartBusyProductId) === String(product.id)
+                        ? "Adding to cart..."
+                        : "Add to cart"}
+                  </span>
+                  <small>{outOfStock ? "Ask us about the next availability" : "Secure checkout with Razorpay"}</small>
                 </button>
                 <div className="customer-purchase-trust" aria-label="Checkout reassurance">
                   <span>Secure payment</span>
@@ -4185,7 +4452,11 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
             <button type="button" className="customer-share-link" onClick={() => onShare(product)}>
               Share product
             </button>
-            {paymentMessage ? <p className={`customer-payment-note ${paymentMessage.tone}`}>{paymentMessage.text}</p> : null}
+            {paymentMessage ? (
+              <p className={`customer-payment-note ${paymentMessage.tone}`} aria-live="polite">
+                {paymentMessage.text}
+              </p>
+            ) : null}
           </div>
         </div>
       </aside>
@@ -4209,17 +4480,36 @@ function CustomerCartDrawer({
   const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
   if (!open) {
     return null;
   }
 
   return (
     <div className="customer-cart-overlay open" onClick={onClose}>
-      <aside className="customer-cart-drawer" onClick={(event) => event.stopPropagation()}>
+      <aside
+        className="customer-cart-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="customer-cart-title"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="customer-cart-head">
           <div>
             <p className="eyebrow">Decorbeats checkout</p>
-            <h2>Your cart</h2>
+            <h2 id="customer-cart-title">Your cart</h2>
             <span>{itemCount ? `${itemCount} item${itemCount === 1 ? "" : "s"}` : "No items yet"}</span>
           </div>
           <button type="button" className="customer-sheet-close" aria-label="Close cart" onClick={onClose}>
@@ -4227,15 +4517,22 @@ function CustomerCartDrawer({
           </button>
         </div>
 
-        {error ? <p className="customer-payment-note error">{error}</p> : null}
-        {success ? <p className="customer-payment-note success">{success}</p> : null}
+        {error ? <p className="customer-payment-note error" aria-live="assertive">{error}</p> : null}
+        {success ? <p className="customer-payment-note success" aria-live="polite">{success}</p> : null}
 
         {items.length ? (
           <>
             <div className="customer-cart-items">
               {items.map((item) => (
                 <article key={item.product.id} className="customer-cart-item">
-                  <img src={item.product.imageUrl || brandLogo} alt="" />
+                  <img
+                    src={getOptimizedImageUrl(item.product.imageUrl, 180, 72)}
+                    alt=""
+                    width="90"
+                    height="112"
+                    loading="lazy"
+                    decoding="async"
+                  />
                   <div>
                     <strong>{item.product.name}</strong>
                     <span>{item.product.sku}</span>
@@ -4274,6 +4571,9 @@ function CustomerCartDrawer({
                 Full name
                 <input
                   type="text"
+                  name="name"
+                  autoComplete="name"
+                  maxLength="120"
                   value={details.customerName}
                   placeholder="Customer name"
                   onChange={(event) => setDetails((current) => ({ ...current, customerName: event.target.value }))}
@@ -4284,6 +4584,10 @@ function CustomerCartDrawer({
                 Phone number
                 <input
                   type="tel"
+                  name="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  maxLength="15"
                   value={details.phone}
                   placeholder="10-digit mobile number"
                   onChange={(event) => setDetails((current) => ({ ...current, phone: event.target.value }))}
@@ -4294,6 +4598,9 @@ function CustomerCartDrawer({
                 Email
                 <input
                   type="email"
+                  name="email"
+                  autoComplete="email"
+                  maxLength="160"
                   value={details.email}
                   placeholder="Optional, for payment receipt"
                   onChange={(event) => setDetails((current) => ({ ...current, email: event.target.value }))}
@@ -4303,6 +4610,9 @@ function CustomerCartDrawer({
                 Delivery address
                 <textarea
                   rows="3"
+                  name="street-address"
+                  autoComplete="street-address"
+                  maxLength="240"
                   value={details.addressLine1}
                   placeholder="House / flat, street, landmark"
                   onChange={(event) => setDetails((current) => ({ ...current, addressLine1: event.target.value }))}
@@ -4314,6 +4624,9 @@ function CustomerCartDrawer({
                   City
                   <input
                     type="text"
+                    name="address-level2"
+                    autoComplete="address-level2"
+                    maxLength="100"
                     value={details.city}
                     onChange={(event) => setDetails((current) => ({ ...current, city: event.target.value }))}
                     required
@@ -4323,6 +4636,9 @@ function CustomerCartDrawer({
                   State
                   <input
                     type="text"
+                    name="address-level1"
+                    autoComplete="address-level1"
+                    maxLength="100"
                     value={details.state}
                     onChange={(event) => setDetails((current) => ({ ...current, state: event.target.value }))}
                     required
@@ -4332,7 +4648,11 @@ function CustomerCartDrawer({
                   PIN code
                   <input
                     type="text"
+                    name="postal-code"
+                    autoComplete="postal-code"
                     inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength="6"
                     value={details.pincode}
                     onChange={(event) => setDetails((current) => ({ ...current, pincode: event.target.value }))}
                     required
@@ -4343,6 +4663,8 @@ function CustomerCartDrawer({
                 Delivery notes
                 <textarea
                   rows="2"
+                  name="delivery-notes"
+                  maxLength="500"
                   value={details.notes}
                   placeholder="Optional"
                   onChange={(event) => setDetails((current) => ({ ...current, notes: event.target.value }))}
@@ -4384,7 +4706,7 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
             ♜
           </span>
           <strong>Registered Office</strong>
-          <p>decorbeats(OPC) Pvt Ltd, B140, DeenDayalNagar, BrassCity, Moradabad, UP — 244001</p>
+          <p>Decorbeats (OPC) Pvt. Ltd., B-140, Deen Dayal Nagar, Moradabad, Uttar Pradesh — 244001</p>
         </div>
         <div className="customer-footer-contact-item">
           <span className="customer-footer-contact-icon" aria-hidden="true">
@@ -4399,7 +4721,7 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
       <div className="customer-footer-main">
         <div className="customer-footer-brand">
           <img src={brandLogo} alt="Decorbeats" className="customer-footer-logo" />
-          <p>Artisanal décor, gifted with love.</p>
+          <p>The Brass House of India. Rooted in Moradabad.</p>
         </div>
         <div className="customer-footer-cta">
           <p>For bulk orders of 50+ units</p>
@@ -5392,7 +5714,7 @@ export default function App() {
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
-  const [visibleCustomerProductCount, setVisibleCustomerProductCount] = useState(18);
+  const [visibleCustomerProductCount, setVisibleCustomerProductCount] = useState(12);
   const [inquiryStatusFilter, setInquiryStatusFilter] = useState("all");
   const [statusMessage, setStatusMessage] = useState(
     isSupabaseConfigured
@@ -5454,7 +5776,7 @@ export default function App() {
   const [purchaseModalError, setPurchaseModalError] = useState("");
   const [paymentBusyProductId, setPaymentBusyProductId] = useState("");
   const [paymentMessage, setPaymentMessage] = useState(null);
-  const [cartItems, setCartItems] = useState([]);
+  const [cartItems, setCartItems] = useState(getStoredCartItems);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutDetails, setCheckoutDetails] = useState(createEmptyCheckoutDetails);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
@@ -5506,46 +5828,6 @@ export default function App() {
     }
 
     let cancelled = false;
-    let authSubscription = null;
-    let authScheduleId = null;
-    let authTimeoutId = null;
-
-    async function restoreAdminSession() {
-      let client;
-      try {
-        client = await getSupabaseClient();
-      } catch (error) {
-        console.error("Could not initialize secure admin access:", error);
-        if (!cancelled) {
-          setAuthReady(true);
-        }
-        return;
-      }
-      if (cancelled || !client) {
-        return;
-      }
-
-      client.auth
-        .getSession()
-        .then(({ data }) => {
-          if (!cancelled) {
-            setSession(data.session ?? null);
-          }
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setAuthReady(true);
-          }
-        });
-
-      const {
-        data: { subscription }
-      } = client.auth.onAuthStateChange((_event, nextSession) => {
-        setSession(nextSession ?? null);
-        setAuthReady(true);
-      });
-      authSubscription = subscription;
-    }
 
     async function loadStorefront() {
       let productData;
@@ -5612,23 +5894,57 @@ export default function App() {
       }
     });
 
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      authScheduleId = window.requestIdleCallback(restoreAdminSession, { timeout: 1800 });
-    } else {
-      authTimeoutId = window.setTimeout(restoreAdminSession, 900);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || publicScreen !== "admin-auth") {
+      return undefined;
     }
+
+    let cancelled = false;
+    let authSubscription = null;
+    setAuthReady(false);
+
+    async function restoreAdminSession() {
+      try {
+        const client = await getSupabaseClient();
+        if (!client || cancelled) {
+          return;
+        }
+
+        const { data } = await client.auth.getSession();
+        if (!cancelled) {
+          setSession(data.session ?? null);
+          setAuthReady(true);
+        }
+
+        const {
+          data: { subscription }
+        } = client.auth.onAuthStateChange((_event, nextSession) => {
+          if (!cancelled) {
+            setSession(nextSession ?? null);
+            setAuthReady(true);
+          }
+        });
+        authSubscription = subscription;
+      } catch (error) {
+        console.error("Could not initialize secure admin access:", error);
+        if (!cancelled) {
+          setAuthReady(true);
+        }
+      }
+    }
+
+    void restoreAdminSession();
 
     return () => {
       cancelled = true;
-      if (authScheduleId !== null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
-        window.cancelIdleCallback(authScheduleId);
-      }
-      if (authTimeoutId !== null) {
-        window.clearTimeout(authTimeoutId);
-      }
       authSubscription?.unsubscribe();
     };
-  }, []);
+  }, [publicScreen]);
 
   const userEmail = session?.user?.email ?? "";
   const canManage = Boolean(userEmail) || !isSupabaseConfigured;
@@ -5839,7 +6155,7 @@ export default function App() {
   }, [categoryFilter, currentCatalog, customerFacing, search]);
 
   useEffect(() => {
-    setVisibleCustomerProductCount(18);
+    setVisibleCustomerProductCount(12);
   }, [categoryFilter, search]);
 
   const visibleCustomerProducts = useMemo(
@@ -5855,7 +6171,10 @@ export default function App() {
         if (!product || product.archivedAt || !price) {
           return null;
         }
-        const availableQuantity = Math.max(1, Number(product.quantity || 1));
+        const availableQuantity = Math.max(0, Number(product.quantity || 0));
+        if (availableQuantity <= 0) {
+          return null;
+        }
         const quantity = Math.max(1, Math.min(Number(item.quantity) || 1, availableQuantity));
         return {
           product,
@@ -5871,6 +6190,30 @@ export default function App() {
     () => cartItems.reduce((sum, item) => sum + Math.max(0, Number(item.quantity) || 0), 0),
     [cartItems]
   );
+
+  useEffect(() => {
+    if (!products.length) {
+      return;
+    }
+    setCartItems((current) =>
+      current.flatMap((item) => {
+        const product = products.find((entry) => String(entry.id) === String(item.productId));
+        const availableQuantity = Math.max(0, Number(product?.quantity || 0));
+        if (!product || product.archivedAt || availableQuantity <= 0 || !parsePrice(product.pricing?.mrp)) {
+          return [];
+        }
+        return [{ ...item, quantity: Math.min(item.quantity, availableQuantity) }];
+      })
+    );
+  }, [products]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
+    } catch {
+      // Shopping remains available when storage is blocked or full.
+    }
+  }, [cartItems]);
 
   const filteredInquiries = useMemo(() => {
     const statusFiltered =
@@ -6122,6 +6465,7 @@ export default function App() {
   }
 
   function handleProductSelect(product) {
+    const willClose = selectedId === product.id;
     if (!adminActive || previewCustomerView) {
       trackCustomerEvent("Product Viewed", {
         sku: product.sku,
@@ -6129,10 +6473,32 @@ export default function App() {
         category: product.category,
         hasPrice: hasDisplayValue(product.pricing?.mrp)
       });
+      trackCommerceEvent("view_item", {
+        value: parsePrice(product.pricing?.mrp) || 0,
+        items: [toCommerceItem(product)]
+      });
+      if (typeof window !== "undefined") {
+        const nextPath = willClose
+          ? categoryFilter === "All"
+            ? "/"
+            : `/category/${slugify(categoryFilter)}`
+          : `/product/${product.slug}`;
+        window.history.pushState({}, "", nextPath);
+      }
     }
-    setSelectedId((current) => (current === product.id ? null : product.id));
+    setSelectedId(willClose ? null : product.id);
     if (adminActive) {
       populateForm(product);
+    }
+  }
+
+  function handleCustomerProductClose() {
+    setSelectedId(null);
+    if (customerFacing && typeof window !== "undefined") {
+      const nextPath = categoryFilter === "All" ? "/" : `/category/${slugify(categoryFilter)}`;
+      if (window.location.pathname !== nextPath) {
+        window.history.pushState({}, "", nextPath);
+      }
     }
   }
 
@@ -7178,19 +7544,24 @@ export default function App() {
   }
 
   async function extractInquiryWithOpenAI(transcriptText) {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const client = await getSupabaseClient();
+    if (!client) {
+      throw new Error("Admin services are not configured.");
+    }
+    const { data: sessionData } = await client.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) {
+      throw new Error("Your admin session expired. Please sign in again.");
+    }
+
+    const response = await fetch("/api/extract-inquiry", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`
+        Authorization: `Bearer ${accessToken}`
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: INQUIRY_SYSTEM_PROMPT },
-          { role: "user", content: transcriptText }
-        ]
+        transcript: transcriptText
       })
     });
 
@@ -7200,11 +7571,10 @@ export default function App() {
     }
 
     const payload = await response.json();
-    const content = payload?.choices?.[0]?.message?.content;
-    if (!content) {
+    if (!payload?.inquiry) {
       throw new Error("OpenAI returned an empty response.");
     }
-    return JSON.parse(content);
+    return payload.inquiry;
   }
 
   async function processInquiryTranscript() {
@@ -7223,9 +7593,6 @@ export default function App() {
     setInquiryModalError("");
 
     try {
-      if (!OPENAI_API_KEY) {
-        throw new Error("Missing OpenAI API key.");
-      }
       const extracted = await extractInquiryWithOpenAI(rawTranscript);
       setInquiryDraft(normalizeInquiryDraft(extracted, products));
       setInquiryModalStep("confirm");
@@ -7337,6 +7704,12 @@ export default function App() {
   function handleCustomerCategorySelect(category, source = "category_bar") {
     trackCustomerEvent("Category Selected", { category, source });
     setCategoryFilter(category);
+    if (customerFacing && typeof window !== "undefined") {
+      const nextPath = category === "All" ? "/" : `/category/${slugify(category)}`;
+      if (window.location.pathname !== nextPath) {
+        window.history.pushState({}, "", nextPath);
+      }
+    }
   }
 
   function handleCustomerWhatsAppClick(product) {
@@ -7416,17 +7789,22 @@ export default function App() {
         category: product.category
       });
     }
+    const productUrl =
+      typeof window === "undefined"
+        ? `https://decorbeats.in/product/${product.slug}`
+        : `${window.location.origin}/product/${product.slug}`;
     const message = [
       product.name,
-      `SKU: ${product.sku}`,
-      `Stock: ${product.quantity}`,
-      product.imageUrl ? `Image: ${product.imageUrl}` : null
+      [product.material, product.category].filter(Boolean).join(" · "),
+      hasDisplayValue(product.pricing?.mrp) ? formatCurrency(product.pricing.mrp) : "Ask Decorbeats for pricing",
+      productUrl
     ]
       .filter(Boolean)
       .join("\n");
     const shareData = {
       title: product.name,
-      text: message
+      text: message,
+      url: productUrl
     };
 
     try {
@@ -7580,6 +7958,10 @@ export default function App() {
       setPaymentMessage({ tone: "error", text: "Add an MRP before this product can be checked out online." });
       return;
     }
+    if (Number(product.quantity || 0) <= 0) {
+      setPaymentMessage({ tone: "error", text: `${product.name} is currently sold out. Ask us on WhatsApp about availability.` });
+      return;
+    }
 
     const lineId = getCartLineId(product);
     setCartBusyProductId(lineId);
@@ -7589,7 +7971,7 @@ export default function App() {
 
     setCartItems((current) => {
       const existing = current.find((item) => String(item.productId) === lineId);
-      const maxQuantity = Math.max(1, Number(product.quantity || 1));
+      const maxQuantity = Math.max(0, Number(product.quantity || 0));
       if (existing) {
         return current.map((item) =>
           String(item.productId) === lineId
@@ -7605,6 +7987,10 @@ export default function App() {
       product: product.name,
       amount: price
     });
+    trackCommerceEvent("add_to_cart", {
+      value: price,
+      items: [toCommerceItem(product)]
+    });
 
     setSelectedId(null);
     setCartOpen(true);
@@ -7613,7 +7999,11 @@ export default function App() {
 
   function handleCartQuantityChange(productId, nextQuantity) {
     const product = products.find((entry) => String(entry.id) === String(productId));
-    const maxQuantity = Math.max(1, Number(product?.quantity || 1));
+    const maxQuantity = Math.max(0, Number(product?.quantity || 0));
+    if (maxQuantity <= 0) {
+      handleCartRemove(productId);
+      return;
+    }
     const quantity = Math.max(1, Math.min(Number(nextQuantity) || 1, maxQuantity));
     setCartItems((current) =>
       current.map((item) => (String(item.productId) === String(productId) ? { ...item, quantity } : item))
@@ -7647,6 +8037,10 @@ export default function App() {
     setCheckoutBusy(true);
     setCheckoutError("");
     setCheckoutSuccess("");
+    trackCommerceEvent("begin_checkout", {
+      value: cartLines.reduce((sum, line) => sum + line.lineTotal, 0),
+      items: cartLines.map((line) => toCommerceItem(line.product, line.quantity))
+    });
 
     try {
       await loadRazorpayCheckout();
@@ -7714,13 +8108,20 @@ export default function App() {
                 headers: {
                   "Content-Type": "application/json"
                 },
-                body: JSON.stringify(razorpayResponse)
+                body: JSON.stringify({
+                  ...razorpayResponse,
+                  customer: checkoutDetails,
+                  items: (order.items?.length ? order.items : cartLines).map((item) => ({
+                    productId: item.id ?? item.product?.id,
+                    quantity: item.quantity
+                  }))
+                })
               });
               const verifyResult = await verifyResponse.json();
               if (!verifyResponse.ok || !verifyResult.verified) {
                 throw new Error(verifyResult?.error || "Payment could not be verified.");
               }
-              resolveOnce(razorpayResponse);
+              resolveOnce({ razorpayResponse, verifyResult });
             } catch (error) {
               rejectOnce(error);
             }
@@ -7743,62 +8144,20 @@ export default function App() {
       });
 
       const totalAmount = Number(order.amount || 0) / 100;
-      if (isSupabaseConfigured) {
-        const orderPayload = {
-          customer_name: safeText(checkoutDetails.customerName),
-          customer_phone: safeText(checkoutDetails.phone),
-          customer_email: safeText(checkoutDetails.email) || null,
-          address_line1: safeText(checkoutDetails.addressLine1),
-          address_line2: safeText(checkoutDetails.addressLine2) || null,
-          city: safeText(checkoutDetails.city),
-          state: safeText(checkoutDetails.state),
-          pincode: safeText(checkoutDetails.pincode),
-          delivery_notes: safeText(checkoutDetails.notes) || null,
-          total_amount: totalAmount,
-          currency: order.currency || "INR",
-          payment_status: "paid",
-          order_status: "new",
-          razorpay_order_id: paymentResponse.razorpay_order_id,
-          razorpay_payment_id: paymentResponse.razorpay_payment_id
-        };
-
-        const { data: savedOrder, error: orderError } = await supabase
-          .from("customer_orders")
-          .insert(orderPayload)
-          .select()
-          .single();
-
-        if (orderError) {
-          throw new Error(
-            orderError.message?.includes("customer_orders")
-              ? "Payment succeeded, but the customer order table is missing. Please run the checkout SQL migration."
-              : orderError.message
-          );
-        }
-
-        const itemPayload = cartLines.map((line) => ({
-          order_id: savedOrder.id,
-          product_id: String(line.product.id),
-          product_sku: line.product.sku,
-          product_name: line.product.name,
-          quantity: line.quantity,
-          unit_price: line.price,
-          line_total: line.lineTotal,
-          image_url: line.product.imageUrl || null
-        }));
-
-        const { error: itemsError } = await supabase.from("customer_order_items").insert(itemPayload);
-        if (itemsError) {
-          throw new Error(itemsError.message);
-        }
-      }
 
       trackCustomerEvent("Customer Checkout Paid", {
         amount: totalAmount,
-        itemCount: cartLines.length
+        itemCount: cartLines.length,
+        orderReference: paymentResponse.verifyResult.orderReference
       });
-      trackGoogleAdsContactConversion(totalAmount);
-      setCheckoutSuccess("Payment successful. Your order details have been saved.");
+      trackCommerceEvent("purchase", {
+        transactionId: paymentResponse.verifyResult.orderReference,
+        value: totalAmount,
+        items: cartLines.map((line) => toCommerceItem(line.product, line.quantity))
+      });
+      setCheckoutSuccess(
+        `Payment successful. Order reference: ${paymentResponse.verifyResult.orderReference}. We’ll confirm delivery shortly.`
+      );
       setCartItems([]);
       setCheckoutDetails(createEmptyCheckoutDetails());
     } catch (error) {
@@ -8420,6 +8779,9 @@ export default function App() {
 
   function handleTickerAction(action) {
     if (action === "collection") {
+      if (activeTicker.text.includes("VARALAKSHMI")) {
+        handleCustomerCategorySelect("Diya", "campaign_ticker");
+      }
       handleScrollToCollection();
       return;
     }
@@ -8496,7 +8858,7 @@ export default function App() {
     </div>
   ) : !adminActive || previewCustomerView ? (
     <div className="customer-page customer-shell">
-      <AnnouncementBar />
+      <AnnouncementBar onShop={handleScrollToCollection} />
       <CustomerUtilityBar />
       <CustomerHeader
         scrolled={customerHeaderElevated}
@@ -8519,16 +8881,21 @@ export default function App() {
           setPreviewCustomerView(false);
           setActiveTab("products");
         }} /> : null}
-        <CustomerHero slides={heroSlides} featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
+        <CustomerHero
+          slides={heroSlides}
+          featuredProduct={featuredCustomerProduct}
+          onShop={handleScrollToCollection}
+          onSelectCategory={handleCustomerCategorySelect}
+        />
         <CustomerCommercePromise />
-        <CustomerOccasionRail products={customerCatalog} onSelectCategory={handleCustomerCategorySelect} onShop={handleScrollToCollection} />
-        <TrustStrip productCount={stats.totalProducts} />
-        <section className="customer-catalog-shell" ref={productGridRef}>
+        <section className="customer-catalog-shell" ref={productGridRef} aria-labelledby="brass-edit-title">
           <div className="customer-collections-head desktop-reveal">
             <div>
-              <p className="eyebrow">Collections</p>
-              <h2>Browse the Collection</h2>
+              <p className="eyebrow">Curated by brass specialists</p>
+              <h2 id="brass-edit-title">The Decorbeats Brass Edit</h2>
+              <p>Pieces with presence—for rituals, rooms, tables and gifts worth remembering.</p>
             </div>
+            <span>{filteredProducts.length} pieces</span>
           </div>
           <div className="customer-filter-bar">
             <CustomerCategoryBar categories={categories} categoryFilter={categoryFilter} setCategoryFilter={handleCustomerCategorySelect} />
@@ -8544,12 +8911,6 @@ export default function App() {
               />
             </div>
           </div>
-          <FeaturedCategoriesRow
-            products={customerCatalog}
-            onSelectCategory={handleCustomerCategorySelect}
-            onShop={handleScrollToCollection}
-          />
-          <EditorialSection />
           <section className="customer-product-grid">
             {visibleCustomerProducts.map((product) => (
               <CustomerProductCard
@@ -8567,9 +8928,9 @@ export default function App() {
               <button
                 type="button"
                 className="customer-load-more"
-                onClick={() => setVisibleCustomerProductCount((current) => current + 18)}
+                onClick={() => setVisibleCustomerProductCount((current) => current + 12)}
               >
-                Show more pieces
+                Discover more pieces
               </button>
               <span>
                 Showing {visibleCustomerProducts.length} of {filteredProducts.length}
@@ -8577,11 +8938,18 @@ export default function App() {
             </div>
           ) : null}
         </section>
-        <CustomerFooter onAdmin={handleAdminEntry} showAdminLink={!adminActive} />
+        <BrandAuthorityIntro productCount={stats.totalProducts} onShop={handleScrollToCollection} />
+        <CustomerOccasionRail products={customerCatalog} onSelectCategory={handleCustomerCategorySelect} onShop={handleScrollToCollection} />
+        <EditorialSection onShop={handleScrollToCollection} />
+        <CorporateGiftingSection />
+        <KnowYourBrass />
+        <CustomerFaq />
+        <CustomerFooter onAdmin={handleAdminEntry} showAdminLink={false} />
       </main>
+      <CustomerMobileDock cartCount={cartCount} onShop={handleScrollToCollection} onCartOpen={() => setCartOpen(true)} />
       <CustomerSheet
         product={selectedProduct}
-        onClose={() => setSelectedId(null)}
+        onClose={handleCustomerProductClose}
         onShare={handleShareProduct}
         onWhatsApp={handleCustomerWhatsAppClick}
         onAddToCart={handleAddToCart}

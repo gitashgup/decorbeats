@@ -28,11 +28,11 @@ async function readJsonBody(request) {
 }
 
 async function fetchProductFromSupabase(productId) {
-  const supabaseUrl = getRequiredEnv("VITE_SUPABASE_URL");
-  const supabaseAnonKey = getRequiredEnv("VITE_SUPABASE_ANON_KEY");
+  const supabaseUrl = process.env.SUPABASE_URL || getRequiredEnv("VITE_SUPABASE_URL");
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || getRequiredEnv("VITE_SUPABASE_ANON_KEY");
   const productUrl = new URL("/rest/v1/products", supabaseUrl);
   productUrl.searchParams.set("id", `eq.${productId}`);
-  productUrl.searchParams.set("select", "id,sku,name,mrp,archived_at");
+  productUrl.searchParams.set("select", "id,sku,name,mrp,quantity,archived_at");
   productUrl.searchParams.set("limit", "1");
 
   const response = await fetch(productUrl, {
@@ -51,8 +51,8 @@ async function fetchProductFromSupabase(productId) {
 }
 
 async function fetchProductsFromSupabase(productIds) {
-  const supabaseUrl = getRequiredEnv("VITE_SUPABASE_URL");
-  const supabaseAnonKey = getRequiredEnv("VITE_SUPABASE_ANON_KEY");
+  const supabaseUrl = process.env.SUPABASE_URL || getRequiredEnv("VITE_SUPABASE_URL");
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || getRequiredEnv("VITE_SUPABASE_ANON_KEY");
   const ids = [...new Set(productIds.map((id) => String(id).trim()).filter(Boolean))];
   if (!ids.length) {
     return [];
@@ -60,7 +60,7 @@ async function fetchProductsFromSupabase(productIds) {
 
   const productUrl = new URL("/rest/v1/products", supabaseUrl);
   productUrl.searchParams.set("id", `in.(${ids.join(",")})`);
-  productUrl.searchParams.set("select", "id,sku,name,mrp,archived_at,image_url");
+  productUrl.searchParams.set("select", "id,sku,name,mrp,quantity,archived_at,image_url");
 
   const response = await fetch(productUrl, {
     headers: {
@@ -124,6 +124,16 @@ export default async function handler(request, response) {
         if (!matchedProduct || matchedProduct.archived_at) {
           throw new Error("One or more products are not available");
         }
+        const availableQuantity = Math.max(0, Number(matchedProduct.quantity || 0));
+        if (availableQuantity < itemQuantity) {
+          const availabilityError = new Error(
+            availableQuantity > 0
+              ? `Only ${availableQuantity} of ${matchedProduct.name || "this product"} are currently available`
+              : `${matchedProduct.name || "A product"} is currently sold out`
+          );
+          availabilityError.statusCode = 409;
+          throw availabilityError;
+        }
 
         const itemPrice = Number(matchedProduct.mrp);
         if (!Number.isFinite(itemPrice) || itemPrice <= 0) {
@@ -155,6 +165,15 @@ export default async function handler(request, response) {
       product = await fetchProductFromSupabase(productId);
       if (!product || product.archived_at) {
         sendJson(response, 404, { error: "Product is not available" });
+        return;
+      }
+      if (Math.max(0, Number(product.quantity || 0)) < quantity) {
+        sendJson(response, 409, {
+          error:
+            Number(product.quantity || 0) > 0
+              ? `Only ${Number(product.quantity)} units are currently available`
+              : "This product is currently sold out"
+        });
         return;
       }
 
@@ -210,7 +229,12 @@ export default async function handler(request, response) {
     });
   } catch (error) {
     console.error("Razorpay order error:", error);
-    const statusCode = error?.statusCode === 401 || error?.error?.code === "BAD_REQUEST_ERROR" ? error.statusCode || 500 : 500;
+    const statusCode =
+      Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 600
+        ? error.statusCode
+        : error?.error?.code === "BAD_REQUEST_ERROR"
+          ? 400
+          : 500;
     sendJson(response, statusCode, { error: error?.error?.description || error.message || "Could not start payment" });
   }
 }
