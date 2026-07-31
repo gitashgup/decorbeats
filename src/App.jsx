@@ -1,6 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { track } from "@vercel/analytics";
-import { isSupabaseConfigured, supabase } from "./lib/supabase";
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+let supabase = null;
+let supabaseClientPromise = null;
+
+async function getSupabaseClient() {
+  if (!isSupabaseConfigured) {
+    return null;
+  }
+  if (supabase) {
+    return supabase;
+  }
+  if (!supabaseClientPromise) {
+    supabaseClientPromise = import("./lib/supabase").then((module) => {
+      supabase = module.supabase;
+      return supabase;
+    });
+  }
+  return supabaseClientPromise;
+}
 
 const brandLogo = "/assets/brand/decorbeats-logo.svg";
 const WHATSAPP_NUMBER = "919811133661";
@@ -9,14 +29,15 @@ const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 const RAZORPAY_CHECKOUT_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
 const GOOGLE_ADS_CONTACT_CONVERSION = "AW-18084439764/kF1hCNnLiK4cENTNqq9D";
 const ANNOUNCEMENTS = [
+  "✦ Varalakshmi gifting — Brass diyas and blessings, beautifully given",
   "𝄞 Decorbeats — where every gift finds its rhythm",
-  "✦ Summer Sale — Up to 30% off selected items",
   "♪ Bulk orders welcome · 50 to 400+ units",
   "♫ Handcrafted in India · Shipped across the country",
   "✦ WhatsApp us for custom gifting solutions",
   "𝄞 New arrivals added weekly"
 ];
 const TICKER_MESSAGES = [
+  { text: "✦  VARALAKSHMI GIFTS — BLESSINGS, BEAUTIFULLY GIVEN", action: "collection" },
   { text: "𝄞  DECORBEATS — WHERE EVERY GIFT FINDS ITS RHYTHM  𝄞", action: null },
   { text: "🚚  SAME-DAY DELIVERY ACROSS BANGALORE — ORDER BEFORE 2PM", action: "collection" },
   { text: "✦  BRASS NEVER LIES. NEITHER DOES OUR CRAFTSMANSHIP.", action: null },
@@ -80,12 +101,19 @@ const customerOccasions = [
   { label: "Corporate Orders", category: "Box", note: "Bulk-ready gifts and keepsakes", beat: "Gifting in harmony" },
   { label: "Wall Stories", category: "Wall Decor", note: "Brass details for beautiful walls", beat: "Notes for your walls" }
 ];
-const customerBeatStories = [
-  { title: "Beat 01", text: "Hand-finished brass and metal pieces selected for celebrations." },
-  { title: "Beat 02", text: "Bulk gifting support for 50 to 400+ units with quick WhatsApp coordination." },
-  { title: "Beat 03", text: "A living catalogue that keeps new arrivals, stock and enquiries in tune." }
-];
 const defaultHeroSlides = [
+  {
+    id: "default-varalakshmi",
+    eyebrow: "Varalakshmi gifting · Handcrafted in India",
+    title: "Blessings,|beautifully given.",
+    body: "Discover auspicious brass diyas and meaningful gifts, chosen for homes filled with light, abundance and celebration.",
+    ctaLabel: "Shop festive gifts",
+    ctaAction: "collection",
+    contentPosition: "left",
+    imageUrl: "/assets/images/decorbeats-varalakshmi-gifting.jpg",
+    active: true,
+    sortOrder: 0
+  },
   {
     id: "default-credibility",
     eyebrow: "The new heirlooms · Handcrafted in India",
@@ -97,18 +125,6 @@ const defaultHeroSlides = [
     imageUrl: "/assets/images/decorbeats-atelier-campaign.jpg",
     active: true,
     sortOrder: 1
-  },
-  {
-    id: "default-hero",
-    eyebrow: "A modern Indian atelier",
-    title: "Crafted to become|part of your story.",
-    body: "Heirloom-inspired objects in brass and metal, hand-finished in India and curated for contemporary living.",
-    ctaLabel: "Discover Decorbeats",
-    ctaAction: "collection",
-    contentPosition: "left",
-    imageUrl: "",
-    active: true,
-    sortOrder: 2
   }
 ];
 
@@ -394,14 +410,16 @@ const BULK_WHATSAPP_MESSAGE =
   "Hi Decorbeats! I am interested in placing a bulk order of 50+ units. Please share your catalogue, pricing and delivery details.";
 
 function trackCustomerEvent(eventName, properties = {}) {
-  try {
-    track(eventName, {
-      ...properties,
-      surface: "customer"
+  void import("@vercel/analytics")
+    .then(({ track }) =>
+      track(eventName, {
+        ...properties,
+        surface: "customer"
+      })
+    )
+    .catch((error) => {
+      console.debug("Analytics event skipped:", eventName, error);
     });
-  } catch (error) {
-    console.debug("Analytics event skipped:", eventName, error);
-  }
 }
 
 function trackGoogleAdsContactConversion(value = 1) {
@@ -1263,36 +1281,38 @@ function toHeroSlide(raw, index = 0) {
   const isLegacyLeadSlide =
     rawImageUrl === "/assets/images/slider-credibility-studio.svg" ||
     rawImageUrl.includes("/hero-slides/1778733194643.jpg");
-  const isLegacyPosterSlide = [
-    "/hero-slides/1778948763595.jpg",
-    "/hero-slides/1778697872686.jpg"
-  ].some((imagePath) => rawImageUrl.includes(imagePath));
-  const imageUrl =
-    isLegacyLeadSlide
-      ? "/assets/images/decorbeats-atelier-campaign.jpg"
-      : rawImageUrl;
+  const isVaralakshmiCampaignSlide = rawImageUrl.includes("/hero-slides/1778948763595.jpg");
+  const isLegacyPosterSlide = rawImageUrl.includes("/hero-slides/1778697872686.jpg");
+  const campaignSlide = isVaralakshmiCampaignSlide
+    ? defaultHeroSlides[0]
+    : isLegacyLeadSlide
+      ? defaultHeroSlides[1]
+      : null;
+  const imageUrl = campaignSlide?.imageUrl || rawImageUrl;
   return {
     id: raw.id ?? `hero-slide-${index}`,
-    eyebrow: isLegacyLeadSlide
-      ? defaultHeroSlides[0].eyebrow
+    eyebrow: campaignSlide
+      ? campaignSlide.eyebrow
       : safeText(raw.eyebrow, "Decorbeats"),
-    title: isLegacyLeadSlide
-      ? defaultHeroSlides[0].title
+    title: campaignSlide
+      ? campaignSlide.title
       : safeText(raw.title, "Handcrafted for every celebration."),
-    body: isLegacyLeadSlide
-      ? defaultHeroSlides[0].body
+    body: campaignSlide
+      ? campaignSlide.body
       : safeText(raw.body, "Brass, metal & artisanal decor - made in India, gifted with rhythm."),
-    ctaLabel: isLegacyLeadSlide
-      ? defaultHeroSlides[0].ctaLabel
+    ctaLabel: campaignSlide
+      ? campaignSlide.ctaLabel
       : safeText(raw.cta_label ?? raw.ctaLabel, "Shop the Collection"),
-    ctaAction: isLegacyLeadSlide
-      ? defaultHeroSlides[0].ctaAction
+    ctaAction: campaignSlide
+      ? campaignSlide.ctaAction
       : safeText(raw.cta_action ?? raw.ctaAction, "collection"),
     contentPosition: safeText(raw.content_position ?? raw.contentPosition, "left"),
     imageUrl,
     posterOnly: Boolean(raw.poster_only ?? raw.posterOnly ?? isLegacyPosterSlide),
     active: raw.active ?? raw.is_active ?? true,
-    sortOrder: Number(raw.sort_order ?? raw.sortOrder ?? index + 1),
+    sortOrder: isVaralakshmiCampaignSlide
+      ? 0
+      : Number(raw.sort_order ?? raw.sortOrder ?? index + 1),
     createdAt: raw.created_at ?? raw.createdAt ?? null
   };
 }
@@ -3638,7 +3658,7 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
   const heroImage = getPrimaryImage(featuredProduct);
   const preparedSlides = slides.length
     ? slides
-    : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: heroImage }));
+    : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: slide.imageUrl || heroImage }));
   const activeSlide = preparedSlides[activeIndex] ?? preparedSlides[0] ?? defaultHeroSlides[0];
   const slideImage = activeSlide.imageUrl || heroImage || defaultHeroSlides[0].imageUrl;
   const titleLines = getHeroTitleLines(activeSlide.title);
@@ -3756,26 +3776,6 @@ function CustomerCommercePromise() {
           <span>{detail}</span>
         </article>
       ))}
-    </section>
-  );
-}
-
-function CustomerBeatStories() {
-  return (
-    <section className="customer-beat-stories desktop-reveal" aria-label="The Decorbeats rhythm">
-      <div className="customer-beat-intro">
-        <p className="eyebrow">Our point of view</p>
-        <h2>Beauty lives in the details.</h2>
-      </div>
-      <div className="customer-beat-list">
-        {customerBeatStories.map((story) => (
-          <article key={story.title} className="customer-beat-card">
-            <span aria-hidden="true">𝄞</span>
-            <strong>{story.title}</strong>
-            <p>{story.text}</p>
-          </article>
-        ))}
-      </div>
     </section>
   );
 }
@@ -5506,26 +5506,46 @@ export default function App() {
     }
 
     let cancelled = false;
+    let authSubscription = null;
+    let authScheduleId = null;
+    let authTimeoutId = null;
 
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
-        if (!cancelled) {
-          setSession(data.session ?? null);
-        }
-      })
-      .finally(() => {
+    async function restoreAdminSession() {
+      let client;
+      try {
+        client = await getSupabaseClient();
+      } catch (error) {
+        console.error("Could not initialize secure admin access:", error);
         if (!cancelled) {
           setAuthReady(true);
         }
-      });
+        return;
+      }
+      if (cancelled || !client) {
+        return;
+      }
 
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession ?? null);
-      setAuthReady(true);
-    });
+      client.auth
+        .getSession()
+        .then(({ data }) => {
+          if (!cancelled) {
+            setSession(data.session ?? null);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setAuthReady(true);
+          }
+        });
+
+      const {
+        data: { subscription }
+      } = client.auth.onAuthStateChange((_event, nextSession) => {
+        setSession(nextSession ?? null);
+        setAuthReady(true);
+      });
+      authSubscription = subscription;
+    }
 
     async function loadStorefront() {
       let productData;
@@ -5542,9 +5562,13 @@ export default function App() {
         productData = payload.products;
         heroData = payload.heroSlides;
       } catch {
+        const client = await getSupabaseClient();
+        if (!client) {
+          throw new Error("Supabase is unavailable");
+        }
         const [productResult, heroResult] = await Promise.all([
-          supabase.from("products").select("*").order("created_at", { ascending: false }),
-          supabase
+          client.from("products").select("*").order("created_at", { ascending: false }),
+          client
             .from("hero_slides")
             .select("*")
             .eq("is_active", true)
@@ -5566,7 +5590,12 @@ export default function App() {
       setProducts(nextProducts);
       setSelectedId(null);
       setLastSyncAt(new Date().toISOString());
-      setHeroSlides((heroData ?? []).map(toHeroSlide).filter((slide) => slide.active));
+      setHeroSlides(
+        (heroData ?? [])
+          .map(toHeroSlide)
+          .filter((slide) => slide.active)
+          .sort((left, right) => left.sortOrder - right.sortOrder)
+      );
       setStatusMessage(
         nextProducts.length
           ? `Loaded ${nextProducts.length} products from Supabase.`
@@ -5583,9 +5612,21 @@ export default function App() {
       }
     });
 
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      authScheduleId = window.requestIdleCallback(restoreAdminSession, { timeout: 1800 });
+    } else {
+      authTimeoutId = window.setTimeout(restoreAdminSession, 900);
+    }
+
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
+      if (authScheduleId !== null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(authScheduleId);
+      }
+      if (authTimeoutId !== null) {
+        window.clearTimeout(authTimeoutId);
+      }
+      authSubscription?.unsubscribe();
     };
   }, []);
 
@@ -5955,7 +5996,14 @@ export default function App() {
         return;
       }
 
-      const { data, error } = await supabase
+      const client = await getSupabaseClient();
+      if (!client) {
+        setPublicCatalogueStatus("error");
+        setPublicCatalogueError("This catalogue is temporarily unavailable.");
+        return;
+      }
+
+      const { data, error } = await client
         .from("share_catalogues")
         .select("*, share_catalogue_items(*)")
         .eq("slug", routeIntent.slug)
@@ -7975,7 +8023,11 @@ export default function App() {
 
     setAuthBusy(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const client = await getSupabaseClient();
+      if (!client) {
+        throw new Error("Secure sign-in is temporarily unavailable.");
+      }
+      const { error } = await client.auth.signInWithPassword({
         email: authEmail,
         password: authPassword
       });
@@ -7995,7 +8047,8 @@ export default function App() {
     if (!isSupabaseConfigured) {
       return;
     }
-    await supabase.auth.signOut();
+    const client = await getSupabaseClient();
+    await client?.auth.signOut();
     setForm(emptyForm);
     setPublicScreen("customer");
     setSelectedId(null);
@@ -8377,6 +8430,7 @@ export default function App() {
 
   function handleAdminEntry() {
     trackCustomerEvent("Admin Link Clicked");
+    void getSupabaseClient();
     setPublicScreen("admin-auth");
     if (typeof window !== "undefined") {
       window.history.pushState({}, "", "/admin");
@@ -8468,7 +8522,6 @@ export default function App() {
         <CustomerHero slides={heroSlides} featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
         <CustomerCommercePromise />
         <CustomerOccasionRail products={customerCatalog} onSelectCategory={handleCustomerCategorySelect} onShop={handleScrollToCollection} />
-        <CustomerBeatStories />
         <TrustStrip productCount={stats.totalProducts} />
         <section className="customer-catalog-shell" ref={productGridRef}>
           <div className="customer-collections-head desktop-reveal">
