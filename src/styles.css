@@ -10017,6 +10017,33 @@ body:has(.customer-shell) {
   cursor: wait;
 }
 
+.customer-shell .customer-campaign-card-skeleton {
+  grid-template-rows: auto auto 43px;
+  pointer-events: none;
+}
+
+.customer-shell .customer-campaign-skeleton-copy {
+  display: grid;
+  gap: 9px;
+  padding: 15px 14px 17px;
+}
+
+.customer-shell .customer-campaign-skeleton-add {
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid var(--house-line);
+  background: rgba(94, 67, 49, 0.06);
+}
+
+.customer-shell .customer-campaign-skeleton-add::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.58), transparent);
+  content: "";
+  transform: translateX(-100%);
+  animation: customer-skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
 .customer-shell .customer-empty-results {
   min-height: 300px;
   display: grid;

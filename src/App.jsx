@@ -4144,6 +4144,7 @@ function CustomerCommercePromise() {
 
 function CustomerCampaignEdit({
   products,
+  loading,
   onSelect,
   onAddToCart,
   busyProductId,
@@ -4163,13 +4164,18 @@ function CustomerCampaignEdit({
       matchesCustomerCollection(product, "varalakshmi")
   );
   const edit = [...curated, ...fallback].slice(0, 6);
+  const showSkeleton = loading && !edit.length;
 
-  if (!edit.length) {
+  if (!edit.length && !showSkeleton) {
     return null;
   }
 
   return (
-    <section className="customer-campaign-edit" aria-labelledby="varalakshmi-edit-title">
+    <section
+      className="customer-campaign-edit"
+      aria-labelledby="varalakshmi-edit-title"
+      aria-busy={showSkeleton}
+    >
       <div className="customer-campaign-edit-head">
         <div>
           <p className="eyebrow">The Varalakshmi edit</p>
@@ -4184,7 +4190,19 @@ function CustomerCampaignEdit({
         </button>
       </div>
       <div className="customer-campaign-products">
-        {edit.map((product) => {
+        {showSkeleton
+          ? Array.from({ length: 4 }, (_, index) => (
+              <article className="customer-campaign-card customer-campaign-card-skeleton" key={index} aria-hidden="true">
+                <span className="customer-product-skeleton-image" />
+                <span className="customer-campaign-skeleton-copy">
+                  <span className="customer-product-skeleton-line" />
+                  <span className="customer-product-skeleton-line short" />
+                  <span className="customer-product-skeleton-line short" />
+                </span>
+                <span className="customer-campaign-skeleton-add" />
+              </article>
+            ))
+          : edit.map((product) => {
           const image = getPrimaryImage(product);
           const busy = String(busyProductId) === String(product.id);
           return (
@@ -9464,6 +9482,7 @@ export default function App() {
         {customerCollection === "all" || customerCollection === "varalakshmi" ? (
           <CustomerCampaignEdit
             products={customerCatalog}
+            loading={storefrontLoading}
             onSelect={handleProductSelect}
             onAddToCart={handleAddToCart}
             busyProductId={cartBusyProductId}
