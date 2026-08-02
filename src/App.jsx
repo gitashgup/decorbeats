@@ -3973,11 +3973,6 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
     onShop();
   }
 
-  function selectSlide(index) {
-    setActiveIndex(index);
-    setIsPaused(true);
-  }
-
   function moveSlide(direction) {
     setActiveIndex((current) => (current + direction + preparedSlides.length) % preparedSlides.length);
     setIsPaused(true);
@@ -4047,17 +4042,17 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
           <button type="button" className="customer-hero-arrow" aria-label="Previous campaign" onClick={() => moveSlide(-1)}>
             ←
           </button>
-          <div className="customer-hero-dots" aria-label="Featured campaigns">
-            {preparedSlides.map((slide, index) => (
-              <button
-                key={slide.id}
-                type="button"
-                className={index === activeIndex ? "active" : ""}
-                aria-label={`Show campaign ${index + 1}: ${safeText(slide.title).replaceAll("|", " ")}`}
-                aria-current={index === activeIndex ? "true" : undefined}
-                onClick={() => selectSlide(index)}
-              />
-            ))}
+          <div
+            className="customer-hero-position"
+            role="status"
+            aria-live="polite"
+            aria-label={`Campaign ${activeIndex + 1} of ${preparedSlides.length}`}
+          >
+            <span className="customer-hero-position-current" aria-hidden="true">
+              {String(activeIndex + 1).padStart(2, "0")}
+            </span>
+            <span aria-hidden="true">/</span>
+            <span aria-hidden="true">{String(preparedSlides.length).padStart(2, "0")}</span>
           </div>
           <button
               type="button"

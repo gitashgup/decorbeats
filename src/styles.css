@@ -7984,6 +7984,7 @@ body:has(.customer-shell) {
   min-height: min(690px, calc(100svh - 193px));
   display: grid;
   grid-template-columns: minmax(420px, 0.84fr) minmax(0, 1.36fr) !important;
+  align-items: stretch;
   gap: 0;
   overflow: hidden;
   margin: 0;
@@ -8013,7 +8014,8 @@ body:has(.customer-shell) {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  padding: clamp(54px, 6.5vw, 108px);
+  gap: 0;
+  padding: clamp(48px, 5vw, 78px);
   background:
     radial-gradient(circle at 0 0, rgba(168, 121, 63, 0.12), transparent 40%),
     #f4eee5;
@@ -8027,13 +8029,13 @@ body:has(.customer-shell) {
 
 .customer-shell .customer-hero-copy h1 {
   max-width: 10ch;
-  margin: 19px 0 23px;
+  margin: 16px 0 20px;
   color: var(--house-ink);
   font-family: var(--house-serif);
-  font-size: clamp(3.7rem, 5.4vw, 6.6rem);
+  font-size: clamp(3.5rem, 4.7vw, 5.8rem);
   font-weight: 400;
   letter-spacing: -0.055em;
-  line-height: 0.91;
+  line-height: 0.92;
 }
 
 .customer-shell .customer-hero-copy h1 span {
@@ -8045,16 +8047,17 @@ body:has(.customer-shell) {
   margin: 0;
   color: var(--house-muted);
   font-size: clamp(0.94rem, 1vw, 1.04rem);
-  line-height: 1.72;
+  line-height: 1.62;
 }
 
 .customer-shell .customer-hero-actions {
   width: auto;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: flex-start;
-  gap: 22px;
-  margin-top: 31px;
+  gap: 8px;
+  margin-top: 24px;
 }
 
 .customer-shell .customer-hero-cta,
@@ -8105,7 +8108,7 @@ body:has(.customer-shell) {
   display: flex;
   flex-wrap: wrap;
   gap: 9px 18px;
-  margin-top: 30px;
+  margin-top: 20px;
   color: #796b60;
   font-size: 0.64rem;
   font-weight: 720;
@@ -8155,7 +8158,7 @@ body:has(.customer-shell) {
   min-height: inherit;
   display: block;
   object-fit: cover;
-  object-position: center;
+  object-position: right center;
   background: #dfd2c2;
   filter: saturate(0.92) contrast(1.015);
   transform: none;
@@ -8164,16 +8167,16 @@ body:has(.customer-shell) {
 .customer-shell .customer-hero-controls {
   position: absolute;
   z-index: 8;
-  bottom: 23px;
-  left: clamp(54px, 6.5vw, 108px);
+  bottom: 20px;
+  left: clamp(48px, 5vw, 78px);
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
 .customer-shell .customer-hero-arrow {
-  width: 35px;
-  height: 35px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border: 1px solid rgba(37, 25, 20, 0.22);
@@ -8190,36 +8193,22 @@ body:has(.customer-shell) {
   color: #fff;
 }
 
-.customer-shell .customer-hero-dots,
-.customer-shell .customer-hero.hero-poster-slide .customer-hero-dots {
-  position: static;
+.customer-shell .customer-hero-position {
+  min-width: 58px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  transform: none;
+  justify-content: center;
+  gap: 5px;
+  color: rgba(37, 25, 20, 0.48);
+  font-family: Inter, ui-sans-serif, sans-serif;
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
-.customer-shell .customer-hero-dots button {
-  width: 22px;
-  height: 35px;
-  min-height: 35px;
-  border-radius: 0;
-  background:
-    linear-gradient(
-      transparent 16px,
-      rgba(37, 25, 20, 0.25) 16px 18px,
-      transparent 18px
-    );
-}
-
-.customer-shell .customer-hero-dots button.active {
-  width: 42px;
-  background:
-    linear-gradient(
-      transparent 16px,
-      var(--house-oxblood) 16px 18px,
-      transparent 18px
-    );
+.customer-shell .customer-hero-position-current {
+  color: var(--house-oxblood);
 }
 
 .customer-shell .customer-hero.hero-poster-only {
@@ -9425,22 +9414,13 @@ body:has(.customer-shell) {
     backdrop-filter: blur(8px);
   }
 
-  .customer-shell .customer-hero-dots button {
-    background:
-      linear-gradient(
-        transparent 16px,
-        rgba(255, 255, 255, 0.48) 16px 18px,
-        transparent 18px
-      );
+  .customer-shell .customer-hero-position {
+    color: rgba(255, 255, 255, 0.62);
+    text-shadow: 0 1px 8px rgba(37, 25, 20, 0.4);
   }
 
-  .customer-shell .customer-hero-dots button.active {
-    background:
-      linear-gradient(
-        transparent 16px,
-        #fff 16px 18px,
-        transparent 18px
-      );
+  .customer-shell .customer-hero-position-current {
+    color: #fff;
   }
 
   .customer-shell .customer-commerce-promise {
@@ -9863,11 +9843,23 @@ body:has(.customer-shell) {
 
 /* 2026 campaign conversion refinement */
 
-.customer-shell .customer-hero-media picture,
+.customer-shell .customer-hero-media picture {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .customer-shell .editorial-media picture {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+.customer-shell .customer-hero-media img,
+.customer-shell .customer-hero.hero-poster-slide .customer-hero-media img {
+  min-height: 0;
 }
 
 .customer-shell .customer-campaign-edit {
