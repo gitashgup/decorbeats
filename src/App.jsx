@@ -123,6 +123,12 @@ const CUSTOMER_COLLECTIONS = [
     terms: ["planter", "tree", "candle", "decor", "accent"]
   }
 ];
+const CUSTOMER_QUICK_COLLECTIONS = [
+  { id: "pooja-diyas", label: "Diyas" },
+  { id: "urlis-serveware", label: "Urlis" },
+  { id: "idols-spiritual", label: "Idols" },
+  { id: "wall-home", label: "Wall décor" }
+];
 const CUSTOMER_COLLECTION_ALIASES = new Map([
   ["", "all"],
   ["all", "all"],
@@ -3826,30 +3832,32 @@ function CustomerUtilityBar() {
 
 function CustomerNavigation({ onSelectCategory, onShop }) {
   const items = [
-    getCustomerCollectionById("varalakshmi"),
-    getCustomerCollectionById("pooja-diyas"),
-    getCustomerCollectionById("urlis-serveware"),
-    getCustomerCollectionById("idols-spiritual"),
-    getCustomerCollectionById("wall-home"),
-    getCustomerCollectionById("home-accents")
+    { collection: getCustomerCollectionById("varalakshmi"), mobileLabel: "Gifts" },
+    { collection: getCustomerCollectionById("pooja-diyas"), mobileLabel: "Diyas" },
+    { collection: getCustomerCollectionById("urlis-serveware"), mobileLabel: "Urlis" },
+    { collection: getCustomerCollectionById("idols-spiritual"), mobileLabel: "Idols" },
+    { collection: getCustomerCollectionById("wall-home"), mobileLabel: "Wall" },
+    { collection: getCustomerCollectionById("home-accents"), mobileLabel: "Décor" }
   ];
 
   return (
     <nav className="customer-primary-nav" aria-label="Shop collections">
       {items.map((item) => (
         <a
-          key={item.label}
-          href={item.path}
+          key={item.collection.id}
+          href={item.collection.path}
           onClick={(event) => {
             event.preventDefault();
-            onSelectCategory(item.id, "primary_navigation");
+            onSelectCategory(item.collection.id, "primary_navigation");
             onShop();
           }}
         >
-          {item.label}
+          <span className="customer-nav-label-desktop">{item.collection.label}</span>
+          <span className="customer-nav-label-mobile">{item.mobileLabel}</span>
         </a>
       ))}
       <a
+        className="customer-primary-nav-business"
         href={getBulkWhatsAppUrl()}
         target="_blank"
         rel="noopener noreferrer"
@@ -3935,6 +3943,7 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
+  const pointerStartX = useRef(null);
   const heroImage = getPrimaryImage(featuredProduct);
   const preparedSlides = (
     slides.length ? slides : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: slide.imageUrl || heroImage }))
@@ -3943,6 +3952,10 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
   const slideImage = activeSlide.imageUrl || heroImage || defaultHeroSlides[0].imageUrl;
   const mobileSlideImage = activeSlide.mobileImageUrl || slideImage;
   const titleLines = getHeroTitleLines(activeSlide.title);
+  const compactTitle =
+    activeSlide.collectionId === "varalakshmi" || slideImage.includes("varalakshmi")
+      ? "Blessings in brass."
+      : "India’s home of brass.";
   const isPosterOnly = Boolean(activeSlide.posterOnly);
   const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}${isPosterOnly ? " hero-poster-slide hero-poster-only" : ""}`;
 
@@ -3978,6 +3991,21 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
     setIsPaused(true);
   }
 
+  function handlePointerDown(event) {
+    pointerStartX.current = event.clientX;
+  }
+
+  function handlePointerUp(event) {
+    if (pointerStartX.current == null) {
+      return;
+    }
+    const distance = event.clientX - pointerStartX.current;
+    pointerStartX.current = null;
+    if (Math.abs(distance) >= 45) {
+      moveSlide(distance > 0 ? -1 : 1);
+    }
+  }
+
   return (
     <section
       className={heroClassName}
@@ -3985,13 +4013,21 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onFocusCapture={() => setIsPaused(true)}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={() => {
+        pointerStartX.current = null;
+      }}
     >
       <div className="customer-hero-copy" aria-live="polite">
         <p className="eyebrow">{activeSlide.eyebrow}</p>
         <h1>
-          {titleLines.map((line) => (
-            <span key={line}>{line}</span>
-          ))}
+          <span className="customer-hero-title-full">
+            {titleLines.map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+          </span>
+          <span className="customer-hero-title-compact">{compactTitle}</span>
         </h1>
         <p>{activeSlide.body}</p>
         <div className="customer-hero-actions">
@@ -4062,6 +4098,11 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
             >
               →
             </button>
+          <div className="customer-hero-progress" aria-hidden="true">
+            {preparedSlides.map((slide, index) => (
+              <span key={slide.id ?? index} className={index === activeIndex ? "active" : ""} />
+            ))}
+          </div>
         </div>
       ) : null}
     </section>
@@ -4119,11 +4160,14 @@ function CustomerCampaignEdit({
       <div className="customer-campaign-edit-head">
         <div>
           <p className="eyebrow">The Varalakshmi edit</p>
-          <h2 id="varalakshmi-edit-title">Auspicious brass, ready to gift.</h2>
+          <h2 id="varalakshmi-edit-title">
+            <span className="customer-campaign-title-full">Auspicious brass, ready to gift.</span>
+            <span className="customer-campaign-title-compact">Varalakshmi gifts</span>
+          </h2>
           <p>In-stock diyas and ritual accents selected for homes filled with light and abundance.</p>
         </div>
         <button type="button" className="customer-text-link" onClick={onViewAll}>
-          View the full edit <span aria-hidden="true">→</span>
+          View all <span aria-hidden="true">→</span>
         </button>
       </div>
       <div className="customer-campaign-products">
@@ -4256,14 +4300,14 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
 }
 
 function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
-  const featuredCategories = ["Bowl", "Diya", "Wall Decor", "Box"];
-  const tiles = featuredCategories
-    .map((category) => {
-      const match = products.find((product) => product.category === category && getPrimaryImage(product));
+  const tiles = CUSTOMER_QUICK_COLLECTIONS
+    .map((collection) => {
+      const match = products.find(
+        (product) => isCustomerSellReady(product) && matchesCustomerCollection(product, collection.id) && getPrimaryImage(product)
+      );
       return {
-        category,
+        ...collection,
         image: match ? getPrimaryImage(match) : "",
-        label: category
       };
     })
     .filter((item) => item.image);
@@ -4273,30 +4317,46 @@ function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
   }
 
   return (
-    <section className="featured-categories desktop-reveal">
-      {tiles.map((tile) => (
+    <section className="customer-quick-categories" aria-labelledby="quick-categories-title">
+      <div className="customer-quick-categories-head">
+        <h2 id="quick-categories-title">Shop by category</h2>
         <button
-          key={tile.category}
           type="button"
-          className="featured-category-tile"
           onClick={() => {
-            onSelectCategory(tile.category, "featured_category");
+            onSelectCategory("all", "featured_category");
             onShop();
           }}
         >
-          <img
-            src={getOptimizedImageUrl(tile.image, 520, 72)}
-            srcSet={getOptimizedImageSrcSet(tile.image, [320, 520, 720], 72)}
-            sizes="(max-width: 767px) 50vw, 25vw"
-            alt={tile.label}
-            width="520"
-            height="640"
-            loading="lazy"
-            decoding="async"
-          />
-          <span>{tile.label}</span>
+          View all
         </button>
-      ))}
+      </div>
+      <div className="customer-quick-categories-grid">
+        {tiles.map((tile) => (
+          <button
+            key={tile.id}
+            type="button"
+            className="customer-quick-category"
+            onClick={() => {
+              onSelectCategory(tile.id, "featured_category");
+              onShop();
+            }}
+          >
+            <span className="customer-quick-category-image">
+              <img
+                src={getOptimizedImageUrl(tile.image, 320, 70)}
+                srcSet={getOptimizedImageSrcSet(tile.image, [180, 320], 70)}
+                sizes="25vw"
+                alt=""
+                width="320"
+                height="320"
+                loading="lazy"
+                decoding="async"
+              />
+            </span>
+            <span>{tile.label}</span>
+          </button>
+        ))}
+      </div>
     </section>
   );
 }
@@ -9400,6 +9460,11 @@ export default function App() {
           featuredProduct={featuredCustomerProduct}
           onShop={handleScrollToCollection}
           onSelectCategory={handleCustomerCategorySelect}
+        />
+        <FeaturedCategoriesRow
+          products={customerCatalog}
+          onSelectCategory={handleCustomerCategorySelect}
+          onShop={handleScrollToCollection}
         />
         <CustomerCommercePromise />
         {customerCollection === "all" || customerCollection === "varalakshmi" ? (
