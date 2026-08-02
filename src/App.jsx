@@ -124,10 +124,10 @@ const CUSTOMER_COLLECTIONS = [
   }
 ];
 const CUSTOMER_QUICK_COLLECTIONS = [
-  { id: "pooja-diyas", label: "Diyas" },
-  { id: "urlis-serveware", label: "Urlis" },
-  { id: "idols-spiritual", label: "Idols" },
-  { id: "wall-home", label: "Wall décor" }
+  { id: "pooja-diyas", label: "Diyas", image: "/assets/images/mobile-categories/diyas.jpg" },
+  { id: "urlis-serveware", label: "Urlis", image: "/assets/images/mobile-categories/urlis.jpg" },
+  { id: "idols-spiritual", label: "Idols", image: "/assets/images/mobile-categories/idols.jpg" },
+  { id: "wall-home", label: "Wall décor", image: "/assets/images/mobile-categories/wall.jpg" }
 ];
 const CUSTOMER_COLLECTION_ALIASES = new Map([
   ["", "all"],
@@ -3943,7 +3943,7 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
-  const pointerStartX = useRef(null);
+  const gestureStart = useRef(null);
   const heroImage = getPrimaryImage(featuredProduct);
   const preparedSlides = (
     slides.length ? slides : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: slide.imageUrl || heroImage }))
@@ -3992,17 +3992,28 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
   }
 
   function handlePointerDown(event) {
-    pointerStartX.current = event.clientX;
+    if (event.pointerType === "mouse" || event.button !== 0) {
+      return;
+    }
+    gestureStart.current = {
+      x: event.clientX,
+      y: event.clientY,
+      pointerId: event.pointerId
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
   }
 
   function handlePointerUp(event) {
-    if (pointerStartX.current == null) {
+    const start = gestureStart.current;
+    if (!start || start.pointerId !== event.pointerId) {
       return;
     }
-    const distance = event.clientX - pointerStartX.current;
-    pointerStartX.current = null;
-    if (Math.abs(distance) >= 45) {
-      moveSlide(distance > 0 ? -1 : 1);
+    const distanceX = event.clientX - start.x;
+    const distanceY = event.clientY - start.y;
+    gestureStart.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (Math.abs(distanceX) >= 45 && Math.abs(distanceX) > Math.abs(distanceY) * 1.2) {
+      moveSlide(distanceX > 0 ? -1 : 1);
     }
   }
 
@@ -4013,11 +4024,6 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
       onFocusCapture={() => setIsPaused(true)}
-      onPointerDown={handlePointerDown}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={() => {
-        pointerStartX.current = null;
-      }}
     >
       <div className="customer-hero-copy" aria-live="polite">
         <p className="eyebrow">{activeSlide.eyebrow}</p>
@@ -4050,7 +4056,14 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
           <span>Pan-India delivery</span>
         </div>
       </div>
-      <div className="customer-hero-media">
+      <div
+        className="customer-hero-media"
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={() => {
+          gestureStart.current = null;
+        }}
+      >
         {slideImage ? (
           <picture>
             <source media="(max-width: 767px)" srcSet={mobileSlideImage} />
@@ -4299,23 +4312,7 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
   );
 }
 
-function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
-  const tiles = CUSTOMER_QUICK_COLLECTIONS
-    .map((collection) => {
-      const match = products.find(
-        (product) => isCustomerSellReady(product) && matchesCustomerCollection(product, collection.id) && getPrimaryImage(product)
-      );
-      return {
-        ...collection,
-        image: match ? getPrimaryImage(match) : "",
-      };
-    })
-    .filter((item) => item.image);
-
-  if (!tiles.length) {
-    return null;
-  }
-
+function FeaturedCategoriesRow({ onSelectCategory, onShop }) {
   return (
     <section className="customer-quick-categories" aria-labelledby="quick-categories-title">
       <div className="customer-quick-categories-head">
@@ -4331,7 +4328,7 @@ function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
         </button>
       </div>
       <div className="customer-quick-categories-grid">
-        {tiles.map((tile) => (
+        {CUSTOMER_QUICK_COLLECTIONS.map((tile) => (
           <button
             key={tile.id}
             type="button"
@@ -4343,12 +4340,10 @@ function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
           >
             <span className="customer-quick-category-image">
               <img
-                src={getOptimizedImageUrl(tile.image, 320, 70)}
-                srcSet={getOptimizedImageSrcSet(tile.image, [180, 320], 70)}
-                sizes="25vw"
+                src={tile.image}
                 alt=""
-                width="320"
-                height="320"
+                width="360"
+                height="360"
                 loading="lazy"
                 decoding="async"
               />
@@ -9462,7 +9457,6 @@ export default function App() {
           onSelectCategory={handleCustomerCategorySelect}
         />
         <FeaturedCategoriesRow
-          products={customerCatalog}
           onSelectCategory={handleCustomerCategorySelect}
           onShop={handleScrollToCollection}
         />

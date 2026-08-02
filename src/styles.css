@@ -10435,7 +10435,7 @@ body:has(.customer-shell) {
   display: none;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 860px) {
   .customer-shell .announcement-bar,
   .customer-shell .announcement-inner {
     height: 28px;
@@ -10519,8 +10519,8 @@ body:has(.customer-shell) {
   .customer-shell .customer-hero.hero-poster-slide {
     position: relative;
     width: 100%;
-    height: clamp(232px, 62vw, 250px);
-    min-height: clamp(232px, 62vw, 250px);
+    height: clamp(232px, 60vw, 300px);
+    min-height: clamp(232px, 60vw, 300px);
     display: block;
     overflow: hidden;
     touch-action: pan-y;
@@ -10620,11 +10620,16 @@ body:has(.customer-shell) {
     right: 14px;
     bottom: 12px;
     left: auto;
-    gap: 0;
+    gap: 6px;
   }
 
   .customer-shell .customer-hero-arrow {
-    display: none;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    border-color: rgba(255, 255, 255, 0.42);
+    background: rgba(37, 25, 20, 0.28);
+    color: #fff;
   }
 
   .customer-shell .customer-hero-position {
@@ -10685,7 +10690,7 @@ body:has(.customer-shell) {
   }
 
   .customer-shell .customer-quick-categories-head button {
-    min-height: 32px;
+    min-height: 44px;
     border: 0;
     border-bottom: 1px solid currentColor;
     background: transparent;
@@ -10816,5 +10821,29 @@ body:has(.customer-shell) {
 
   .customer-shell .customer-mobile-dock .customer-mobile-shop small {
     display: none;
+  }
+
+  .customer-shell .customer-hero.hero-poster-only {
+    height: auto;
+    min-height: 0;
+    display: block;
+  }
+
+  .customer-shell .customer-hero.hero-poster-only .customer-hero-copy {
+    display: none;
+  }
+
+  .customer-shell .customer-hero.hero-poster-only .customer-hero-media {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 16 / 9;
+  }
+
+  .customer-shell .customer-hero.hero-poster-only .customer-hero-media img {
+    min-height: 0;
+    object-fit: contain;
   }
 }
