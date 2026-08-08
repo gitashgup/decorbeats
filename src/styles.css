@@ -7685,6 +7685,89 @@ header img {
   gap: 0.6rem;
 }
 
+.app-shell-admin .inquiries-screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: stretch;
+}
+
+.app-shell-admin .inquiries-toolbar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.7rem;
+  border: 1px solid var(--inventory-line);
+  border-radius: 18px;
+  background: var(--inventory-panel);
+  box-shadow: 0 8px 30px rgba(54, 40, 30, 0.045);
+}
+
+.app-shell-admin .inquiries-toolbar .inquiry-status-row {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding-bottom: 0;
+}
+
+.app-shell-admin .inquiry-create-button {
+  min-width: 142px;
+  min-height: 44px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--inventory-brass);
+  border-radius: 11px;
+  background: var(--inventory-brass);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 780;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px rgba(109, 61, 31, 0.14);
+}
+
+.app-shell-admin .inquiry-create-button:hover {
+  border-color: var(--inventory-brass-dark);
+  background: var(--inventory-brass-dark);
+}
+
+.app-shell-admin .inquiry-create-button svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+}
+
+.app-shell-admin .inquiries-screen .inquiry-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.app-shell-admin .inquiries-screen .inquiry-card.expanded {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .app-shell-admin .inquiries-screen .inquiry-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .app-shell-admin .inquiries-toolbar {
+    align-items: stretch;
+    flex-direction: column-reverse;
+    padding: 0.6rem;
+  }
+
+  .app-shell-admin .inquiry-create-button {
+    width: 100%;
+  }
+}
+
 .inquiry-status-row {
   display: flex;
   gap: 0.65rem;

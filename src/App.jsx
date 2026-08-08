@@ -2898,12 +2898,14 @@ function InquiriesScreen({
   busy
 }) {
   return (
-    <section className="stack-grid">
-      <button type="button" className="primary-button inquiry-log-button" onClick={onNewInquiry}>
-        <PlusIcon />
-        <span>New Inquiry</span>
-      </button>
-      <InquiryStatusFilters activeStatus={statusFilter} onChange={setStatusFilter} />
+    <section className="inquiries-screen">
+      <div className="inquiries-toolbar">
+        <InquiryStatusFilters activeStatus={statusFilter} onChange={setStatusFilter} />
+        <button type="button" className="inquiry-create-button" onClick={onNewInquiry}>
+          <PlusIcon />
+          <span>New inquiry</span>
+        </button>
+      </div>
       <section className="inquiry-list">
         {inquiries.length ? (
           inquiries.map((inquiry) => (
