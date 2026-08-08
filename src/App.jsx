@@ -1,8 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+const configuredAdminEmails = String(import.meta.env.VITE_ADMIN_EMAILS || "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
 let supabase = null;
 let supabaseClientPromise = null;
 
@@ -22,12 +26,18 @@ async function getSupabaseClient() {
   return supabaseClientPromise;
 }
 
+function isConfiguredAdminEmail(email) {
+  const normalizedEmail = safeText(email).toLowerCase();
+  return Boolean(normalizedEmail) && (!configuredAdminEmails.length || configuredAdminEmails.includes(normalizedEmail));
+}
+
 const brandLogo = "/assets/brand/decorbeats-logo.svg";
 const WHATSAPP_NUMBER = "919811133661";
 const PRODUCT_STORAGE_BUCKET = "products";
 const CART_STORAGE_KEY = "decorbeats-cart-v1";
 const RAZORPAY_CHECKOUT_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
 const GOOGLE_ADS_CONTACT_CONVERSION = "AW-18084439764/kF1hCNnLiK4cENTNqq9D";
+const LOW_STOCK_THRESHOLD = 10;
 const ANNOUNCEMENTS = [
   "Varalakshmi gifts now live",
   "Handpicked in Moradabad",
@@ -305,16 +315,17 @@ function parseLegacyPath(pathname) {
 const emptyInquiryDraft = {
   customer_name: "",
   customer_phone: "",
-  source: "phone",
+  source: "whatsapp",
   occasion: "",
   required_by_date: "",
   budget_per_unit: "",
   total_budget: "",
   notes: "",
-  products: [{ product_name: "", matched_sku: "", quantity_requested: "", quoted_price: "" }]
+  products: [{ product_name: "", matched_sku: "", quantity_requested: 1, quoted_price: "" }]
 };
 
-const inquiryStatusOrder = ["new", "quoted", "converted", "lost"];
+const inquiryStatusOrder = ["new", "contacted", "quoted", "follow_up", "converted", "lost"];
+const SALE_NOTES_META_PREFIX = "[[DECORBEATS_ORDER_V1]]";
 const catalogueLeadTimeOptions = [
   "Ready to ship",
   "2-3 days",
@@ -621,31 +632,126 @@ function toInquiry(raw) {
   };
 }
 
+function parseSaleNotes(value) {
+  const rawNotes = safeText(value);
+  if (!rawNotes.startsWith(SALE_NOTES_META_PREFIX)) {
+    return { metadata: {}, notes: rawNotes };
+  }
+
+  const firstLineEnd = rawNotes.indexOf("\n");
+  const metadataText = rawNotes.slice(
+    SALE_NOTES_META_PREFIX.length,
+    firstLineEnd === -1 ? undefined : firstLineEnd
+  );
+  try {
+    return {
+      metadata: JSON.parse(metadataText) || {},
+      notes: firstLineEnd === -1 ? "" : rawNotes.slice(firstLineEnd + 1).trim()
+    };
+  } catch {
+    return { metadata: {}, notes: rawNotes };
+  }
+}
+
+function limitSaleText(value, maxLength) {
+  return safeText(value).slice(0, maxLength);
+}
+
+function buildSaleNotes(draft) {
+  const metadata = {
+    client_order_id: limitSaleText(draft.client_order_id, 100),
+    order_date: limitSaleText(draft.order_date, 20),
+    customer_phone: limitSaleText(draft.customer_phone, 40),
+    source_channel: limitSaleText(safeText(draft.source_channel, "whatsapp"), 40),
+    fulfillment_status: limitSaleText(safeText(draft.fulfillment_status, "confirmed"), 40),
+    amount_received: draft.amount_received === "" ? null : Number(draft.amount_received || 0),
+    delivery_charge: draft.delivery_charge === "" ? null : Number(draft.delivery_charge || 0),
+    courier_cost: draft.courier_cost === "" ? null : Number(draft.courier_cost || 0),
+    item_sources: draft.items
+      .filter((item) => safeText(item.product_name))
+      .map((item) => ({
+        product_name: limitSaleText(item.product_name, 240),
+        quantity_sold: Number(item.quantity_sold || 0),
+        selling_price: Number(item.selling_price || 0),
+        cost_price: item.cost_price === "" || item.cost_price == null ? null : Number(item.cost_price),
+        catalog_sku: limitSaleText(item.product_sku, 100),
+        fulfillment_source: item.track_inventory ? "inventory" : "vendor_direct",
+        vendor_name: limitSaleText(item.vendor_name, 160)
+      }))
+  };
+  const userNotes = limitSaleText(draft.notes, 2_000);
+  const packedNotes = `${SALE_NOTES_META_PREFIX}${JSON.stringify(metadata)}${userNotes ? `\n${userNotes}` : ""}`;
+  if (packedNotes.length > 8_000) {
+    throw new Error("This order has too much optional detail. Shorten the notes or split it into two orders.");
+  }
+  return packedNotes;
+}
+
 function toSale(raw) {
-  return {
-    id: raw.id,
-    createdAt: raw.created_at,
-    customerName: safeText(raw.customer_name, "Walk-in sale"),
-    paymentMethod: safeText(raw.payment_method, "upi").toLowerCase(),
-    paymentStatus: safeText(raw.payment_status, "paid").toLowerCase(),
-    notes: safeText(raw.notes),
-    totalAmount: Number(raw.total_amount ?? 0),
-    items: Array.isArray(raw.sale_items)
-      ? raw.sale_items.map((item) => ({
+  const parsedNotes = parseSaleNotes(raw.notes);
+  const metadata = parsedNotes.metadata;
+  const sourceRows = Array.isArray(metadata.item_sources) ? metadata.item_sources : [];
+  const usedSourceRows = new Set();
+  const saleItems = Array.isArray(raw.sale_items)
+    ? raw.sale_items.map((item) => {
+        const exactSourceIndex = sourceRows.findIndex(
+          (source, index) =>
+            !usedSourceRows.has(index) &&
+            safeText(source.product_name).toLowerCase() === safeText(item.product_name).toLowerCase() &&
+            Number(source.quantity_sold || 0) === Number(item.quantity_sold || 0) &&
+            Number(source.selling_price || 0) === Number(item.selling_price || 0) &&
+            (source.cost_price == null ? null : Number(source.cost_price)) ===
+              (item.cost_price == null ? null : Number(item.cost_price))
+        );
+        const skuSourceIndex = safeText(item.product_sku)
+          ? sourceRows.findIndex(
+              (source, index) =>
+                !usedSourceRows.has(index) && safeText(source.catalog_sku) === safeText(item.product_sku)
+            )
+          : -1;
+        const fallbackSourceIndex = sourceRows.findIndex((_source, index) => !usedSourceRows.has(index));
+        const sourceIndex = exactSourceIndex >= 0 ? exactSourceIndex : skuSourceIndex >= 0 ? skuSourceIndex : fallbackSourceIndex;
+        if (sourceIndex >= 0) {
+          usedSourceRows.add(sourceIndex);
+        }
+        const source = sourceIndex >= 0 ? sourceRows[sourceIndex] : {};
+        const tracked = Boolean(safeText(item.product_sku));
+        return {
           id: item.id,
           productSku: safeText(item.product_sku),
+          catalogSku: safeText(item.product_sku) || safeText(source.catalog_sku),
           productName: safeText(item.product_name),
           quantitySold: Number(item.quantity_sold ?? 0),
           sellingPrice: Number(item.selling_price ?? 0),
-          costPrice: item.cost_price == null ? null : Number(item.cost_price)
-        }))
-      : []
+          costPrice: item.cost_price == null ? null : Number(item.cost_price),
+          trackInventory: tracked,
+          fulfillmentSource: tracked ? "inventory" : safeText(source.fulfillment_source, "vendor_direct"),
+          vendorName: safeText(source.vendor_name)
+        };
+      })
+    : [];
+  return {
+    id: raw.id,
+    createdAt: raw.created_at,
+    orderDate: safeText(metadata.order_date) || raw.created_at,
+    customerName: safeText(raw.customer_name, "Walk-in sale"),
+    customerPhone: safeText(metadata.customer_phone),
+    sourceChannel: safeText(metadata.source_channel, "not_recorded").toLowerCase(),
+    fulfilmentStatus: safeText(metadata.fulfillment_status, "delivered").toLowerCase(),
+    paymentMethod: safeText(raw.payment_method, "not_recorded").toLowerCase(),
+    paymentStatus: safeText(raw.payment_status, "not_recorded").toLowerCase(),
+    amountReceived:
+      safeText(raw.payment_status, "paid").toLowerCase() === "paid"
+        ? Number(raw.total_amount ?? 0)
+        : metadata.amount_received == null
+          ? 0
+          : Number(metadata.amount_received || 0),
+    deliveryCharge: metadata.delivery_charge == null ? null : Number(metadata.delivery_charge || 0),
+    courierCost: metadata.courier_cost == null ? null : Number(metadata.courier_cost || 0),
+    notes: parsedNotes.notes,
+    totalAmount: Number(raw.total_amount ?? 0),
+    items: saleItems
   };
-}
-
-function isMissingSaleRpcError(error) {
-  const message = safeText(error?.message).toLowerCase();
-  return error?.code === "PGRST202" || message.includes("record_sale_with_items") || message.includes("could not find the function");
 }
 
 function isMissingDeleteSaleRpcError(error) {
@@ -655,30 +761,13 @@ function isMissingDeleteSaleRpcError(error) {
 
 function formatSaleSaveError(error) {
   const message = safeText(error?.message);
-  if (isMissingSaleRpcError(error)) {
-    return "The safe sale-saving function is not installed in Supabase yet. Please run the latest sales SQL migration, then try again.";
-  }
   if (message === "Load failed" || error?.name === "TypeError") {
-    return "Could not reach Supabase from this phone. Please check the connection, then try once more. If it repeats, update the app after the next deploy.";
+    return "Could not reach Decorbeats right now. Your order details are still here—check the connection and tap Save order again.";
   }
   if (message.toLowerCase().includes("row-level security")) {
     return "Supabase security is blocking this sale. Please check the sales, sale_items, and products RLS policies.";
   }
-  return message || "Could not save this sale.";
-}
-
-function saleFromRpcData(data) {
-  const payload = Array.isArray(data) ? data[0] : data;
-  if (!payload) {
-    return null;
-  }
-  if (payload.sale && Array.isArray(payload.sale_items)) {
-    return toSale({ ...payload.sale, sale_items: payload.sale_items });
-  }
-  if (payload.id) {
-    return toSale(payload);
-  }
-  return null;
+  return message || "Could not save this order.";
 }
 
 function toPurchase(raw) {
@@ -804,11 +893,42 @@ function getCatalogueShareMessage(catalogue) {
 
 function createEmptySaleDraft() {
   return {
+    client_order_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `order-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    order_date: new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10),
     customer_name: "",
-    payment_method: "upi",
-    payment_status: "paid",
+    customer_phone: "",
+    source_channel: "whatsapp",
+    payment_method: "not_recorded",
+    payment_status: "not_recorded",
+    fulfillment_status: "confirmed",
+    amount_received: "",
+    delivery_charge: "",
+    courier_cost: "",
     notes: "",
-    items: []
+    items: [createSaleItemDraft()]
+  };
+}
+
+function createSaleItemDraft(overrides = {}) {
+  return {
+    client_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `sale-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    product_id: "",
+    product_sku: "",
+    product_name: "",
+    quantity_sold: 1,
+    selling_price: "",
+    cost_price: "",
+    max_quantity: 0,
+    track_inventory: false,
+    fulfillment_source: "vendor_direct",
+    vendor_name: "",
+    ...overrides
   };
 }
 
@@ -861,12 +981,45 @@ function getCartLineId(product) {
 }
 
 function formatPaymentMethod(value) {
-  return safeText(value, "upi").toUpperCase();
+  const normalized = safeText(value, "not_recorded").toLowerCase();
+  if (normalized === "not_recorded") {
+    return "Not recorded";
+  }
+  if (normalized === "bank_transfer") {
+    return "Bank transfer";
+  }
+  return normalized.toUpperCase();
 }
 
 function formatPaymentStatus(value) {
-  const normalized = safeText(value, "paid").toLowerCase();
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  const normalized = safeText(value, "not_recorded").toLowerCase();
+  return normalized
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatFulfilmentStatus(value) {
+  const normalized = safeText(value, "confirmed").toLowerCase();
+  const labels = {
+    confirmed: "Confirmed",
+    procurement: "Vendor procurement",
+    packing: "Packing / ready",
+    shipped: "Shipped",
+    delivered: "Delivered",
+    cancelled: "Cancelled"
+  };
+  return labels[normalized] || formatPaymentStatus(normalized);
+}
+
+function getSaleInventoryLabel(sale) {
+  const inventorySourceCount = sale.items.filter(
+    (item) => item.trackInventory || item.fulfillmentSource === "inventory"
+  ).length;
+  if (!inventorySourceCount) {
+    return "Vendor / custom";
+  }
+  return inventorySourceCount === sale.items.length ? "Inventory source" : "Mixed source";
 }
 
 function formatSaleDate(value) {
@@ -898,7 +1051,10 @@ function formatPurchaseDate(value) {
 
 function formatInquiryStatus(status) {
   const normalized = safeText(status, "new").toLowerCase();
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  return normalized
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function formatPurchaseStatus(status) {
@@ -917,9 +1073,11 @@ function normalizeInquiryDraft(payload, products = []) {
   return {
     customer_name: safeText(payload?.customer_name),
     customer_phone: safeText(payload?.customer_phone),
-    source: ["phone", "whatsapp", "walkin"].includes(safeText(payload?.source).toLowerCase())
+    source: ["phone", "whatsapp", "walkin", "instagram", "google", "website", "referral"].includes(
+      safeText(payload?.source).toLowerCase()
+    )
       ? safeText(payload?.source).toLowerCase()
-      : "phone",
+      : "whatsapp",
     occasion: safeText(payload?.occasion),
     required_by_date: safeText(payload?.required_by_date),
     budget_per_unit: payload?.budget_per_unit ?? "",
@@ -979,7 +1137,7 @@ function findMatchingProduct(products, query) {
       bestScore = score;
     }
   });
-  return bestScore >= 40 ? best : null;
+  return bestScore >= 100 ? best : null;
 }
 
 function GridIcon() {
@@ -1520,7 +1678,7 @@ function toProduct(raw, index = 0) {
     category: normalizeProductCategory(raw.category),
     material: raw.material ?? "Unspecified",
     quantity,
-    stockStatus: quantity <= 0 ? "Out of stock" : quantity <= 10 ? "Low stock" : "In stock",
+    stockStatus: quantity <= 0 ? "Out of stock" : quantity <= LOW_STOCK_THRESHOLD ? "Low stock" : "In stock",
     driveUrl: raw.driveUrl ?? raw.drive_url ?? "",
     imageUrl: primaryImage,
     imageUrls,
@@ -1763,14 +1921,22 @@ function ProductThumb({ product }) {
   if (primaryImage) {
     return (
       <div className="product-thumb">
-        <img className="product-thumb-image" src={primaryImage} alt={product.name} loading="lazy" />
+        <img
+          className="product-thumb-image"
+          src={getOptimizedImageUrl(primaryImage, 112, 64)}
+          alt={product.name}
+          width="56"
+          height="56"
+          loading="lazy"
+          decoding="async"
+        />
       </div>
     );
   }
 
   return (
     <div className="product-thumb product-thumb-fallback">
-      <img src={brandLogo} alt="Decorbeats" className="product-thumb-logo" loading="lazy" />
+      <img src={brandLogo} alt="Decorbeats" className="product-thumb-logo" width="44" height="44" loading="lazy" decoding="async" />
     </div>
   );
 }
@@ -2643,7 +2809,9 @@ function InquiryStatusFilters({ activeStatus, onChange }) {
 function InquiryCard({ inquiry, expanded, onToggle, onStatusUpdate, busy }) {
   const requestedUnits = inquiry.items.reduce((sum, item) => sum + Number(item.quantityRequested || 0), 0);
   const productsMentioned = inquiry.items.map((item) => item.productName || item.productSku).filter(Boolean).join(", ");
-  const nextStatus = inquiryStatusOrder[inquiryStatusOrder.indexOf(inquiry.status) + 1] ?? null;
+  const nextStatus = ["converted", "lost"].includes(inquiry.status)
+    ? null
+    : inquiryStatusOrder[inquiryStatusOrder.indexOf(inquiry.status) + 1] ?? null;
 
   return (
     <article className={expanded ? "inquiry-card expanded" : "inquiry-card"}>
@@ -2732,8 +2900,8 @@ function InquiriesScreen({
   return (
     <section className="stack-grid">
       <button type="button" className="primary-button inquiry-log-button" onClick={onNewInquiry}>
-        <MicIcon />
-        <span>Log New Inquiry</span>
+        <PlusIcon />
+        <span>New Inquiry</span>
       </button>
       <InquiryStatusFilters activeStatus={statusFilter} onChange={setStatusFilter} />
       <section className="inquiry-list">
@@ -2764,7 +2932,7 @@ function SalesSummaryStrip({ items }) {
 }
 
 function SalesPaymentFilters({ activeStatus, onChange }) {
-  const filters = ["all", "pending", "paid"];
+  const filters = ["all", "not_recorded", "pending", "part_paid", "paid"];
 
   return (
     <div className="inquiry-status-row" aria-label="Filter sales by payment status">
@@ -2784,10 +2952,9 @@ function SalesPaymentFilters({ activeStatus, onChange }) {
 
 function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markingPaidId, deletingSaleId }) {
   const itemsSummary = sale.items.map((item) => `${item.quantitySold}× ${item.productName || item.productSku}`).join(" + ");
-  const badgeClass =
-    sale.paymentMethod === "upi" ? "sale-payment-badge upi" : sale.paymentMethod === "cash" ? "sale-payment-badge cash" : "sale-payment-badge";
-  const paymentStatusClass = sale.paymentStatus === "pending" ? "sale-payment-status pending" : "sale-payment-status paid";
-  const isPending = sale.paymentStatus === "pending";
+  const paymentStatusClass = `sale-payment-status ${sale.paymentStatus}`;
+  const fulfilmentClass = `sale-fulfilment-status ${sale.fulfilmentStatus}`;
+  const isPending = ["pending", "part_paid"].includes(sale.paymentStatus);
   const isBusy = markingPaidId === sale.id;
   const isDeleting = deletingSaleId === sale.id;
 
@@ -2796,17 +2963,18 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markin
       <button type="button" className="sale-card-main" onClick={() => onToggle(sale.id)}>
         <div className="sale-card-top">
           <div>
-            <p className="sale-card-date">{formatSaleDate(sale.createdAt)}</p>
+            <p className="sale-card-date">{formatPurchaseDate(sale.orderDate)}</p>
             <h3>{sale.customerName}</h3>
           </div>
           <div className="sale-card-badges">
-            <span className={badgeClass}>{formatPaymentMethod(sale.paymentMethod)}</span>
-            <span className={paymentStatusClass}>{isPending ? "₹ PENDING" : "PAID"}</span>
+            <span className={fulfilmentClass}>{formatFulfilmentStatus(sale.fulfilmentStatus)}</span>
+            <span className={paymentStatusClass}>{formatPaymentStatus(sale.paymentStatus)}</span>
           </div>
         </div>
         <p className="sale-card-items">{itemsSummary || "No items recorded"}</p>
         <div className="sale-card-meta">
           <strong>{formatCurrency(sale.totalAmount)}</strong>
+          <span>{getSaleInventoryLabel(sale)}</span>
         </div>
       </button>
       {expanded ? (
@@ -2817,20 +2985,28 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markin
               <strong>{sale.customerName}</strong>
             </div>
             <div>
+              <span>Mobile</span>
+              <strong>{sale.customerPhone || "Not recorded"}</strong>
+            </div>
+            <div>
               <span>Payment</span>
-              <strong>{formatPaymentMethod(sale.paymentMethod)}</strong>
+              <strong>{formatPaymentStatus(sale.paymentStatus)} · {formatPaymentMethod(sale.paymentMethod)}</strong>
             </div>
             <div>
-              <span>Status</span>
-              <strong>{formatPaymentStatus(sale.paymentStatus)}</strong>
+              <span>Fulfilment</span>
+              <strong>{formatFulfilmentStatus(sale.fulfilmentStatus)}</strong>
             </div>
             <div>
-              <span>Time</span>
-              <strong>{formatSaleDate(sale.createdAt)}</strong>
+              <span>Order date</span>
+              <strong>{formatPurchaseDate(sale.orderDate)}</strong>
             </div>
             <div>
-              <span>Total</span>
-              <strong>{formatCurrency(sale.totalAmount)}</strong>
+              <span>Source</span>
+              <strong>{formatPaymentStatus(sale.sourceChannel)}</strong>
+            </div>
+            <div>
+              <span>Received</span>
+              <strong>{formatCurrency(sale.amountReceived)}</strong>
             </div>
           </div>
           <ul className="sale-item-list">
@@ -2838,7 +3014,13 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markin
               <li key={item.id || `${item.productSku}-${item.productName}`}>
                 <div>
                   <strong>{item.productName || item.productSku}</strong>
-                  <span>{item.productSku}</span>
+                  <span>
+                    {item.trackInventory
+                      ? `${item.productSku} · Inventory deducted`
+                      : item.fulfillmentSource === "inventory"
+                        ? `${item.catalogSku || "Inventory item"} · Stock not adjusted`
+                        : "Custom / vendor direct · No stock change"}
+                  </span>
                 </div>
                 <div>
                   <strong>{item.quantitySold} × {formatCurrency(item.sellingPrice)}</strong>
@@ -2890,7 +3072,7 @@ function SalesScreen({
     <section className="stack-grid">
       <button type="button" className="primary-button inquiry-log-button" onClick={onRecordSale}>
         <ReceiptIcon />
-        <span>Record Sale</span>
+        <span>Record Order</span>
       </button>
       <SalesSummaryStrip items={summaryItems} />
       <SalesPaymentFilters activeStatus={paymentFilter} onChange={setPaymentFilter} />
@@ -3308,11 +3490,9 @@ function RecordSaleModal({
   setPickerOpen,
   busy,
   errorMessage,
-  confirmation,
-  onCancelConfirmation,
-  onConfirmSale,
   onClose,
   onAddProduct,
+  onAddCustomItem,
   onRemoveProduct,
   onUpdateItem,
   onSave
@@ -3324,95 +3504,102 @@ function RecordSaleModal({
   const matchingProducts = products.filter((product) => {
     const query = productSearch.trim().toLowerCase();
     if (!query) {
-      return product.quantity > 0;
+      return true;
     }
-    return (
-      product.quantity > 0 &&
-      [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase().includes(query)
-    );
-  });
+    return [product.name, product.sku, product.category, product.material]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(query);
+  }).slice(0, 20);
 
   const total = draft.items.reduce(
     (sum, item) => sum + (Number(item.quantity_sold || 0) * Number(item.selling_price || 0)),
     0
   );
-
   return (
-    <div className="inquiry-modal-overlay" onClick={onClose}>
-      <div className="inquiry-modal sale-modal" onClick={(event) => event.stopPropagation()}>
+    <div className="inquiry-modal-overlay" onClick={() => !busy && onClose()}>
+      <div className="inquiry-modal sale-modal quick-order-modal" onClick={(event) => event.stopPropagation()}>
         <form
-          className="inquiry-modal-body inquiry-confirm-form sale-form"
+          className="inquiry-modal-body quick-order-form"
+          aria-busy={busy}
           noValidate
           onSubmit={(event) => {
             event.preventDefault();
-            onSave();
+            if (!busy) {
+              onSave();
+            }
           }}
         >
-          <div className="section-head">
+          <fieldset className="quick-order-fieldset" disabled={busy}>
+          <div className="quick-order-header">
             <div>
-              <p className="eyebrow">Record Sale</p>
-              <h3>Complete a new sale</h3>
+              <p className="eyebrow">Quick order</p>
+              <h3>Record an order</h3>
+              <p>Inventory, custom work, and vendor-direct items all belong here.</p>
             </div>
-          </div>
-          {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
-          <label>
-            Customer name
-            <input
-              value={draft.customer_name}
-              onChange={(event) => setDraft((current) => ({ ...current, customer_name: event.target.value }))}
-              placeholder="Optional"
-            />
-          </label>
-          <div className="sale-payment-toggle">
-            <button
-              type="button"
-              className={draft.payment_method === "cash" ? "payment-toggle active" : "payment-toggle"}
-              onClick={() => setDraft((current) => ({ ...current, payment_method: "cash" }))}
-            >
-              💵 Cash
-            </button>
-            <button
-              type="button"
-              className={draft.payment_method === "upi" ? "payment-toggle active" : "payment-toggle"}
-              onClick={() => setDraft((current) => ({ ...current, payment_method: "upi" }))}
-            >
-              📱 UPI
+            <button type="button" className="quick-order-close" aria-label="Close order recorder" onClick={onClose}>
+              ×
             </button>
           </div>
-          <div className="payment-status-block">
-            <p className="eyebrow">Payment Status</p>
-            <div className="sale-payment-toggle payment-status-toggle">
-              <button
-                type="button"
-                className={draft.payment_status === "paid" ? "payment-toggle active payment-toggle-paid" : "payment-toggle"}
-                onClick={() => setDraft((current) => ({ ...current, payment_status: "paid" }))}
-              >
-                ✓ Paid
-              </button>
-              <button
-                type="button"
-                className={draft.payment_status === "pending" ? "payment-toggle active payment-toggle-pending" : "payment-toggle"}
-                onClick={() => setDraft((current) => ({ ...current, payment_status: "pending" }))}
-              >
-                ⏳ Pending
-              </button>
-            </div>
-            {draft.payment_status === "pending" ? (
-              <p className="support-copy payment-status-note">
-                Stock will still be reduced. Payment can be marked as received later.
-              </p>
-            ) : null}
+          {errorMessage ? <p className="inline-upload-error quick-order-error" role="alert">{errorMessage}</p> : null}
+
+          <div className="quick-order-customer-grid">
+            <label>
+              Order date
+              <input
+                type="date"
+                value={draft.order_date}
+                onChange={(event) => setDraft((current) => ({ ...current, order_date: event.target.value }))}
+              />
+            </label>
+            <label>
+              Customer name
+              <input
+                autoFocus
+                autoComplete="name"
+                value={draft.customer_name}
+                onChange={(event) => setDraft((current) => ({ ...current, customer_name: event.target.value }))}
+                placeholder="e.g. Ranjini"
+              />
+            </label>
+            <label>
+              Mobile <span>optional</span>
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={draft.customer_phone}
+                onChange={(event) => setDraft((current) => ({ ...current, customer_phone: event.target.value }))}
+                placeholder="Customer number"
+              />
+            </label>
           </div>
-          <div className="inquiry-products-editor span-2">
-            <div className="section-head">
+
+          <section className="quick-order-items" aria-labelledby="quick-order-items-title">
+            <div className="quick-order-section-head">
               <div>
-                <p className="eyebrow">Products</p>
-                <h3>Sale items</h3>
+                <p className="eyebrow">Line items</p>
+                <h4 id="quick-order-items-title">What did they order?</h4>
               </div>
-              <button type="button" className="ghost-button" onClick={() => setPickerOpen((value) => !value)}>
-                Add Product
+              <span>{draft.items.length} {draft.items.length === 1 ? "item" : "items"}</span>
+            </div>
+
+            <div className="quick-order-add-actions">
+              <button type="button" className="quick-order-add inventory" onClick={() => setPickerOpen((value) => !value)}>
+                <span aria-hidden="true">⌕</span>
+                Choose inventory
+              </button>
+              <button type="button" className="quick-order-add vendor" onClick={onAddCustomItem}>
+                <span aria-hidden="true">＋</span>
+                Custom / vendor item
               </button>
             </div>
+
+            <p className="quick-order-stock-note" role="status">
+              Quick orders never change stock automatically. After dispatch, update the quantity from Inventory.
+            </p>
+
             {pickerOpen ? (
               <div className="sale-picker">
                 <input
@@ -3420,7 +3607,8 @@ function RecordSaleModal({
                   type="search"
                   value={productSearch}
                   onChange={(event) => setProductSearch(event.target.value)}
-                  placeholder="Search products by name or SKU"
+                  placeholder="Search inventory by product or SKU"
+                  autoFocus
                 />
                 <div className="sale-picker-results">
                   {matchingProducts.map((product) => (
@@ -3429,113 +3617,263 @@ function RecordSaleModal({
                         <strong>{product.name}</strong>
                         <span>{product.sku}</span>
                       </div>
-                      <small>{product.quantity} in stock</small>
+                      <small className={product.quantity > 0 ? "" : "out"}>
+                        {product.quantity > 0 ? `${product.quantity} in stock` : "Vendor-direct only"}
+                      </small>
                     </button>
                   ))}
+                  {!matchingProducts.length ? (
+                    <button type="button" className="sale-picker-item sale-picker-custom" onClick={onAddCustomItem}>
+                      <div>
+                        <strong>Add “{productSearch || "custom item"}”</strong>
+                        <span>No catalogue match required</span>
+                      </div>
+                      <small>Vendor direct</small>
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
-            <div className="inquiry-product-editor-list">
-              {draft.items.length ? (
-                draft.items.map((item, index) => (
-                  <div key={`${item.product_sku}-${index}`} className="inquiry-product-editor-card sale-item-card">
-                    <div className="sale-item-head">
-                      <div>
-                        <strong>{item.product_name}</strong>
-                        <span>{item.product_sku}</span>
-                      </div>
-                      <button type="button" className="detail-cancel-link" onClick={() => onRemoveProduct(index)}>
-                        ×
+
+            <div className="quick-order-item-list">
+              {draft.items.map((item, index) => {
+                const stockShort = item.track_inventory && Number(item.quantity_sold || 0) > Number(item.max_quantity || 0);
+                return (
+                  <article key={item.client_id || `${item.product_sku}-${index}`} className="quick-order-item-card">
+                    <div className="quick-order-item-head">
+                      <span className={item.track_inventory ? "quick-order-source-badge inventory" : "quick-order-source-badge vendor"}>
+                        {item.track_inventory ? "Inventory" : "Custom / vendor"}
+                      </span>
+                      <button
+                        type="button"
+                        className="quick-order-remove"
+                        aria-label={`Remove ${item.product_name || `item ${index + 1}`}`}
+                        onClick={() => onRemoveProduct(index)}
+                      >
+                        Remove
                       </button>
                     </div>
-                    <div className="inquiry-inline-fields">
+
+                    <label className="quick-order-product-name">
+                      Item name
+                      <input
+                        value={item.product_name}
+                        readOnly={Boolean(item.product_id)}
+                        onChange={(event) => onUpdateItem(index, "product_name", event.target.value)}
+                        placeholder="e.g. Customised bell"
+                      />
+                    </label>
+
+                    {item.product_sku ? (
+                      <div className="quick-order-source-toggle" aria-label="Choose how this item will be fulfilled">
+                        <button
+                          type="button"
+                          className={item.track_inventory ? "active" : ""}
+                          onClick={() => onUpdateItem(index, "fulfillment_source", "inventory")}
+                        >
+                          From inventory
+                        </button>
+                        <button
+                          type="button"
+                          className={!item.track_inventory ? "active" : ""}
+                          onClick={() => onUpdateItem(index, "fulfillment_source", "vendor_direct")}
+                        >
+                          Vendor direct
+                        </button>
+                      </div>
+                    ) : null}
+
+                    <div className="quick-order-numbers">
                       <label>
-                        Quantity
+                        Qty
                         <input
                           type="number"
                           inputMode="numeric"
-                          pattern="[0-9]*"
-                          max={item.max_quantity}
-                          value={Number(item.quantity_sold || 0) === 0 ? "" : item.quantity_sold}
-                          placeholder="0"
+                          min="1"
+                          step="1"
+                          value={item.quantity_sold}
                           onClick={handleNumericInputClick}
                           onChange={(event) => onUpdateItem(index, "quantity_sold", event.target.value)}
                         />
                       </label>
                       <label>
-                        Selling price
+                        Unit price
                         <div className="rupee-field">
                           <span>₹</span>
                           <input
                             type="number"
                             inputMode="decimal"
-                            value={Number(item.selling_price || 0) === 0 ? "" : item.selling_price}
+                            min="0"
+                            step="0.01"
+                            value={item.selling_price}
                             placeholder="0"
                             onClick={handleNumericInputClick}
                             onChange={(event) => onUpdateItem(index, "selling_price", event.target.value)}
                           />
                         </div>
                       </label>
+                      <div className="quick-order-line-total">
+                        <span>Line total</span>
+                        <strong>{formatCurrency(Number(item.quantity_sold || 0) * Number(item.selling_price || 0))}</strong>
+                      </div>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <p className="support-copy">Add at least one product to record this sale.</p>
-              )}
+
+                    {stockShort ? (
+                      <p className="quick-order-stock-warning" role="alert">
+                        Only {item.max_quantity} currently recorded in stock. Choose Vendor direct or update Inventory after saving.
+                      </p>
+                    ) : null}
+
+                    <details className="quick-order-line-details">
+                      <summary>Cost and vendor <span>optional</span></summary>
+                      <div>
+                        <label>
+                          Unit cost
+                          <div className="rupee-field">
+                            <span>₹</span>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              value={item.cost_price}
+                              onChange={(event) => onUpdateItem(index, "cost_price", event.target.value)}
+                            />
+                          </div>
+                        </label>
+                        <label>
+                          Vendor
+                          <input
+                            value={item.vendor_name}
+                            onChange={(event) => onUpdateItem(index, "vendor_name", event.target.value)}
+                            placeholder="Optional vendor name"
+                          />
+                        </label>
+                      </div>
+                    </details>
+                  </article>
+                );
+              })}
             </div>
-          </div>
-          <label className="span-2">
-            Notes
-            <textarea
-              rows="4"
-              value={draft.notes}
-              onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-            />
-          </label>
-          <div className="sale-total-card span-2">
-            <span>Order total</span>
-            <strong>{formatCurrency(total)}</strong>
-          </div>
-          {confirmation ? (
-            <div className="sale-confirm-card span-2">
-              <p className="eyebrow">Confirm Sale</p>
-              <h3>Stock will be reduced</h3>
-              <ul className="sale-confirm-list">
-                {confirmation.inventoryChanges.map(({ item, product, nextQuantity }) => (
-                  <li key={item.product_sku}>
-                    <strong>{item.product_name}</strong>
-                    <span>
-                      {product.quantity} → {nextQuantity}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="sale-confirm-total">
-                Total: <strong>{formatCurrency(confirmation.total)}</strong> ({formatPaymentMethod(confirmation.paymentMethod)})
-              </p>
-              <div className="detail-edit-actions">
-                <button type="button" className="ghost-button" disabled={busy} onClick={onCancelConfirmation}>
-                  Cancel
-                </button>
-                <button type="button" className="primary-button detail-save-button" disabled={busy} onClick={onConfirmSale}>
-                  {busy ? "Saving..." : "Confirm & Save"}
-                </button>
-              </div>
+          </section>
+
+          <details className="quick-order-details">
+            <summary>Payment, delivery and notes <span>optional</span></summary>
+            <div className="quick-order-details-grid">
+              <label>
+                Fulfilment
+                <select
+                  value={draft.fulfillment_status}
+                  onChange={(event) => setDraft((current) => ({ ...current, fulfillment_status: event.target.value }))}
+                >
+                  <option value="confirmed">Confirmed</option>
+                  <option value="procurement">Vendor procurement</option>
+                  <option value="packing">Packing / ready</option>
+                  <option value="shipped">Shipped</option>
+                  <option value="delivered">Delivered</option>
+                </select>
+              </label>
+              <label>
+                Payment status
+                <select
+                  value={draft.payment_status}
+                  onChange={(event) => setDraft((current) => ({ ...current, payment_status: event.target.value }))}
+                >
+                  <option value="not_recorded">Not recorded</option>
+                  <option value="pending">Unpaid</option>
+                  <option value="part_paid">Part-paid</option>
+                  <option value="paid">Paid</option>
+                </select>
+              </label>
+              <label>
+                Payment mode
+                <select
+                  value={draft.payment_method}
+                  onChange={(event) => setDraft((current) => ({ ...current, payment_method: event.target.value }))}
+                >
+                  <option value="not_recorded">Not recorded</option>
+                  <option value="upi">UPI</option>
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="card">Card</option>
+                </select>
+              </label>
+              <label>
+                Amount received
+                <div className="rupee-field">
+                  <span>₹</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    value={draft.amount_received}
+                    onChange={(event) => setDraft((current) => ({ ...current, amount_received: event.target.value }))}
+                  />
+                </div>
+              </label>
+              <label>
+                Order source
+                <select
+                  value={draft.source_channel}
+                  onChange={(event) => setDraft((current) => ({ ...current, source_channel: event.target.value }))}
+                >
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="google">Google</option>
+                  <option value="website">Website</option>
+                  <option value="phone">Phone</option>
+                  <option value="walkin">Walk-in</option>
+                  <option value="referral">Referral</option>
+                </select>
+              </label>
+              <label>
+                Courier cost paid
+                <div className="rupee-field">
+                  <span>₹</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    value={draft.courier_cost}
+                    onChange={(event) => setDraft((current) => ({ ...current, courier_cost: event.target.value }))}
+                  />
+                </div>
+              </label>
+              <label>
+                Delivery charge collected
+                <div className="rupee-field">
+                  <span>₹</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    value={draft.delivery_charge}
+                    onChange={(event) => setDraft((current) => ({ ...current, delivery_charge: event.target.value }))}
+                  />
+                </div>
+              </label>
+              <label className="span-2">
+                Notes
+                <textarea
+                  rows="3"
+                  value={draft.notes}
+                  onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder="Customisation, delivery address, follow-up..."
+                />
+              </label>
             </div>
-          ) : null}
-          <div className="detail-edit-actions">
-            <button
-              type="button"
-              className="primary-button detail-save-button"
-              disabled={busy || !draft.items.length || Boolean(confirmation)}
-              onClick={onSave}
-            >
-              {busy ? "Saving..." : "Complete Sale"}
-            </button>
-            <button type="button" className="detail-cancel-link" onClick={onClose}>
-              Cancel
+          </details>
+
+          <div className="quick-order-save-bar">
+            <div>
+              <span>Order total</span>
+              <strong>{formatCurrency(total)}</strong>
+              <small>Stock unchanged · update Inventory after dispatch</small>
+            </div>
+            <button type="submit" className="primary-button" disabled={busy}>
+              {busy ? "Saving order..." : "Save order"}
             </button>
           </div>
+          </fieldset>
         </form>
       </div>
     </div>
@@ -3571,14 +3909,18 @@ function InquiryRecorderModal({
 
   return (
     <div className="inquiry-modal-overlay" onClick={onCancel}>
-      <div className="inquiry-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="inquiry-modal quick-inquiry-modal" onClick={(event) => event.stopPropagation()}>
         {step === "record" ? (
-          <div className="inquiry-modal-body">
-            <div className="section-head">
+          <div className="inquiry-modal-body quick-inquiry-assist">
+            <div className="quick-order-header">
               <div>
-                <p className="eyebrow">New Inquiry</p>
-                <h3>Capture inquiry details</h3>
+                <p className="eyebrow">Optional assistant</p>
+                <h3>Speak or paste a customer message</h3>
+                <p>We’ll pull the useful details into the quick inquiry form.</p>
               </div>
+              <button type="button" className="quick-order-close" aria-label="Close inquiry recorder" onClick={onCancel}>
+                ×
+              </button>
             </div>
             {supportsSpeechRecognition ? (
               <>
@@ -3592,28 +3934,25 @@ function InquiryRecorderModal({
                 <p className="support-copy inquiry-recorder-copy">
                   {isListening ? "Listening in English (India)..." : "Tap the mic to start recording."}
                 </p>
-                <div className="transcript-box">{transcript || "Live transcript will appear here as you speak."}</div>
+                {transcript ? <div className="transcript-box">{transcript}</div> : null}
               </>
-            ) : (
-              <>
-                <label className="inquiry-textarea-label">
-                  Type your inquiry here
-                  <textarea
-                    rows="9"
-                    value={manualTranscript}
-                    onChange={(event) => setManualTranscript(event.target.value)}
-                    placeholder="Capture the customer inquiry details here..."
-                  />
-                </label>
-              </>
-            )}
+            ) : null}
+            <label className="inquiry-textarea-label">
+              Paste or type the message
+              <textarea
+                rows="6"
+                value={manualTranscript}
+                onChange={(event) => setManualTranscript(event.target.value)}
+                placeholder="e.g. Priya needs 80 dabara sets at ₹1,200 each for an event next month"
+              />
+            </label>
             {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
             <div className="detail-edit-actions">
               <button type="button" className="primary-button detail-save-button" disabled={busy} onClick={onStopAndProcess}>
-                Done
+                Fill inquiry form
               </button>
-              <button type="button" className="detail-cancel-link" onClick={onCancel}>
-                Cancel
+              <button type="button" className="detail-cancel-link" onClick={onBack}>
+                Back to quick form
               </button>
             </div>
           </div>
@@ -3628,120 +3967,77 @@ function InquiryRecorderModal({
 
         {step === "confirm" ? (
           <form
-            className="inquiry-modal-body inquiry-confirm-form"
+            className="inquiry-modal-body inquiry-confirm-form quick-inquiry-form"
             onSubmit={(event) => {
               event.preventDefault();
               onSave();
             }}
           >
-            <div className="section-head">
+            <div className="quick-order-header span-2">
               <div>
-                <p className="eyebrow">Confirm Inquiry</p>
-                <h3>Review before saving</h3>
+                <p className="eyebrow">Quick inquiry</p>
+                <h3>Customer and requirement</h3>
+                <p>Capture only what you know. Unknown products are welcome.</p>
               </div>
+              <button type="button" className="quick-order-close" aria-label="Close inquiry recorder" onClick={onCancel}>
+                ×
+              </button>
             </div>
-            {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
+            {errorMessage ? <p className="inline-upload-error span-2" role="alert">{errorMessage}</p> : null}
             <label>
               Customer name
               <input
+                autoFocus
+                autoComplete="name"
                 value={draft.customer_name}
                 onChange={(event) => setDraft((current) => ({ ...current, customer_name: event.target.value }))}
+                placeholder="Name or business"
               />
             </label>
             <label>
-              Customer phone
+              Mobile
               <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 value={draft.customer_phone}
                 onChange={(event) => setDraft((current) => ({ ...current, customer_phone: event.target.value }))}
+                placeholder="Optional if name is known"
               />
             </label>
-            <label>
-              Source
-              <select
-                value={draft.source}
-                onChange={(event) => setDraft((current) => ({ ...current, source: event.target.value }))}
-              >
-                <option value="phone">Phone</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="walkin">Walk-in</option>
-              </select>
-            </label>
-            <label>
-              Occasion
-              <input
-                value={draft.occasion}
-                onChange={(event) => setDraft((current) => ({ ...current, occasion: event.target.value }))}
-              />
-            </label>
-            <label>
-              Required by date
-              <input
-                value={draft.required_by_date}
-                onChange={(event) => setDraft((current) => ({ ...current, required_by_date: event.target.value }))}
-              />
-            </label>
-            <label>
-              Budget per unit
-              <div className="rupee-field">
-                <span>₹</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={draft.budget_per_unit}
-                  onClick={handleNumericInputClick}
-                  onChange={(event) => setDraft((current) => ({ ...current, budget_per_unit: event.target.value }))}
-                />
-              </div>
-            </label>
-            <label>
-              Total budget
-              <div className="rupee-field">
-                <span>₹</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={draft.total_budget}
-                  onClick={handleNumericInputClick}
-                  onChange={(event) => setDraft((current) => ({ ...current, total_budget: event.target.value }))}
-                />
-              </div>
-            </label>
-            <label className="span-2">
-              Notes
-              <textarea
-                rows="4"
-                value={draft.notes}
-                onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-              />
-            </label>
-            <div className="inquiry-products-editor span-2">
-              <div className="section-head">
+
+            <div className="inquiry-products-editor span-2 quick-inquiry-items">
+              <div className="quick-order-section-head">
                 <div>
-                  <p className="eyebrow">Products</p>
-                  <h3>Items requested</h3>
+                  <p className="eyebrow">Requirement</p>
+                  <h4>What are they looking for?</h4>
                 </div>
                 <button type="button" className="ghost-button" onClick={onAddProductRow}>
-                  Add item
+                  + Add item
                 </button>
               </div>
               <div className="inquiry-product-editor-list">
                 {draft.products.map((item, index) => (
                   <div key={`draft-item-${index}`} className="inquiry-product-editor-card">
                     <label>
-                      Product name
+                      Item or requirement
                       <input
                         value={item.product_name}
                         onChange={(event) => onProductNameChange(index, event.target.value)}
+                        placeholder="e.g. Custom bell, 8-inch brass plate"
                       />
                     </label>
-                    {item.matched_sku ? <span className="matched-sku-badge">{item.matched_sku}</span> : null}
+                    {item.matched_sku ? <span className="matched-sku-badge">Possible match: {item.matched_sku}</span> : null}
                     <div className="inquiry-inline-fields">
                       <label>
                         Quantity
                         <input
                           type="number"
                           inputMode="numeric"
+                          min="1"
+                          step="1"
                           value={item.quantity_requested}
+                          placeholder="1"
                           onClick={handleNumericInputClick}
                           onChange={(event) => onProductFieldChange(index, "quantity_requested", event.target.value)}
                         />
@@ -3753,7 +4049,9 @@ function InquiryRecorderModal({
                           <input
                             type="number"
                             inputMode="decimal"
+                            min="0"
                             value={item.quoted_price}
+                            placeholder="Optional"
                             onClick={handleNumericInputClick}
                             onChange={(event) => onProductFieldChange(index, "quoted_price", event.target.value)}
                           />
@@ -3772,12 +4070,84 @@ function InquiryRecorderModal({
                 ))}
               </div>
             </div>
-            <div className="detail-edit-actions">
-              <button type="submit" className="primary-button detail-save-button" disabled={busy}>
-                {busy ? "Saving..." : "Save Inquiry"}
+
+            <details className="quick-order-details span-2">
+              <summary>Source, date, budget and notes <span>optional</span></summary>
+              <div className="quick-order-details-grid">
+                <label>
+                  Source
+                  <select
+                    value={draft.source}
+                    onChange={(event) => setDraft((current) => ({ ...current, source: event.target.value }))}
+                  >
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="google">Google</option>
+                    <option value="website">Website</option>
+                    <option value="phone">Phone</option>
+                    <option value="walkin">Walk-in</option>
+                    <option value="referral">Referral</option>
+                  </select>
+                </label>
+                <label>
+                  Occasion
+                  <input
+                    value={draft.occasion}
+                    onChange={(event) => setDraft((current) => ({ ...current, occasion: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Required by
+                  <input
+                    type="date"
+                    value={draft.required_by_date}
+                    onChange={(event) => setDraft((current) => ({ ...current, required_by_date: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Budget per unit
+                  <div className="rupee-field">
+                    <span>₹</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      value={draft.budget_per_unit}
+                      onChange={(event) => setDraft((current) => ({ ...current, budget_per_unit: event.target.value }))}
+                    />
+                  </div>
+                </label>
+                <label>
+                  Total budget
+                  <div className="rupee-field">
+                    <span>₹</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      value={draft.total_budget}
+                      onChange={(event) => setDraft((current) => ({ ...current, total_budget: event.target.value }))}
+                    />
+                  </div>
+                </label>
+                <label className="span-2">
+                  Notes
+                  <textarea
+                    rows="3"
+                    value={draft.notes}
+                    onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+                    placeholder="Follow-up, customisation, reference, address..."
+                  />
+                </label>
+              </div>
+            </details>
+
+            <div className="quick-inquiry-save-bar span-2">
+              <button type="button" className="ghost-button" onClick={onBack}>
+                Use voice / paste message
               </button>
-              <button type="button" className="detail-cancel-link" onClick={onBack}>
-                Back
+              <button type="submit" className="primary-button detail-save-button" disabled={busy}>
+                {busy ? "Saving inquiry..." : "Save inquiry"}
               </button>
             </div>
           </form>
@@ -6136,6 +6506,8 @@ function DetailPanel({
             <input
               type="number"
               inputMode="numeric"
+              min="0"
+              step="1"
               value={draft.quantity}
               onClick={handleNumericInputClick}
               onChange={(event) => setDraft((current) => ({ ...current, quantity: event.target.value }))}
@@ -6156,6 +6528,561 @@ function DetailPanel({
         </form>
       ) : null}
     </aside>
+  );
+}
+
+function getInventoryStockMeta(quantity) {
+  if (quantity <= 0) {
+    return { label: "Out of stock", tone: "out" };
+  }
+  if (quantity <= LOW_STOCK_THRESHOLD) {
+    return { label: "Low stock", tone: "low" };
+  }
+  return { label: "In stock", tone: "in" };
+}
+
+function getInventorySyncLabel(lastSyncAt) {
+  if (!lastSyncAt) {
+    return "Sync pending";
+  }
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - new Date(lastSyncAt).getTime()) / 60000));
+  if (elapsedMinutes < 1) {
+    return "Synced just now";
+  }
+  if (elapsedMinutes < 60) {
+    return `Synced ${elapsedMinutes}m ago`;
+  }
+  return `Synced ${new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(
+    new Date(lastSyncAt)
+  )}`;
+}
+
+const InventoryRow = memo(
+  function InventoryRow({
+    product,
+    canManage,
+    onQuantitySave,
+    onEdit,
+    onShare,
+    onArchiveToggle,
+    onPinToggle,
+    archiveBusy
+  }) {
+    const [draftQuantity, setDraftQuantity] = useState(String(product.quantity));
+    const [saveState, setSaveState] = useState("idle");
+    const [saveError, setSaveError] = useState("");
+    const [menuOpen, setMenuOpen] = useState(false);
+    const savedTimerRef = useRef(null);
+    const savePromiseRef = useRef(null);
+    const cancelBlurRef = useRef(false);
+    const menuRef = useRef(null);
+    const menuButtonRef = useRef(null);
+    const stockMeta = getInventoryStockMeta(product.quantity);
+
+    useEffect(() => {
+      if (saveState !== "saving" && saveState !== "error") {
+        setDraftQuantity(String(product.quantity));
+      }
+    }, [product.quantity, saveState]);
+
+    useEffect(() => {
+      return () => {
+        if (savedTimerRef.current) {
+          window.clearTimeout(savedTimerRef.current);
+        }
+      };
+    }, []);
+
+    useEffect(() => {
+      if (!menuOpen) {
+        return undefined;
+      }
+      menuRef.current?.querySelector('[role="menuitem"]')?.focus();
+      function closeMenu(event) {
+        if (event.type === "keydown") {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setMenuOpen(false);
+            menuButtonRef.current?.focus();
+            return;
+          }
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const items = [...(menuRef.current?.querySelectorAll('[role="menuitem"]') ?? [])];
+            const currentIndex = items.indexOf(document.activeElement);
+            const direction = event.key === "ArrowDown" ? 1 : -1;
+            items[(currentIndex + direction + items.length) % items.length]?.focus();
+          }
+          return;
+        }
+        if (event.type === "pointerdown" && menuRef.current?.contains(event.target)) {
+          return;
+        }
+        setMenuOpen(false);
+      }
+      document.addEventListener("pointerdown", closeMenu);
+      document.addEventListener("keydown", closeMenu);
+      return () => {
+        document.removeEventListener("pointerdown", closeMenu);
+        document.removeEventListener("keydown", closeMenu);
+      };
+    }, [menuOpen]);
+
+    async function commitQuantity(nextValue = draftQuantity) {
+      if (savePromiseRef.current) {
+        return savePromiseRef.current;
+      }
+      const nextQuantity = Number(nextValue);
+      if (nextValue === "" || !Number.isInteger(nextQuantity) || nextQuantity < 0) {
+        setSaveState("error");
+        setSaveError("Enter a whole number of 0 or more.");
+        return null;
+      }
+
+      setDraftQuantity(String(nextQuantity));
+      setSaveError("");
+      if (nextQuantity === Number(product.quantity)) {
+        setSaveState("idle");
+        return product;
+      }
+
+      if (savedTimerRef.current) {
+        window.clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = null;
+      }
+      setSaveState("saving");
+      const pendingSave = (async () => {
+        try {
+          const savedProduct = await onQuantitySave(product, nextQuantity);
+          setDraftQuantity(String(savedProduct?.quantity ?? nextQuantity));
+          setSaveState("saved");
+          savedTimerRef.current = window.setTimeout(() => setSaveState("idle"), 1800);
+          return savedProduct;
+        } catch (error) {
+          setSaveState("error");
+          setSaveError(error?.message || "Could not save stock. Try again.");
+          return null;
+        }
+      })();
+      savePromiseRef.current = pendingSave;
+      try {
+        return await pendingSave;
+      } finally {
+        savePromiseRef.current = null;
+      }
+    }
+
+    async function openFullEditor() {
+      const nextQuantity = Number(draftQuantity);
+      const hasValidChange = Number.isInteger(nextQuantity) && nextQuantity >= 0 && nextQuantity !== Number(product.quantity);
+      const savedProduct = savePromiseRef.current
+        ? await savePromiseRef.current
+        : hasValidChange
+          ? await commitQuantity(draftQuantity)
+          : product;
+      if (savedProduct) {
+        onEdit(savedProduct);
+      }
+    }
+
+    function handleQuantityKeyDown(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.currentTarget.blur();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelBlurRef.current = true;
+        setDraftQuantity(String(product.quantity));
+        setSaveError("");
+        setSaveState("idle");
+        event.currentTarget.blur();
+      }
+    }
+
+    return (
+      <div className={`admin-inventory-row ${product.archivedAt ? "is-archived" : ""}`} role="row">
+        <div className="admin-inventory-product" role="cell">
+          <button type="button" className="admin-inventory-thumb-button" onClick={openFullEditor} aria-label={`Edit ${product.name}`}>
+            <ProductThumb product={product} />
+          </button>
+          <div>
+            <button type="button" className="admin-inventory-name" onClick={openFullEditor}>
+              {product.name}
+            </button>
+            <div className="admin-inventory-product-meta">
+              <span>{product.sku || "No SKU"}</span>
+              {product.material ? <span>{product.material}</span> : null}
+            </div>
+          </div>
+        </div>
+        <div className="admin-inventory-category" role="cell">
+          <span className="admin-inventory-cell-label">Category</span>
+          <span>{product.category || "—"}</span>
+        </div>
+        <div className="admin-inventory-price" role="cell">
+          <span className="admin-inventory-cell-label">MRP</span>
+          <strong>{hasDisplayValue(product.pricing?.mrp) ? formatCurrency(product.pricing.mrp) : "—"}</strong>
+        </div>
+        <div className="admin-inventory-stock-cell" role="cell">
+          <span className="admin-inventory-cell-label">Stock</span>
+          <div className="admin-stock-editor">
+            <button
+              type="button"
+              aria-label={`Decrease stock for ${product.name}`}
+              disabled={!canManage || saveState === "saving" || Number(draftQuantity || product.quantity) <= 0}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => commitQuantity(Math.max(0, Number(draftQuantity || product.quantity) - 1))}
+            >
+              −
+            </button>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              inputMode="numeric"
+              aria-label={`Stock quantity for ${product.name}`}
+              value={draftQuantity}
+              disabled={!canManage || saveState === "saving"}
+              onChange={(event) => {
+                setDraftQuantity(event.target.value);
+                setSaveState("idle");
+                setSaveError("");
+              }}
+              onBlur={() => {
+                if (cancelBlurRef.current) {
+                  cancelBlurRef.current = false;
+                  return;
+                }
+                void commitQuantity();
+              }}
+              onKeyDown={handleQuantityKeyDown}
+            />
+            <button
+              type="button"
+              aria-label={`Increase stock for ${product.name}`}
+              disabled={!canManage || saveState === "saving"}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => commitQuantity(Number(draftQuantity || product.quantity) + 1)}
+            >
+              +
+            </button>
+          </div>
+          <div className={`admin-stock-feedback ${saveState}`} aria-live="polite">
+            {saveState === "saving" ? "Saving…" : null}
+            {saveState === "saved" ? "Saved" : null}
+            {saveState === "error" ? (
+              <>
+                <span>{saveError}</span>
+                <button type="button" onClick={() => commitQuantity()}>
+                  Retry
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+        <div className="admin-inventory-status-cell" role="cell">
+          <span className="admin-inventory-cell-label">Status</span>
+          <span className={`admin-stock-status ${stockMeta.tone}`}>
+            <i aria-hidden="true" />
+            {product.archivedAt ? "Archived" : stockMeta.label}
+          </span>
+        </div>
+        <div className="admin-inventory-actions" role="cell">
+          <button type="button" className="admin-inventory-edit" onClick={openFullEditor}>
+            Edit
+          </button>
+          <div className="admin-inventory-menu-wrap" ref={menuRef}>
+            <button
+              type="button"
+              className="admin-inventory-menu-button"
+              ref={menuButtonRef}
+              aria-label={`More actions for ${product.name}`}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((current) => !current)}
+            >
+              ⋯
+            </button>
+            {menuOpen ? (
+              <div className="admin-inventory-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onShare(product);
+                  }}
+                >
+                  Share product
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={archiveBusy}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onPinToggle(product, !product.pinned);
+                  }}
+                >
+                  {product.pinned ? "Unpin from shop" : "Pin to shop"}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={archiveBusy}
+                  onClick={() => {
+                    if (!product.archivedAt && !window.confirm(`Archive ${product.name}? It will be hidden from the live shop.`)) {
+                      return;
+                    }
+                    setMenuOpen(false);
+                    onArchiveToggle(product, !product.archivedAt);
+                  }}
+                >
+                  {product.archivedAt ? "Restore product" : "Archive product"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  },
+  (previous, next) =>
+    previous.product === next.product && previous.canManage === next.canManage && previous.archiveBusy === next.archiveBusy
+);
+
+function InventoryWorkspace({
+  products,
+  canManage,
+  search,
+  setSearch,
+  categoryFilter,
+  setCategoryFilter,
+  initialStockFilter = "all",
+  lastSyncAt,
+  statusMessage,
+  refreshBusy,
+  onRefresh,
+  onAddProduct,
+  onCreateCatalogue,
+  onQuantitySave,
+  onEdit,
+  onShare,
+  onArchiveToggle,
+  onPinToggle,
+  archiveBusy
+}) {
+  const [stockFilter, setStockFilter] = useState(initialStockFilter);
+  const [visibility, setVisibility] = useState("active");
+  const [sortOrder, setSortOrder] = useState(initialStockFilter === "attention" ? "stock-asc" : "name-asc");
+
+  const activeProducts = useMemo(() => products.filter((product) => !product.archivedAt), [products]);
+  const archivedProducts = useMemo(() => products.filter((product) => product.archivedAt), [products]);
+  const visibleBase = visibility === "active" ? activeProducts : visibility === "archived" ? archivedProducts : products;
+  const categories = useMemo(
+    () => ["All", ...new Set(visibleBase.map((product) => product.category).filter(Boolean).sort((left, right) => left.localeCompare(right)))],
+    [visibleBase]
+  );
+  const effectiveCategory = categories.includes(categoryFilter) ? categoryFilter : "All";
+  const counts = useMemo(
+    () => ({
+      all: visibleBase.length,
+      attention: visibleBase.filter((product) => product.quantity <= LOW_STOCK_THRESHOLD).length,
+      out: visibleBase.filter((product) => product.quantity <= 0).length,
+      healthy: visibleBase.filter((product) => product.quantity > LOW_STOCK_THRESHOLD).length
+    }),
+    [visibleBase]
+  );
+  const visibleProducts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const nextProducts = visibleBase.filter((product) => {
+      const haystack = [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase();
+      const matchesSearch = !query || haystack.includes(query);
+      const matchesCategory = effectiveCategory === "All" || product.category === effectiveCategory;
+      const matchesStock =
+        stockFilter === "all" ||
+        (stockFilter === "attention" && product.quantity <= LOW_STOCK_THRESHOLD) ||
+        (stockFilter === "out" && product.quantity <= 0) ||
+        (stockFilter === "healthy" && product.quantity > LOW_STOCK_THRESHOLD);
+      return matchesSearch && matchesCategory && matchesStock;
+    });
+
+    return [...nextProducts].sort((left, right) => {
+      if (sortOrder === "stock-asc") {
+        return left.quantity - right.quantity || left.name.localeCompare(right.name);
+      }
+      if (sortOrder === "stock-desc") {
+        return right.quantity - left.quantity || left.name.localeCompare(right.name);
+      }
+      if (sortOrder === "price-desc") {
+        return Number(right.pricing?.mrp || 0) - Number(left.pricing?.mrp || 0) || left.name.localeCompare(right.name);
+      }
+      return left.name.localeCompare(right.name);
+    });
+  }, [effectiveCategory, search, sortOrder, stockFilter, visibleBase]);
+
+  const totalUnits = activeProducts.reduce((sum, product) => sum + Number(product.quantity || 0), 0);
+  const filterItems = [
+    { id: "all", label: "All", count: counts.all },
+    { id: "attention", label: "Needs attention", count: counts.attention },
+    { id: "out", label: "Out of stock", count: counts.out },
+    { id: "healthy", label: "In stock", count: counts.healthy }
+  ];
+
+  return (
+    <main className="admin-inventory-workspace">
+      <header className="admin-inventory-header">
+        <div className="admin-inventory-title-wrap">
+          <img src={brandLogo} alt="" className="admin-inventory-logo" />
+          <div>
+            <p>Decorbeats Admin</p>
+            <h1>Inventory</h1>
+            <span>
+              {activeProducts.length} active products · {totalUnits.toLocaleString("en-IN")} units
+            </span>
+          </div>
+        </div>
+        <div className="admin-inventory-header-actions">
+          <div className="admin-inventory-sync" role="status">
+            <i aria-hidden="true" />
+            {getInventorySyncLabel(lastSyncAt)}
+          </div>
+          <button type="button" className="admin-inventory-secondary-action" onClick={onCreateCatalogue}>
+            Create catalogue
+          </button>
+          <button type="button" className="admin-inventory-primary-action" onClick={onAddProduct}>
+            <span aria-hidden="true">+</span> Add product
+          </button>
+        </div>
+      </header>
+
+      <div className="admin-inventory-message" role="status" aria-live="polite">
+        {statusMessage}
+      </div>
+
+      <section className="admin-inventory-command-bar" aria-label="Inventory filters">
+        <div className="admin-inventory-search-wrap">
+          <SearchIcon />
+          <input
+            type="search"
+            aria-label="Search inventory"
+            placeholder="Search name or SKU"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          {search ? (
+            <button type="button" aria-label="Clear inventory search" onClick={() => setSearch("")}>
+              ×
+            </button>
+          ) : null}
+        </div>
+        <label className="admin-inventory-select-wrap">
+          <span>Category</span>
+          <select value={effectiveCategory} onChange={(event) => setCategoryFilter(event.target.value)}>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-inventory-select-wrap">
+          <span>Sort</span>
+          <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}>
+            <option value="name-asc">Name A–Z</option>
+            <option value="stock-asc">Stock: low first</option>
+            <option value="stock-desc">Stock: high first</option>
+            <option value="price-desc">Price: high first</option>
+          </select>
+        </label>
+        <button type="button" className="admin-inventory-refresh" disabled={refreshBusy} onClick={onRefresh}>
+          <span aria-hidden="true">↻</span> {refreshBusy ? "Refreshing…" : "Refresh"}
+        </button>
+      </section>
+
+      <section className="admin-inventory-filter-row">
+        <div className="admin-inventory-stat-filters" aria-label="Filter by stock status">
+          {filterItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={stockFilter === item.id ? `active ${item.id}` : item.id}
+              aria-pressed={stockFilter === item.id}
+              onClick={() => setStockFilter(item.id)}
+            >
+              <span>{item.label}</span>
+              <strong>{item.count}</strong>
+            </button>
+          ))}
+        </div>
+        <div className="admin-inventory-visibility" aria-label="Product visibility">
+          {[{ id: "active", label: "Active" }, { id: "archived", label: `Archived ${archivedProducts.length}` }, { id: "all", label: "All records" }].map(
+            (item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={visibility === item.id ? "active" : ""}
+                aria-pressed={visibility === item.id}
+                onClick={() => setVisibility(item.id)}
+              >
+                {item.label}
+              </button>
+            )
+          )}
+        </div>
+      </section>
+
+      <section className="admin-inventory-list-card">
+        <div className="admin-inventory-list-summary">
+          <div>
+            <strong>{visibleProducts.length}</strong> products shown
+          </div>
+          <span>Type a quantity, then press Enter or tap away to save.</span>
+        </div>
+        <div className="admin-inventory-table" role="table" aria-label="Product inventory" aria-rowcount={visibleProducts.length + 1}>
+          <div className="admin-inventory-table-head" role="row">
+            <span role="columnheader">Product</span>
+            <span role="columnheader">Category</span>
+            <span role="columnheader">MRP</span>
+            <span role="columnheader">Stock</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader">Actions</span>
+          </div>
+          <div role="rowgroup">
+            {visibleProducts.length ? (
+              visibleProducts.map((product) => (
+                <InventoryRow
+                  key={product.id}
+                  product={product}
+                  canManage={canManage}
+                  onQuantitySave={onQuantitySave}
+                  onEdit={onEdit}
+                  onShare={onShare}
+                  onArchiveToggle={onArchiveToggle}
+                  onPinToggle={onPinToggle}
+                  archiveBusy={archiveBusy}
+                />
+              ))
+            ) : (
+              <div className="admin-inventory-empty">
+                <p>No products match these filters.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setCategoryFilter("All");
+                    setStockFilter("all");
+                  }}
+                >
+                  Clear filters
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -6239,10 +7166,10 @@ function CatalogSection({
 
 function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
   const items = [
-    { id: "products", label: "Products", icon: <GridIcon /> },
-    { id: "sales", label: "Sales", icon: <ReceiptIcon /> },
+    { id: "products", label: "Inventory", icon: <GridIcon />, badge: lowStockCount },
+    { id: "sales", label: "Orders", icon: <ReceiptIcon /> },
+    { id: "inquiries", label: "Inquiries", icon: <MicIcon /> },
     { id: "purchases", label: "Purchases", icon: <BoxIcon /> },
-    { id: "low-stock", label: "Low Stock", icon: <WarningIcon />, badge: lowStockCount },
     { id: "settings", label: "Settings", icon: <GearIcon /> }
   ];
 
@@ -6295,6 +7222,7 @@ export default function App() {
   const [compressionMessage, setCompressionMessage] = useState("");
   const [uploadStageMessage, setUploadStageMessage] = useState("");
   const [importBusy, setImportBusy] = useState(false);
+  const [inventoryRefreshBusy, setInventoryRefreshBusy] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [inquiryBusy, setInquiryBusy] = useState(false);
@@ -6305,7 +7233,6 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
-  const [showArchived, setShowArchived] = useState(false);
   const [publicScreen, setPublicScreen] = useState(getInitialPublicScreen);
   const [routeIntent, setRouteIntent] = useState(() =>
     typeof window === "undefined" ? { screen: "customer", type: "home", slug: "" } : parseLegacyPath(window.location.pathname)
@@ -6331,7 +7258,6 @@ export default function App() {
   const [salePaymentStatusFilter, setSalePaymentStatusFilter] = useState("all");
   const [saleProductSearch, setSaleProductSearch] = useState("");
   const [salePickerOpen, setSalePickerOpen] = useState(false);
-  const [saleConfirmation, setSaleConfirmation] = useState(null);
   const [saleModalError, setSaleModalError] = useState("");
   const [markingSalePaidId, setMarkingSalePaidId] = useState("");
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
@@ -6514,11 +7440,21 @@ export default function App() {
   }, [publicScreen]);
 
   const userEmail = session?.user?.email ?? "";
-  const canManage = Boolean(userEmail) || !isSupabaseConfigured;
-  const adminActive = Boolean(userEmail) || !isSupabaseConfigured;
+  const adminActive = !isSupabaseConfigured || isConfiguredAdminEmail(userEmail);
+  const canManage = adminActive;
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !session?.user?.id) {
+    if (!isSupabaseConfigured || !userEmail || isConfiguredAdminEmail(userEmail)) {
+      return;
+    }
+    setStatusMessage("This account does not have Decorbeats admin access.");
+    void getSupabaseClient().then((client) => client?.auth.signOut()).catch((error) => {
+      console.error("Could not close an unauthorized admin session:", error);
+    });
+  }, [userEmail]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !session?.user?.id || !adminActive) {
       return undefined;
     }
 
@@ -6561,7 +7497,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [session?.user?.id]);
+  }, [adminActive, session?.user?.id]);
 
   useEffect(() => {
     if (adminActive && routeIntent.type !== "catalogue") {
@@ -6695,8 +7631,11 @@ export default function App() {
       });
   }, [products]);
   const customerFacing = !adminActive || previewCustomerView;
-  const adminCatalog = useMemo(() => products.filter((product) => showArchived || !product.archivedAt), [products, showArchived]);
-  const lowStockCatalog = useMemo(() => adminCatalog.filter((product) => product.quantity <= 10), [adminCatalog]);
+  const adminCatalog = useMemo(() => products.filter((product) => !product.archivedAt), [products]);
+  const lowStockCatalog = useMemo(
+    () => adminCatalog.filter((product) => product.quantity <= LOW_STOCK_THRESHOLD),
+    [adminCatalog]
+  );
 
   const currentCatalog = useMemo(() => {
     if (customerFacing) {
@@ -6811,7 +7750,9 @@ export default function App() {
   }, [inquiries, inquiryStatusFilter]);
   const filteredSales = useMemo(() => {
     const filtered = salePaymentStatusFilter === "all" ? sales : sales.filter((sale) => sale.paymentStatus === salePaymentStatusFilter);
-    return [...filtered].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+    return [...filtered].sort(
+      (left, right) => new Date(right.orderDate || right.createdAt) - new Date(left.orderDate || left.createdAt)
+    );
   }, [sales, salePaymentStatusFilter]);
   const filteredPurchases = useMemo(() => {
     const filtered = purchaseStatusFilter === "all" ? purchases : purchases.filter((purchase) => purchase.status === purchaseStatusFilter);
@@ -6954,18 +7895,20 @@ export default function App() {
     return {
       totalProducts: products.filter((product) => !product.archivedAt).length,
       totalUnits: products.filter((product) => !product.archivedAt).reduce((sum, product) => sum + Number(product.quantity || 0), 0),
-      lowStock: products.filter((product) => !product.archivedAt && product.stockStatus === "Low stock").length,
+      lowStock: products.filter(
+        (product) => !product.archivedAt && product.quantity <= LOW_STOCK_THRESHOLD
+      ).length,
       withImages: products.filter((product) => !product.archivedAt && getProductImages(product).length).length
     };
   }, [products]);
   const todaysSalesSummary = useMemo(() => {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const todaysSales = sales.filter((sale) => new Date(sale.createdAt) >= startOfDay);
-    const paidSales = todaysSales.filter((sale) => sale.paymentStatus !== "pending");
-    const pendingSales = todaysSales.filter((sale) => sale.paymentStatus === "pending");
-    const collected = paidSales.reduce((sum, sale) => sum + Number(sale.totalAmount || 0), 0);
-    const pendingTotal = pendingSales.reduce((sum, sale) => sum + Number(sale.totalAmount || 0), 0);
+    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+    const todaysSales = sales.filter((sale) => safeText(sale.orderDate || sale.createdAt).slice(0, 10) === today);
+    const collected = todaysSales.reduce((sum, sale) => sum + Number(sale.amountReceived || 0), 0);
+    const pendingTotal = todaysSales.reduce(
+      (sum, sale) => sum + Math.max(0, Number(sale.totalAmount || 0) - Number(sale.amountReceived || 0)),
+      0
+    );
     const productCounts = new Map();
     todaysSales.forEach((sale) => {
       sale.items.forEach((item) => {
@@ -6980,7 +7923,7 @@ export default function App() {
     return [
       { label: "Collected today", value: formatCurrency(collected), emphasis: collected > 0, tone: "success" },
       { label: "Pending today", value: formatCurrency(pendingTotal), tone: "warn" },
-      { label: "Sales", value: todaysSales.length },
+      { label: "Orders", value: todaysSales.length },
       { label: "Most sold", value: mostSold }
     ];
   }, [sales]);
@@ -7068,13 +8011,14 @@ export default function App() {
   }
 
   function handleEditProduct(product) {
-    handleProductSelect(product);
+    setSelectedId(product.id);
+    populateForm(product);
     setActiveTab("add");
   }
 
   function handleNewInquiry() {
     setInquiryModalOpen(true);
-    setInquiryModalStep("record");
+    setInquiryModalStep("confirm");
     setInquiryTranscript("");
     setManualInquiryTranscript("");
     setInquiryDraft(createEmptyInquiryDraft());
@@ -7110,7 +8054,7 @@ export default function App() {
   function addInquiryProductRow() {
     setInquiryDraft((current) => ({
       ...current,
-      products: [...current.products, { product_name: "", matched_sku: "", quantity_requested: "", quoted_price: "" }]
+      products: [...current.products, { product_name: "", matched_sku: "", quantity_requested: 1, quoted_price: "" }]
     }));
   }
 
@@ -7141,7 +8085,6 @@ export default function App() {
     setSaleDraft(createEmptySaleDraft());
     setSaleProductSearch("");
     setSalePickerOpen(false);
-    setSaleConfirmation(null);
     setSaleModalError("");
   }
 
@@ -7150,43 +8093,50 @@ export default function App() {
     setSaleDraft(createEmptySaleDraft());
     setSaleProductSearch("");
     setSalePickerOpen(false);
-    setSaleConfirmation(null);
     setSaleModalError("");
   }
 
   function handleAddSaleProduct(product) {
-    setSaleConfirmation(null);
     setSaleDraft((current) => {
-      const existingIndex = current.items.findIndex((item) => item.product_sku === product.sku);
-      if (existingIndex >= 0) {
-        const nextItems = [...current.items];
-        const nextQuantity = Math.min(Number(nextItems[existingIndex].quantity_sold || 0) + 1, Number(product.quantity || 0));
-        nextItems[existingIndex] = { ...nextItems[existingIndex], quantity_sold: nextQuantity };
-        return { ...current, items: nextItems };
+      const nextItem = createSaleItemDraft({
+        product_id: product.id,
+        product_sku: product.sku,
+        product_name: product.name,
+        quantity_sold: 1,
+        selling_price: product.pricing.mrp ?? "",
+        cost_price: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
+        max_quantity: Number(product.quantity || 0),
+        track_inventory: Number(product.quantity || 0) > 0,
+        fulfillment_source: Number(product.quantity || 0) > 0 ? "inventory" : "vendor_direct"
+      });
+      const blankIndex = current.items.findIndex((item) => !safeText(item.product_name));
+      if (blankIndex === -1) {
+        return { ...current, items: [...current.items, nextItem] };
       }
+      const nextItems = [...current.items];
+      nextItems[blankIndex] = nextItem;
+      return { ...current, items: nextItems };
+    });
+    setSalePickerOpen(false);
+    setSaleProductSearch("");
+  }
 
-      return {
-        ...current,
-        items: [
-          ...current.items,
-          {
-            product_id: product.id,
-            product_sku: product.sku,
-            product_name: product.name,
-            quantity_sold: 0,
-            selling_price: product.pricing.mrp ?? "",
-            cost_price: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
-            max_quantity: Number(product.quantity || 0)
-          }
-        ]
-      };
+  function handleAddCustomSaleItem() {
+    setSaleDraft((current) => {
+      const nextItem = createSaleItemDraft({ product_name: safeText(saleProductSearch) });
+      const blankIndex = current.items.findIndex((item) => !safeText(item.product_name));
+      if (blankIndex === -1) {
+        return { ...current, items: [...current.items, nextItem] };
+      }
+      const nextItems = [...current.items];
+      nextItems[blankIndex] = nextItem;
+      return { ...current, items: nextItems };
     });
     setSalePickerOpen(false);
     setSaleProductSearch("");
   }
 
   function handleUpdateSaleItem(index, field, value) {
-    setSaleConfirmation(null);
     setSaleDraft((current) => {
       const nextItems = [...current.items];
       const currentItem = nextItems[index];
@@ -7195,11 +8145,18 @@ export default function App() {
       }
       if (field === "quantity_sold") {
         if (value === "") {
-          nextItems[index] = { ...currentItem, quantity_sold: 0 };
+          nextItems[index] = { ...currentItem, quantity_sold: "" };
         } else {
-          const nextQuantity = Math.max(1, Math.min(Number(value || 0), Number(currentItem.max_quantity || 1)));
+          const nextQuantity = Math.max(1, Math.min(Math.trunc(Number(value || 0)), 999999));
           nextItems[index] = { ...currentItem, quantity_sold: nextQuantity };
         }
+      } else if (field === "fulfillment_source") {
+        const useInventory = value === "inventory" && Boolean(currentItem.product_sku);
+        nextItems[index] = {
+          ...currentItem,
+          fulfillment_source: useInventory ? "inventory" : "vendor_direct",
+          track_inventory: useInventory
+        };
       } else {
         nextItems[index] = { ...currentItem, [field]: value };
       }
@@ -7208,48 +8165,54 @@ export default function App() {
   }
 
   function handleRemoveSaleProduct(index) {
-    setSaleConfirmation(null);
-    setSaleDraft((current) => ({
-      ...current,
-      items: current.items.filter((_, itemIndex) => itemIndex !== index)
-    }));
+    setSaleDraft((current) => {
+      const nextItems = current.items.filter((_, itemIndex) => itemIndex !== index);
+      return { ...current, items: nextItems.length ? nextItems : [createSaleItemDraft()] };
+    });
   }
 
   function buildSaleConfirmation() {
-    if (!saleDraft.items.length) {
-      setSaleModalError("Add at least one product before saving.");
+    const orderItems = saleDraft.items.filter((item) => safeText(item.product_name));
+    if (!safeText(saleDraft.customer_name) && !safeText(saleDraft.customer_phone)) {
+      setSaleModalError("Add the customer name or mobile number.");
       return null;
     }
-
-    const inventoryChanges = saleDraft.items.map((item) => {
-      const product = products.find((entry) => entry.sku === item.product_sku);
-      return {
-        item,
-        product,
-        nextQuantity: Math.max(0, Number(product?.quantity || 0) - Number(item.quantity_sold || 0))
-      };
-    });
-
-    const invalidStock = inventoryChanges.find(
-      ({ product, item }) =>
-        !product ||
-        Number(item.quantity_sold || 0) <= 0 ||
-        Number(item.quantity_sold || 0) > Number(product.quantity || 0)
+    if (!safeText(saleDraft.order_date)) {
+      setSaleModalError("Choose the order date.");
+      return null;
+    }
+    if (!orderItems.length) {
+      setSaleModalError("Add at least one item before saving.");
+      return null;
+    }
+    const invalidItem = orderItems.find(
+      (item) =>
+        !Number.isInteger(Number(item.quantity_sold)) ||
+        Number(item.quantity_sold) <= 0 ||
+        item.selling_price === "" ||
+        !Number.isFinite(Number(item.selling_price)) ||
+        Number(item.selling_price) < 0
     );
-    if (invalidStock) {
-      setSaleModalError(`Stock is not available for ${invalidStock.item.product_name || invalidStock.item.product_sku}.`);
+    if (invalidItem) {
+      setSaleModalError(`Add a valid quantity and unit price for ${invalidItem.product_name || "each item"}.`);
+      return null;
+    }
+    const invalidOptionalNumber = [saleDraft.amount_received, saleDraft.delivery_charge, saleDraft.courier_cost].some(
+      (value) => value !== "" && (!Number.isFinite(Number(value)) || Number(value) < 0)
+    );
+    if (invalidOptionalNumber) {
+      setSaleModalError("Payment and delivery amounts cannot be negative.");
       return null;
     }
 
-    const total = saleDraft.items.reduce(
+    const total = orderItems.reduce(
       (sum, item) => sum + Number(item.quantity_sold || 0) * Number(item.selling_price || 0),
       0
     );
 
     return {
-      inventoryChanges,
-      total,
-      paymentMethod: saleDraft.payment_method || "upi"
+      orderItems,
+      total
     };
   }
 
@@ -7259,17 +8222,21 @@ export default function App() {
     if (!confirmation) {
       return;
     }
-    setSaleConfirmation(confirmation);
+    void handleConfirmSale(confirmation);
   }
 
-  async function handleConfirmSale() {
+  async function handleConfirmSale(confirmationOverride = null) {
     try {
-      const confirmation = saleConfirmation || buildSaleConfirmation();
+      const confirmation = confirmationOverride || buildSaleConfirmation();
       if (!confirmation) {
         return;
       }
 
-      const { inventoryChanges, total } = confirmation;
+      const { orderItems, total } = confirmation;
+      const submittedDraft = {
+        ...saleDraft,
+        items: orderItems.map((item) => ({ ...item }))
+      };
 
       setSalesBusy(true);
       setSaleModalError("");
@@ -7277,55 +8244,57 @@ export default function App() {
         throw new Error("Your admin session has expired. Please sign in again before recording the sale.");
       }
       const salePayload = {
-        customer_name: safeText(saleDraft.customer_name) || null,
-        payment_method: saleDraft.payment_method || "upi",
-        payment_status: saleDraft.payment_status || "paid",
-        notes: safeText(saleDraft.notes) || null,
+        customer_name: safeText(submittedDraft.customer_name) || null,
+        payment_method: submittedDraft.payment_method || "not_recorded",
+        payment_status: submittedDraft.payment_status || "not_recorded",
+        notes: buildSaleNotes(submittedDraft),
         total_amount: total
       };
 
+      const saleItemsPayload = submittedDraft.items.map((item) => ({
+        product_id: item.product_id || null,
+        product_sku: null,
+        product_name: safeText(item.product_name),
+        quantity_sold: Number(item.quantity_sold || 0),
+        selling_price: Number(item.selling_price || 0),
+        cost_price: item.cost_price === "" ? null : Number(item.cost_price),
+        track_inventory: false,
+        fulfillment_source: item.track_inventory ? "inventory" : "vendor_direct",
+        vendor_name: safeText(item.vendor_name) || null
+      }));
+
       let savedSale;
       if (isSupabaseConfigured) {
-        const saleItemsPayload = saleDraft.items.map((item) => ({
-          product_sku: item.product_sku,
-          product_name: item.product_name,
-          quantity_sold: Number(item.quantity_sold || 0),
-          selling_price: Number(item.selling_price || 0),
-          cost_price: item.cost_price === "" ? null : Number(item.cost_price)
-        }));
-
-        const { data: rpcData, error: rpcError } = await supabase.rpc("record_sale_with_items", {
-          sale_payload: salePayload,
-          sale_items_payload: saleItemsPayload
+        const accessToken = session?.access_token;
+        if (!accessToken) {
+          throw new Error("Your admin session has expired. Please sign in again.");
+        }
+        const response = await fetch("/api/admin-record-sale", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            client_order_id: submittedDraft.client_order_id,
+            sale_payload: salePayload,
+            sale_items_payload: saleItemsPayload
+          })
         });
-
-        if (rpcError) {
-          throw rpcError;
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not save this order.");
         }
-
-        savedSale = saleFromRpcData(rpcData);
+        savedSale = payload?.sale ? toSale(payload.sale) : null;
         if (!savedSale) {
-          throw new Error("Sale was saved, but Supabase returned an unreadable response. Please refresh Sales before trying again.");
+          throw new Error("The order was saved, but the response could not be read. Refresh Orders before trying again.");
         }
-
-        setProducts((current) =>
-          current.map((product) => {
-            const change = inventoryChanges.find(({ product: changedProduct }) => changedProduct.id === product.id);
-            return change ? { ...product, quantity: change.nextQuantity } : product;
-          })
-        );
       } else {
-        setProducts((current) =>
-          current.map((product) => {
-            const change = inventoryChanges.find(({ product: currentProduct }) => currentProduct.id === product.id);
-            return change ? toProduct({ ...product, quantity: change.nextQuantity }) : product;
-          })
-        );
         savedSale = toSale({
           id: crypto.randomUUID(),
           created_at: new Date().toISOString(),
           ...salePayload,
-          sale_items: saleDraft.items.map((item) => ({
+          sale_items: saleItemsPayload.map((item) => ({
             id: crypto.randomUUID(),
             product_sku: item.product_sku,
             product_name: item.product_name,
@@ -7338,19 +8307,18 @@ export default function App() {
 
       setSales((current) => [savedSale, ...current]);
       setExpandedSaleId(savedSale.id);
-      setStatusMessage("Sale recorded ✓");
-      setSaleConfirmation(null);
+      setStatusMessage("Order saved · stock unchanged ✓");
       resetSaleModal();
-      setSalesBusy(false);
     } catch (error) {
-      console.error("Sale error:", error);
+      console.error("Order save error:", error);
       setSaleModalError(formatSaleSaveError(error));
+    } finally {
       setSalesBusy(false);
     }
   }
 
   async function handleMarkSalePaid(sale) {
-    if (!sale?.id || sale.paymentStatus !== "pending") {
+    if (!sale?.id || !["pending", "part_paid"].includes(sale.paymentStatus)) {
       return;
     }
 
@@ -7388,10 +8356,11 @@ export default function App() {
     }
 
     const restoreLines = sale.items
+      .filter((item) => item.trackInventory)
       .map((item) => `• ${item.productName || item.productSku}: +${Number(item.quantitySold || 0)} stock`)
       .join("\n");
     const confirmed = window.confirm(
-      `Delete this sale?\n\nThis will restore inventory:\n${restoreLines || "• No stock items recorded"}\n\nThis cannot be undone.`
+      `Delete this order?\n\n${restoreLines ? `This will restore inventory:\n${restoreLines}` : "No inventory was deducted for this order."}\n\nThis cannot be undone.`
     );
     if (!confirmed) {
       return;
@@ -7418,7 +8387,7 @@ export default function App() {
       );
       setSales((current) => current.filter((entry) => entry.id !== sale.id));
       setExpandedSaleId((current) => (current === sale.id ? null : current));
-      setStatusMessage("Sale deleted and stock restored ✓");
+      setStatusMessage(restoreLines ? "Order deleted and stock restored ✓" : "Order deleted ✓");
     } catch (error) {
       console.error("Delete sale failed:", error);
       const missingRpcMessage = "The sale delete function is not installed in Supabase yet. Please run the latest sales SQL migration, then try again.";
@@ -8143,7 +9112,7 @@ export default function App() {
   }
 
   async function processInquiryTranscript() {
-    const rawTranscript = speechSupported ? inquiryTranscript.trim() : manualInquiryTranscript.trim();
+    const rawTranscript = inquiryTranscript.trim() || manualInquiryTranscript.trim();
     if (!rawTranscript) {
       setInquiryModalError("Add a transcript before continuing.");
       return;
@@ -8170,14 +9139,29 @@ export default function App() {
   }
 
   async function saveInquiry() {
-    const transcriptText = speechSupported ? inquiryTranscript.trim() : manualInquiryTranscript.trim();
+    const transcriptText = inquiryTranscript.trim() || manualInquiryTranscript.trim();
+    const inquiryItems = inquiryDraft.products.filter((item) => safeText(item.product_name));
+    if (!safeText(inquiryDraft.customer_name) && !safeText(inquiryDraft.customer_phone)) {
+      setInquiryModalError("Add the customer name or mobile number.");
+      return;
+    }
+    if (!inquiryItems.length && !safeText(inquiryDraft.notes)) {
+      setInquiryModalError("Add at least one item or a short requirement note.");
+      return;
+    }
+    if (inquiryItems.some((item) => item.quantity_requested !== "" && Number(item.quantity_requested) <= 0)) {
+      setInquiryModalError("Item quantities must be greater than zero.");
+      return;
+    }
+
     setInquiryBusy(true);
     setInquiryModalError("");
+    let insertedInquiryId = "";
     try {
       const inquiryPayload = {
         customer_name: safeText(inquiryDraft.customer_name) || null,
         customer_phone: safeText(inquiryDraft.customer_phone) || null,
-        source: safeText(inquiryDraft.source, "phone"),
+        source: safeText(inquiryDraft.source, "whatsapp"),
         occasion: safeText(inquiryDraft.occasion) || null,
         required_by_date: safeText(inquiryDraft.required_by_date) || null,
         budget_per_unit: inquiryDraft.budget_per_unit === "" ? null : Number(inquiryDraft.budget_per_unit),
@@ -8193,10 +9177,9 @@ export default function App() {
         if (error) {
           throw error;
         }
+        insertedInquiryId = data.id;
 
-        const itemsPayload = inquiryDraft.products
-          .filter((item) => safeText(item.product_name))
-          .map((item) => ({
+        const itemsPayload = inquiryItems.map((item) => ({
             inquiry_id: data.id,
             product_sku: safeText(item.matched_sku) || null,
             product_name: safeText(item.product_name),
@@ -8219,9 +9202,7 @@ export default function App() {
           id: crypto.randomUUID(),
           created_at: new Date().toISOString(),
           ...inquiryPayload,
-          inquiry_items: inquiryDraft.products
-            .filter((item) => safeText(item.product_name))
-            .map((item) => ({
+          inquiry_items: inquiryItems.map((item) => ({
               id: crypto.randomUUID(),
               product_sku: safeText(item.matched_sku) || null,
               product_name: safeText(item.product_name),
@@ -8237,6 +9218,16 @@ export default function App() {
       resetInquiryModal();
     } catch (error) {
       console.log("Inquiry save failed:", error);
+      if (insertedInquiryId && isSupabaseConfigured) {
+        try {
+          const { error: cleanupError } = await supabase.from("inquiries").delete().eq("id", insertedInquiryId);
+          if (cleanupError) {
+            console.error("Could not remove incomplete inquiry:", cleanupError);
+          }
+        } catch (cleanupError) {
+          console.error("Could not remove incomplete inquiry:", cleanupError);
+        }
+      }
       setInquiryModalError(error?.message || "Could not save this inquiry.");
       setInquiryModalStep("confirm");
     } finally {
@@ -8345,6 +9336,90 @@ export default function App() {
       return false;
     } finally {
       setSaveBusy(false);
+    }
+  }
+
+  async function handleInventoryQuantityUpdate(product, nextQuantity) {
+    if (!canManage) {
+      throw new Error("Sign in again to update stock.");
+    }
+    if (!Number.isInteger(nextQuantity) || nextQuantity < 0) {
+      throw new Error("Stock must be a whole number of 0 or more.");
+    }
+
+    if (isSupabaseConfigured) {
+      const client = await getSupabaseClient();
+      if (!client) {
+        throw new Error("Inventory connection is unavailable.");
+      }
+      const { data, error } = await client
+        .from("products")
+        .update({ quantity: nextQuantity })
+        .eq("id", product.id)
+        .eq("quantity", Number(product.quantity || 0))
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        const { data: latestData, error: latestError } = await client
+          .from("products")
+          .select("*")
+          .eq("id", product.id)
+          .single();
+        if (!latestError && latestData) {
+          const latestProduct = toProduct(latestData);
+          setProducts((current) => current.map((item) => (item.id === latestProduct.id ? latestProduct : item)));
+          setLastSyncAt(new Date().toISOString());
+          throw new Error(`Stock changed elsewhere. Latest quantity is ${latestProduct.quantity}. Review and retry.`);
+        }
+        throw new Error("This product changed elsewhere. Refresh inventory and retry.");
+      }
+
+      const normalized = toProduct(data);
+      setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+      setLastSyncAt(new Date().toISOString());
+      setStatusMessage(`${normalized.name} stock updated to ${normalized.quantity}.`);
+      return normalized;
+    }
+
+    const normalized = toProduct({ ...product, quantity: nextQuantity });
+    setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+    setLastSyncAt(new Date().toISOString());
+    setStatusMessage(`${normalized.name} stock updated locally.`);
+    return normalized;
+  }
+
+  async function handleInventoryRefresh() {
+    if (inventoryRefreshBusy) {
+      return;
+    }
+    setInventoryRefreshBusy(true);
+    try {
+      if (!isSupabaseConfigured) {
+        setLastSyncAt(new Date().toISOString());
+        setStatusMessage("Local inventory is up to date.");
+        return;
+      }
+      const client = await getSupabaseClient();
+      if (!client) {
+        throw new Error("Inventory connection is unavailable.");
+      }
+      const { data, error } = await client.from("products").select("*").order("created_at", { ascending: false });
+      if (error) {
+        throw error;
+      }
+      const normalized = (data ?? []).map(toProduct);
+      setProducts(normalized);
+      setLastSyncAt(new Date().toISOString());
+      setStatusMessage(`Inventory refreshed · ${normalized.length} records loaded.`);
+    } catch (error) {
+      setStatusMessage(error?.message || "Could not refresh inventory.");
+    } finally {
+      setInventoryRefreshBusy(false);
     }
   }
 
@@ -9263,7 +10338,9 @@ export default function App() {
       setStatusMessage(pinned ? `${product.name} pinned to the top of customer view.` : `${product.name} unpinned.`);
     } catch (error) {
       console.log("Pin toggle failed:", error);
-      setUploadError(error?.message || "Pin status could not be updated right now.");
+      const message = error?.message || "Pin status could not be updated right now.";
+      setUploadError(message);
+      setStatusMessage(message);
     } finally {
       setArchiveBusy(false);
     }
@@ -9301,12 +10378,6 @@ export default function App() {
     setSearch("");
   }, [activeTab, publicScreen]);
 
-  useEffect(() => {
-    if (activeTab === "inquiries") {
-      setActiveTab("products");
-    }
-  }, [activeTab]);
-
   const statsItems = [
     { label: "Products", value: stats.totalProducts },
     { label: "Units", value: stats.totalUnits },
@@ -9327,11 +10398,11 @@ export default function App() {
   const activeTicker = TICKER_MESSAGES[headerTickerIndex];
   const adminTitle =
     activeTab === "products"
-      ? "Products"
+      ? "Inventory"
       : activeTab === "inquiries"
         ? "Inquiries"
         : activeTab === "sales"
-          ? "Sales"
+          ? "Orders"
           : activeTab === "purchases"
             ? "Purchases"
             : activeTab === "catalogues"
@@ -9343,11 +10414,11 @@ export default function App() {
                 : "Settings";
   const adminSubtitle =
     activeTab === "products"
-      ? "Browse and edit the full catalog."
+      ? "Update stock quickly and keep the catalogue accurate."
       : activeTab === "inquiries"
         ? "Track customer requests, quotes, and conversions."
         : activeTab === "sales"
-          ? "Record completed orders, watch today’s numbers, and keep stock accurate."
+          ? "Record inventory, custom, and vendor-direct orders in seconds."
           : activeTab === "purchases"
             ? "Track vendor orders, payments, and expected delivery dates."
             : activeTab === "catalogues"
@@ -9598,54 +10669,38 @@ export default function App() {
   ) : (
     <div className="app-shell app-shell-admin">
       <div className="screen-shell admin-shell">
-        <ScreenHeader
-          eyebrow="Decorbeats Admin"
-          title={adminTitle}
-          subtitle={adminSubtitle}
-          action={<div className="user-badge">{userEmail ? `Signed in: ${userEmail}` : "Local admin mode"}</div>}
-        />
+        {activeTab !== "products" && activeTab !== "low-stock" ? (
+          <ScreenHeader
+            eyebrow="Decorbeats Admin"
+            title={adminTitle}
+            subtitle={adminSubtitle}
+            action={<div className="user-badge">{userEmail ? `Signed in: ${userEmail}` : "Local admin mode"}</div>}
+          />
+        ) : null}
 
         {activeTab === "products" ? (
-          <>
-            <div className="admin-action-row">
-              <button type="button" className="primary-button quick-add-button" onClick={() => setActiveTab("add")}>
-                Add Product
-              </button>
-              <button type="button" className="ghost-button quick-add-button" onClick={() => setActiveTab("catalogues")}>
-                Create Catalogue
-              </button>
-            </div>
-            <StatusStrip statusMessage={statusMessage} />
-            <StatStrip items={statsItems} />
-            <CatalogSection
-              products={filteredProducts}
-              customerMode={false}
-              selectedId={selectedId}
-              canManage={canManage}
-              onSelect={handleProductSelect}
-              onEdit={handleEditProduct}
-              onShare={handleShareProduct}
-              onArchiveToggle={handleArchiveToggle}
-              onPinToggle={handlePinToggle}
-              onInlineEdit={handleDetailEdit}
-              onInlineAddImages={handleAddDetailImages}
-              onInlineDeleteImage={handleDeleteDetailImage}
-              onInlineSetCoverImage={handleSetCoverImage}
-              onInlineAddVideos={handleAddDetailVideos}
-              onInlineDeleteVideo={handleDeleteDetailVideo}
-              imageBusy={uploadBusy}
-              uploadError={uploadError}
-              compressionMessage={compressionMessage}
-              uploadStageMessage={uploadStageMessage}
-              saveBusy={saveBusy}
-              search={search}
-              setSearch={setSearch}
-              categoryFilter={categoryFilter}
-              setCategoryFilter={setCategoryFilter}
-              categories={categories}
-              archivedVisible={showArchived}
-            />
-          </>
+          <InventoryWorkspace
+            key="products-inventory"
+            products={products}
+            canManage={canManage}
+            search={search}
+            setSearch={setSearch}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            initialStockFilter="all"
+            lastSyncAt={lastSyncAt}
+            statusMessage={statusMessage}
+            refreshBusy={inventoryRefreshBusy}
+            onRefresh={handleInventoryRefresh}
+            onAddProduct={() => setActiveTab("add")}
+            onCreateCatalogue={() => setActiveTab("catalogues")}
+            onQuantitySave={handleInventoryQuantityUpdate}
+            onEdit={handleEditProduct}
+            onShare={handleShareProduct}
+            onArchiveToggle={handleArchiveToggle}
+            onPinToggle={handlePinToggle}
+            archiveBusy={archiveBusy}
+          />
         ) : null}
 
         {activeTab === "inquiries" ? (
@@ -9753,43 +10808,28 @@ export default function App() {
         ) : null}
 
         {activeTab === "low-stock" ? (
-          <>
-            <StatusStrip
-              statusMessage={statusMessage}
-              items={[
-                { label: "Low stock items", value: lowStockCatalog.filter((product) => !product.archivedAt || showArchived).length },
-                { label: "Archived shown", value: showArchived ? "Yes" : "No" }
-              ]}
-            />
-            <CatalogSection
-              products={filteredProducts}
-              customerMode={false}
-              selectedId={selectedId}
-              canManage={canManage}
-              onSelect={handleProductSelect}
-              onEdit={handleEditProduct}
-              onShare={handleShareProduct}
-              onArchiveToggle={handleArchiveToggle}
-              onPinToggle={handlePinToggle}
-              onInlineEdit={handleDetailEdit}
-              onInlineAddImages={handleAddDetailImages}
-              onInlineDeleteImage={handleDeleteDetailImage}
-              onInlineSetCoverImage={handleSetCoverImage}
-              onInlineAddVideos={handleAddDetailVideos}
-              onInlineDeleteVideo={handleDeleteDetailVideo}
-              imageBusy={uploadBusy}
-              uploadError={uploadError}
-              compressionMessage={compressionMessage}
-              uploadStageMessage={uploadStageMessage}
-              saveBusy={saveBusy}
-              search={search}
-              setSearch={setSearch}
-              categoryFilter={categoryFilter}
-              setCategoryFilter={setCategoryFilter}
-              categories={categories}
-              archivedVisible={showArchived}
-            />
-          </>
+          <InventoryWorkspace
+            key="attention-inventory"
+            products={products}
+            canManage={canManage}
+            search={search}
+            setSearch={setSearch}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            initialStockFilter="attention"
+            lastSyncAt={lastSyncAt}
+            statusMessage={statusMessage}
+            refreshBusy={inventoryRefreshBusy}
+            onRefresh={handleInventoryRefresh}
+            onAddProduct={() => setActiveTab("add")}
+            onCreateCatalogue={() => setActiveTab("catalogues")}
+            onQuantitySave={handleInventoryQuantityUpdate}
+            onEdit={handleEditProduct}
+            onShare={handleShareProduct}
+            onArchiveToggle={handleArchiveToggle}
+            onPinToggle={handlePinToggle}
+            archiveBusy={archiveBusy}
+          />
         ) : null}
 
         {activeTab === "settings" ? (
@@ -9885,7 +10925,7 @@ export default function App() {
         onStartListening={startInquiryListening}
         onStopAndProcess={processInquiryTranscript}
         onCancel={resetInquiryModal}
-        onBack={() => setInquiryModalStep("record")}
+        onBack={() => setInquiryModalStep((current) => (current === "record" ? "confirm" : "record"))}
         onSave={saveInquiry}
         onProductNameChange={syncInquiryProductMatch}
         onProductFieldChange={updateInquiryProductField}
@@ -9903,11 +10943,9 @@ export default function App() {
         setPickerOpen={setSalePickerOpen}
         busy={salesBusy}
         errorMessage={saleModalError}
-        confirmation={saleConfirmation}
-        onCancelConfirmation={() => setSaleConfirmation(null)}
-        onConfirmSale={handleConfirmSale}
         onClose={resetSaleModal}
         onAddProduct={handleAddSaleProduct}
+        onAddCustomItem={handleAddCustomSaleItem}
         onRemoveProduct={handleRemoveSaleProduct}
         onUpdateItem={handleUpdateSaleItem}
         onSave={handleSaveSale}
