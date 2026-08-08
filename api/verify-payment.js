@@ -1,18 +1,45 @@
 import crypto from "node:crypto";
+import { isCashfreeMigrationMissing } from "../server/checkout-store.js";
+import { reconcileCashfreeOrder } from "../server/cashfree.js";
+
+const MAX_BODY_BYTES = 100 * 1024;
 
 function sendJson(response, statusCode, payload) {
   response.statusCode = statusCode;
-  response.setHeader("Content-Type", "application/json");
+  response.setHeader("Content-Type", "application/json; charset=utf-8");
   response.setHeader("Cache-Control", "no-store");
+  response.setHeader("X-Content-Type-Options", "nosniff");
   response.end(JSON.stringify(payload));
 }
 
 async function readJsonBody(request) {
+  const declaredLength = Number(request.headers["content-length"] || 0);
+  if (declaredLength > MAX_BODY_BYTES) {
+    const error = new Error("Payment verification request is too large");
+    error.statusCode = 413;
+    throw error;
+  }
   const chunks = [];
+  let totalBytes = 0;
   for await (const chunk of request) {
+    totalBytes += chunk.length;
+    if (totalBytes > MAX_BODY_BYTES) {
+      const error = new Error("Payment verification request is too large");
+      error.statusCode = 413;
+      throw error;
+    }
     chunks.push(chunk);
   }
-  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {};
+  if (!chunks.length) {
+    return {};
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    const error = new Error("Payment verification request is not valid JSON");
+    error.statusCode = 400;
+    throw error;
+  }
 }
 
 function requiredEnv(...names) {
@@ -25,6 +52,14 @@ function requiredEnv(...names) {
 
 function cleanText(value, maxLength = 500) {
   return String(value ?? "").trim().slice(0, maxLength);
+}
+
+function getActivePaymentProvider() {
+  const provider = cleanText(process.env.PAYMENT_PROVIDER || "razorpay", 30).toLowerCase();
+  if (!new Set(["cashfree", "razorpay"]).has(provider)) {
+    throw new Error("PAYMENT_PROVIDER must be cashfree or razorpay");
+  }
+  return provider;
 }
 
 function getSupabaseConfig() {
@@ -74,7 +109,7 @@ async function fetchRazorpayPayment(paymentId) {
 
 async function fetchProducts(items) {
   const ids = [...new Set(items.map((item) => cleanText(item.productId, 80)).filter(Boolean))];
-  if (!ids.length) {
+  if (!ids.length || ids.some((id) => !/^[a-zA-Z0-9-]{1,80}$/.test(id))) {
     throw new Error("Order items are missing");
   }
   const query = new URLSearchParams({
@@ -218,8 +253,19 @@ export default async function handler(request, response) {
   }
 
   try {
-    const keySecret = requiredEnv("RAZORPAY_KEY_SECRET");
     const body = await readJsonBody(request);
+    if (cleanText(body.provider).toLowerCase() === "cashfree" || body.cashfree_order_id) {
+      const result = await reconcileCashfreeOrder(body.cashfree_order_id || body.orderId);
+      sendJson(response, result.verified ? 200 : 202, result);
+      return;
+    }
+
+    if (getActivePaymentProvider() !== "razorpay") {
+      sendJson(response, 410, { error: "This payment method is no longer active. Contact Decorbeats with your payment reference." });
+      return;
+    }
+
+    const keySecret = requiredEnv("RAZORPAY_KEY_SECRET");
     const { razorpay_order_id: orderId, razorpay_payment_id: paymentId, razorpay_signature: signature } = body;
 
     if (!orderId || !paymentId || !signature) {
@@ -242,31 +288,33 @@ export default async function handler(request, response) {
     }
 
     const payment = await fetchRazorpayPayment(paymentId);
-    if (!["captured", "authorized"].includes(payment.status)) {
+    if (payment.status !== "captured") {
       sendJson(response, 409, { error: "Payment is not complete yet" });
       return;
     }
 
-    let persistence = null;
-    try {
-      persistence = await persistVerifiedOrder({ body, payment, orderId, paymentId });
-    } catch (persistenceError) {
-      console.error("Verified payment persistence error:", persistenceError);
+    const persistence = await persistVerifiedOrder({ body, payment, orderId, paymentId });
+    if (!persistence?.orderId) {
+      throw new Error("Payment was captured, but the order could not be recorded");
     }
 
     sendJson(response, 200, {
       verified: true,
       orderId,
       paymentId,
-      customerOrderId: persistence?.orderId ?? null,
-      orderReference: persistence?.orderId
-        ? `DB-${String(persistence.orderId).slice(0, 8).toUpperCase()}`
-        : paymentId,
-      recorded: Boolean(persistence?.orderId),
-      stockReview: Boolean(persistence?.stockReview)
+      customerOrderId: persistence.orderId,
+      orderReference: `DB-${String(persistence.orderId).slice(0, 8).toUpperCase()}`,
+      recorded: true,
+      stockReview: Boolean(persistence.stockReview)
     });
   } catch (error) {
-    console.error("Razorpay verify error:", error);
-    sendJson(response, 500, { error: error.message || "Could not verify payment" });
+    console.error("Payment verification error:", error);
+    const statusCode =
+      Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 600 ? error.statusCode : 500;
+    sendJson(response, statusCode, {
+      error: isCashfreeMigrationMissing(error)
+        ? "Cashfree payment is confirmed, but order recording is awaiting its database migration. Contact Decorbeats with your payment reference."
+        : error.message || "Could not verify payment"
+    });
   }
 }

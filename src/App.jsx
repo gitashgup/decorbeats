@@ -36,6 +36,7 @@ const WHATSAPP_NUMBER = "919811133661";
 const PRODUCT_STORAGE_BUCKET = "products";
 const CART_STORAGE_KEY = "decorbeats-cart-v1";
 const RAZORPAY_CHECKOUT_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
+const CASHFREE_CHECKOUT_SCRIPT = "https://sdk.cashfree.com/js/v3/cashfree.js";
 const GOOGLE_ADS_CONTACT_CONVERSION = "AW-18084439764/kF1hCNnLiK4cENTNqq9D";
 const LOW_STOCK_THRESHOLD = 10;
 const ANNOUNCEMENTS = [
@@ -754,6 +755,59 @@ function toSale(raw) {
   };
 }
 
+function toCheckoutSale(raw) {
+  const customer = raw?.customer && typeof raw.customer === "object" ? raw.customer : {};
+  const payment = raw?.payment && typeof raw.payment === "object" ? raw.payment : {};
+  const paymentStatus = safeText(payment.status, "pending").toLowerCase();
+  const provider = safeText(payment.provider, "online").toLowerCase();
+  const orderStatus = safeText(raw?.orderStatus, "new").toLowerCase();
+  const fulfilmentStatus =
+    orderStatus === "new" || orderStatus === "payment_pending"
+      ? "confirmed"
+      : orderStatus;
+  const totalAmount = Number(raw?.totalAmount || 0);
+
+  return {
+    id: `checkout-${raw.id}`,
+    databaseId: raw.id,
+    recordType: "checkout",
+    orderReference: safeText(raw.reference, `DB-${safeText(raw.id).slice(0, 8).toUpperCase()}`),
+    createdAt: raw.createdAt,
+    orderDate: raw.createdAt,
+    customerName: safeText(customer.name, "Website customer"),
+    customerPhone: safeText(customer.phone),
+    customerEmail: safeText(customer.email),
+    sourceChannel: "website",
+    fulfilmentStatus,
+    paymentMethod: provider,
+    paymentStatus,
+    amountReceived: paymentStatus === "paid" ? totalAmount : 0,
+    deliveryCharge: null,
+    courierCost: null,
+    notes: safeText(customer.notes),
+    totalAmount,
+    currency: safeText(raw.currency, "INR"),
+    providerOrderId: safeText(payment.providerOrderId),
+    providerPaymentId: safeText(payment.providerPaymentId),
+    providerOrderStatus: safeText(payment.providerOrderStatus),
+    paidAt: payment.paidAt || null,
+    items: Array.isArray(raw.items)
+      ? raw.items.map((item) => ({
+          id: item.id,
+          productSku: safeText(item.sku),
+          catalogSku: safeText(item.sku),
+          productName: safeText(item.name),
+          quantitySold: Number(item.quantity || 0),
+          sellingPrice: Number(item.unitPrice || 0),
+          costPrice: null,
+          trackInventory: false,
+          fulfillmentSource: "website",
+          vendorName: ""
+        }))
+      : []
+  };
+}
+
 function isMissingDeleteSaleRpcError(error) {
   const message = safeText(error?.message).toLowerCase();
   return error?.code === "PGRST202" || message.includes("delete_sale_and_restore_stock") || message.includes("could not find the function");
@@ -1003,6 +1057,8 @@ function formatFulfilmentStatus(value) {
   const normalized = safeText(value, "confirmed").toLowerCase();
   const labels = {
     confirmed: "Confirmed",
+    payment_pending: "Awaiting payment",
+    stock_review: "Stock review",
     procurement: "Vendor procurement",
     packing: "Packing / ready",
     shipped: "Shipped",
@@ -1013,6 +1069,9 @@ function formatFulfilmentStatus(value) {
 }
 
 function getSaleInventoryLabel(sale) {
+  if (sale.recordType === "checkout") {
+    return "Website checkout";
+  }
   const inventorySourceCount = sale.items.filter(
     (item) => item.trackInventory || item.fulfillmentSource === "inventory"
   ).length;
@@ -1596,6 +1655,45 @@ function loadRazorpayCheckout() {
     script.onload = () => resolve();
     script.onerror = () => reject(new Error("Could not load Razorpay Checkout"));
     document.body.appendChild(script);
+  });
+}
+
+function loadCashfreeCheckout() {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Payments are only available in the browser"));
+  }
+
+  if (window.Cashfree) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const existingScript = document.querySelector(`script[src="${CASHFREE_CHECKOUT_SCRIPT}"]`);
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Could not load secure payment checkout")), {
+        once: true
+      });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = CASHFREE_CHECKOUT_SCRIPT;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Could not load secure payment checkout"));
+    document.body.appendChild(script);
+  });
+}
+
+function createCheckoutAttemptId() {
+  if (typeof window !== "undefined" && window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
   });
 }
 
@@ -2959,6 +3057,7 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markin
   const isPending = ["pending", "part_paid"].includes(sale.paymentStatus);
   const isBusy = markingPaidId === sale.id;
   const isDeleting = deletingSaleId === sale.id;
+  const isCheckoutOrder = sale.recordType === "checkout";
 
   return (
     <article className={expanded ? "sale-card expanded" : "sale-card"}>
@@ -3010,6 +3109,12 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markin
               <span>Received</span>
               <strong>{formatCurrency(sale.amountReceived)}</strong>
             </div>
+            {isCheckoutOrder ? (
+              <div>
+                <span>Order reference</span>
+                <strong>{sale.orderReference}</strong>
+              </div>
+            ) : null}
           </div>
           <ul className="sale-item-list">
             {sale.items.map((item) => (
@@ -3017,7 +3122,9 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markin
                 <div>
                   <strong>{item.productName || item.productSku}</strong>
                   <span>
-                    {item.trackInventory
+                    {isCheckoutOrder
+                      ? "Website checkout · stock handled automatically"
+                      : item.trackInventory
                       ? `${item.productSku} · Inventory deducted`
                       : item.fulfillmentSource === "inventory"
                         ? `${item.catalogSku || "Inventory item"} · Stock not adjusted`
@@ -3031,6 +3138,9 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markin
             ))}
           </ul>
           {sale.notes ? <p className="detail-note">{sale.notes}</p> : null}
+          {isCheckoutOrder ? (
+            <p className="detail-note">Online payment and inventory are reconciled automatically. Use the payment provider reference for support.</p>
+          ) : (
           <div className="sale-card-actions">
             {isPending ? (
               <button
@@ -3051,6 +3161,7 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markin
               {isDeleting ? "Deleting..." : "Delete Sale"}
             </button>
           </div>
+          )}
         </div>
       ) : null}
     </article>
@@ -4194,7 +4305,7 @@ function CustomerUtilityBar() {
     <div className="customer-utility-bar" aria-label="Store information">
       <span>Rooted in Moradabad, India’s brass city</span>
       <div>
-        <span>Razorpay-secured checkout</span>
+        <span>Secure online checkout</span>
         <span>Pan-India delivery</span>
         <a href="tel:+919811133661">Brass concierge: +91 98111 33661</a>
       </div>
@@ -4497,7 +4608,7 @@ function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
 function CustomerCommercePromise() {
   const items = [
     ["Moradabad expertise", "Selected with roots in India’s brass city"],
-    ["Secure checkout", "Protected online payments through Razorpay"],
+    ["Secure checkout", "Protected online payments through trusted providers"],
     ["Pan-India delivery", "Carefully packed for brass and handcrafted décor"],
     ["Human guidance", "Real help from selection through delivery"]
   ];
@@ -5280,7 +5391,7 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
                         ? "Adding to cart..."
                         : "Add to cart"}
                   </span>
-                  <small>{outOfStock ? "Ask us about the next availability" : "Secure checkout with Razorpay"}</small>
+                  <small>{outOfStock ? "Ask us about the next availability" : "Secure online checkout"}</small>
                 </button>
                 <div className="customer-purchase-trust" aria-label="Checkout reassurance">
                   <span>Secure payment</span>
@@ -5323,7 +5434,7 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
           </div>
           <div className="customer-product-assurance" aria-label="Order reassurance">
             <span>Material disclosed</span>
-            <span>Secure Razorpay checkout</span>
+            <span>Secure online checkout</span>
             <span>Pan-India assistance</span>
           </div>
         </div>
@@ -5340,10 +5451,13 @@ function CustomerCartDrawer({
   busy,
   error,
   success,
+  checkoutStatus,
+  checkoutResult,
   onClose,
   onQuantityChange,
   onRemove,
-  onCheckout
+  onCheckout,
+  onRetryVerification
 }) {
   const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -5361,12 +5475,18 @@ function CustomerCartDrawer({
       setCheckoutStage("cart");
       return undefined;
     }
+    if (
+      checkoutResult?.orderId &&
+      ["verifying", "paid", "pending", "failed", "cancelled"].includes(checkoutStatus)
+    ) {
+      setCheckoutStage("result");
+    }
     cartPreviousFocusRef.current = document.activeElement;
     const previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const focusFrame = window.requestAnimationFrame(() => cartDialogRef.current?.focus({ preventScroll: true }));
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !busy) {
         cartCloseRef.current();
         return;
       }
@@ -5398,14 +5518,14 @@ function CustomerCartDrawer({
       window.removeEventListener("keydown", handleKeyDown);
       cartPreviousFocusRef.current?.focus?.({ preventScroll: true });
     };
-  }, [open]);
+  }, [busy, checkoutResult?.orderId, checkoutStatus, open]);
 
   if (!open) {
     return null;
   }
 
   return (
-    <div className="customer-cart-overlay open" onClick={onClose}>
+    <div className="customer-cart-overlay open" onClick={busy ? undefined : onClose}>
       <aside
         ref={cartDialogRef}
         className="customer-cart-drawer"
@@ -5418,22 +5538,83 @@ function CustomerCartDrawer({
         <div className="customer-cart-head">
           <div>
             <p className="eyebrow">Decorbeats checkout</p>
-            <h2 id="customer-cart-title">{checkoutStage === "cart" ? "Your cart" : "Delivery details"}</h2>
+            <h2 id="customer-cart-title">
+              {checkoutStage === "cart" ? "Your cart" : checkoutStage === "delivery" ? "Delivery details" : "Payment status"}
+            </h2>
             <span>
-              {itemCount
-                ? `${checkoutStage === "cart" ? "Step 1 of 2" : "Step 2 of 2"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`
+              {checkoutStage === "result"
+                ? checkoutResult?.orderReference || "Secure order confirmation"
+                : itemCount
+                ? `${checkoutStage === "cart" ? "Step 1 of 3" : "Step 2 of 3"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`
                 : "No items yet"}
             </span>
           </div>
-          <button type="button" className="customer-sheet-close" aria-label="Close cart" onClick={onClose}>
+          <button type="button" className="customer-sheet-close" aria-label="Close cart" onClick={onClose} disabled={busy}>
             ×
           </button>
         </div>
 
-        {error ? <p className="customer-payment-note error" aria-live="assertive">{error}</p> : null}
-        {success ? <p className="customer-payment-note success" aria-live="polite">{success}</p> : null}
+        <ol className="customer-checkout-progress" aria-label="Checkout progress">
+          {["Bag", "Delivery", "Payment"].map((label, index) => {
+            const currentIndex = checkoutStage === "cart" ? 0 : checkoutStage === "delivery" ? 1 : 2;
+            return (
+              <li key={label} className={index <= currentIndex ? "active" : ""} aria-current={index === currentIndex ? "step" : undefined}>
+                <span>{index + 1}</span>
+                {label}
+              </li>
+            );
+          })}
+        </ol>
 
-        {items.length ? (
+        {checkoutStage !== "result" && error ? <p className="customer-payment-note error" role="alert">{error}</p> : null}
+        {checkoutStage !== "result" && success ? <p className="customer-payment-note success" role="status">{success}</p> : null}
+
+        {checkoutStage === "result" ? (
+          <section
+            className={`customer-payment-state ${checkoutStatus}`}
+            role={checkoutStatus === "failed" || checkoutStatus === "cancelled" ? "alert" : "status"}
+            aria-live={checkoutStatus === "failed" || checkoutStatus === "cancelled" ? "assertive" : "polite"}
+          >
+            <span className={checkoutStatus === "verifying" ? "customer-checkout-spinner" : "customer-payment-state-icon"} aria-hidden="true">
+              {checkoutStatus === "paid" ? "✓" : checkoutStatus === "pending" ? "◷" : checkoutStatus === "verifying" ? "" : "!"}
+            </span>
+            <p className="eyebrow">Secure online payment</p>
+            <h3>
+              {checkoutStatus === "paid"
+                ? "Your order is confirmed."
+                : checkoutStatus === "pending"
+                  ? "Your payment is processing."
+                  : checkoutStatus === "verifying"
+                    ? "Confirming your payment…"
+                    : "Payment is not confirmed yet."}
+            </h3>
+            <p>
+              {checkoutStatus === "paid"
+                ? success
+                : checkoutStatus === "pending"
+                  ? "Please don’t pay again yet. We’ll keep checking the provider status; your bag remains saved."
+                  : checkoutStatus === "verifying"
+                    ? "This normally takes only a few seconds. Please keep this window open."
+                    : error || "Your bag is still saved. You can check the status again or review delivery details."}
+            </p>
+            {checkoutResult?.orderReference ? <strong>Order reference · {checkoutResult.orderReference}</strong> : null}
+            <div className="customer-payment-state-actions">
+              {checkoutStatus !== "paid" ? (
+                <button type="button" className="primary-button" onClick={onRetryVerification} disabled={busy}>
+                  {busy ? "Checking…" : "Check payment status"}
+                </button>
+              ) : null}
+              {checkoutStatus === "failed" || checkoutStatus === "cancelled" ? (
+                <button type="button" className="ghost-button" onClick={() => setCheckoutStage("delivery")} disabled={busy}>
+                  Review details
+                </button>
+              ) : null}
+              <button type="button" className={checkoutStatus === "paid" ? "primary-button" : "customer-text-link"} onClick={onClose} disabled={busy}>
+                {checkoutStatus === "paid" ? "Continue shopping" : "Continue browsing"}
+              </button>
+            </div>
+          </section>
+        ) : items.length ? (
           <>
             {checkoutStage === "cart" ? (
               <div className="customer-cart-items">
@@ -5453,11 +5634,17 @@ function CustomerCartDrawer({
                       <b>{formatCurrency(item.price)}</b>
                     </div>
                     <div className="customer-cart-qty">
-                      <button type="button" onClick={() => onQuantityChange(item.product.id, item.quantity - 1)} disabled={busy}>
+                      <button
+                        type="button"
+                        aria-label={`Decrease quantity for ${item.product.name}`}
+                        onClick={() => onQuantityChange(item.product.id, item.quantity - 1)}
+                        disabled={busy}
+                      >
                         −
                       </button>
                       <input
                         type="number"
+                        aria-label={`Quantity for ${item.product.name}`}
                         inputMode="numeric"
                         min="1"
                         value={item.quantity}
@@ -5465,7 +5652,12 @@ function CustomerCartDrawer({
                         onChange={(event) => onQuantityChange(item.product.id, Number(event.target.value) || 1)}
                         disabled={busy}
                       />
-                      <button type="button" onClick={() => onQuantityChange(item.product.id, item.quantity + 1)} disabled={busy}>
+                      <button
+                        type="button"
+                        aria-label={`Increase quantity for ${item.product.name}`}
+                        onClick={() => onQuantityChange(item.product.id, item.quantity + 1)}
+                        disabled={busy}
+                      >
                         +
                       </button>
                       <button type="button" className="customer-cart-remove" onClick={() => onRemove(item.product.id)} disabled={busy}>
@@ -5486,7 +5678,7 @@ function CustomerCartDrawer({
                 <button type="button" className="primary-button" onClick={() => setCheckoutStage("delivery")}>
                   Continue to delivery
                 </button>
-                <small>Secure online payment through Razorpay</small>
+                <small>Secure online payment · UPI, cards and more</small>
               </div>
             ) : (
               <button type="button" className="customer-cart-back" onClick={() => setCheckoutStage("cart")}>
@@ -5605,9 +5797,23 @@ function CustomerCartDrawer({
                   onChange={(event) => setDetails((current) => ({ ...current, notes: event.target.value }))}
                 />
               </label>
-              <button type="submit" className="primary-button customer-checkout-button" disabled={busy}>
-                {busy ? "Opening secure payment..." : `Pay ${formatCurrency(total)}`}
-              </button>
+              <div className="customer-payment-footer">
+                <button
+                  type="submit"
+                  className="primary-button customer-checkout-button"
+                  disabled={busy}
+                  aria-busy={busy}
+                >
+                  {busy
+                    ? checkoutStatus === "creating"
+                      ? "Preparing secure payment…"
+                      : checkoutStatus === "opening"
+                        ? "Opening secure payment…"
+                        : "Confirming payment…"
+                    : `Pay ${formatCurrency(total)} securely`}
+                </button>
+                <small className="customer-payment-provider-note">Payment details are handled securely by our payment partner.</small>
+              </div>
               </form>
             ) : null}
           </>
@@ -7269,7 +7475,6 @@ export default function App() {
   const [purchaseProductSearch, setPurchaseProductSearch] = useState("");
   const [purchasePickerOpen, setPurchasePickerOpen] = useState(false);
   const [purchaseModalError, setPurchaseModalError] = useState("");
-  const [paymentBusyProductId, setPaymentBusyProductId] = useState("");
   const [paymentMessage, setPaymentMessage] = useState(null);
   const [cartItems, setCartItems] = useState(getStoredCartItems);
   const [cartOpen, setCartOpen] = useState(false);
@@ -7277,6 +7482,8 @@ export default function App() {
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [checkoutSuccess, setCheckoutSuccess] = useState("");
+  const [checkoutStatus, setCheckoutStatus] = useState("idle");
+  const [checkoutResult, setCheckoutResult] = useState(null);
   const [cartBusyProductId, setCartBusyProductId] = useState("");
   const [heroSlideForm, setHeroSlideForm] = useState(createEmptyHeroSlideForm);
   const [heroSlideBusy, setHeroSlideBusy] = useState(false);
@@ -7294,6 +7501,9 @@ export default function App() {
   const customerSearchRef = useRef(null);
   const recognitionRef = useRef(null);
   const compressionTimerRef = useRef(null);
+  const checkoutAttemptRef = useRef("");
+  const checkoutSubmissionRef = useRef(false);
+  const checkoutReturnHandledRef = useRef(false);
   const pendingRouteIntentRef = useRef(
     typeof window === "undefined" ? null : parseLegacyPath(window.location.pathname)
   );
@@ -7463,7 +7673,20 @@ export default function App() {
     let cancelled = false;
 
     async function loadAdminData() {
-      const [productResult, inquiryResult, salesResult, purchaseResult, catalogueResult] = await Promise.all([
+      const checkoutOrdersPromise = session?.access_token
+        ? fetch("/api/admin-checkout-orders", {
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${session.access_token}`
+            }
+          })
+            .then(async (response) => {
+              const payload = await response.json().catch(() => null);
+              return response.ok ? payload : { orders: [], error: payload?.error || "Could not load website orders" };
+            })
+            .catch(() => ({ orders: [], error: "Could not load website orders" }))
+        : Promise.resolve({ orders: [] });
+      const [productResult, inquiryResult, salesResult, purchaseResult, catalogueResult, checkoutOrdersResult] = await Promise.all([
         supabase.from("products").select("*").order("created_at", { ascending: false }),
         supabase.from("inquiries").select("*, inquiry_items(*)").order("created_at", { ascending: false }),
         supabase.from("sales").select("*, sale_items(*)").order("created_at", { ascending: false }),
@@ -7471,7 +7694,8 @@ export default function App() {
         supabase
           .from("share_catalogues")
           .select("*, share_catalogue_items(*)")
-          .order("created_at", { ascending: false })
+          .order("created_at", { ascending: false }),
+        checkoutOrdersPromise
       ]);
 
       if (cancelled) {
@@ -7485,7 +7709,11 @@ export default function App() {
         setInquiries((inquiryResult.data ?? []).map(toInquiry));
       }
       if (!salesResult.error) {
-        setSales((salesResult.data ?? []).map(toSale));
+        const manuallyRecordedSales = (salesResult.data ?? []).map(toSale);
+        const websiteOrders = Array.isArray(checkoutOrdersResult?.orders)
+          ? checkoutOrdersResult.orders.map(toCheckoutSale)
+          : [];
+        setSales([...manuallyRecordedSales, ...websiteOrders]);
       }
       if (!purchaseResult.error) {
         setPurchases((purchaseResult.data ?? []).map(toPurchase));
@@ -7744,6 +7972,40 @@ export default function App() {
       // Shopping remains available when storage is blocked or full.
     }
   }, [cartItems]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || storefrontLoading || checkoutReturnHandledRef.current) {
+      return;
+    }
+    const returnUrl = new URL(window.location.href);
+    const provider = returnUrl.searchParams.get("payment_provider");
+    const orderId = returnUrl.searchParams.get("cashfree_order_id");
+    if (provider !== "cashfree" || !orderId) {
+      return;
+    }
+
+    checkoutReturnHandledRef.current = true;
+    checkoutSubmissionRef.current = true;
+    setCartOpen(true);
+    setCheckoutBusy(true);
+    setCheckoutStatus("verifying");
+    setCheckoutResult({ provider: "cashfree", orderId });
+    void reconcileCustomerCashfreeOrder(orderId, cartLines)
+      .then(() => {
+        returnUrl.searchParams.delete("payment_provider");
+        returnUrl.searchParams.delete("cashfree_order_id");
+        window.history.replaceState({}, "", `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`);
+      })
+      .catch((error) => {
+        console.error("Cashfree return verification failed:", error);
+        setCheckoutStatus("failed");
+        setCheckoutError(error.message || "We could not confirm this payment yet. Your cart is still saved.");
+      })
+      .finally(() => {
+        checkoutSubmissionRef.current = false;
+        setCheckoutBusy(false);
+      });
+  }, [cartLines, storefrontLoading]);
 
   const filteredInquiries = useMemo(() => {
     const statusFiltered =
@@ -9465,137 +9727,6 @@ export default function App() {
     }
   }
 
-  async function handlePayOnline(product) {
-    const price = parsePrice(product?.pricing?.mrp);
-    if (!product || !price) {
-      setPaymentMessage({ tone: "error", text: "Online payment is available only after an MRP is set for this product." });
-      return;
-    }
-
-    setPaymentBusyProductId(product.id);
-    setPaymentMessage({ tone: "info", text: "Opening secure Razorpay checkout..." });
-
-    try {
-      await loadRazorpayCheckout();
-
-      const orderResponse = await fetch("/api/create-order", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          productId: product.id,
-          quantity: 1
-        })
-      });
-      const order = await orderResponse.json();
-      if (!orderResponse.ok) {
-        throw new Error(order?.error || "Could not start payment");
-      }
-
-      await new Promise((resolve, reject) => {
-        let settled = false;
-        const rejectOnce = (error) => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          reject(error);
-        };
-        const resolveOnce = (value) => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          resolve(value);
-        };
-        const checkout = new window.Razorpay({
-          key: order.keyId,
-          amount: order.amount,
-          currency: order.currency,
-          name: "Decorbeats",
-          description: `${product.name} (${product.sku})`,
-          image: `${window.location.origin}${brandLogo}`,
-          order_id: order.order_id,
-          notes: {
-            sku: product.sku,
-            product_name: product.name
-          },
-          theme: {
-            color: "#8B4A2A"
-          },
-          handler: async (paymentResponse) => {
-            try {
-              const verifyResponse = await fetch("/api/verify-payment", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify(paymentResponse)
-              });
-              const verifyResult = await verifyResponse.json();
-              if (!verifyResponse.ok || !verifyResult.verified) {
-                throw new Error(verifyResult?.error || "Payment could not be verified");
-              }
-              resolveOnce(verifyResult);
-            } catch (error) {
-              rejectOnce(error);
-            }
-          },
-          modal: {
-            ondismiss: () => {
-              const error = new Error("Payment cancelled");
-              error.cancelled = true;
-              rejectOnce(error);
-            }
-          }
-        });
-
-        checkout.on("payment.failed", (failureResponse) => {
-          const paymentError = failureResponse?.error ?? {};
-          const messageParts = [
-            paymentError.description,
-            paymentError.reason ? `Reason: ${paymentError.reason}` : null,
-            paymentError.code ? `Code: ${paymentError.code}` : null,
-            paymentError.step ? `Step: ${paymentError.step}` : null
-          ].filter(Boolean);
-          const error = new Error(messageParts.join(" · ") || "Payment failed in Razorpay Checkout");
-          error.razorpay = paymentError;
-          trackCustomerEvent("Razorpay Payment Failed", {
-            sku: product.sku,
-            product: product.name,
-            code: paymentError.code,
-            reason: paymentError.reason,
-            step: paymentError.step
-          });
-          rejectOnce(error);
-        });
-
-        checkout.open();
-      });
-
-      trackCustomerEvent("Razorpay Payment Verified", {
-        sku: product.sku,
-        product: product.name,
-        amount: price
-      });
-      trackGoogleAdsContactConversion(price);
-      setPaymentMessage({
-        tone: "success",
-        text: "Payment successful. Please WhatsApp us your order details so we can confirm delivery."
-      });
-    } catch (error) {
-      if (error?.cancelled) {
-        setPaymentMessage({ tone: "info", text: "Payment was cancelled. You can try again whenever ready." });
-      } else {
-        console.error("Razorpay payment failed:", error);
-        setPaymentMessage({ tone: "error", text: error.message || "Could not complete payment. Please try WhatsApp enquiry." });
-      }
-    } finally {
-      setPaymentBusyProductId("");
-    }
-  }
-
   function handleAddToCart(product) {
     const price = parsePrice(product?.pricing?.mrp);
     if (!product || !price) {
@@ -9611,6 +9742,9 @@ export default function App() {
     setCartBusyProductId(lineId);
     setCheckoutError("");
     setCheckoutSuccess("");
+    setCheckoutStatus("idle");
+    setCheckoutResult(null);
+    checkoutAttemptRef.current = "";
     setPaymentMessage({ tone: "success", text: `${product.name} added to cart.` });
 
     setCartItems((current) => {
@@ -9640,17 +9774,11 @@ export default function App() {
       handleCustomerProductClose();
     }
     setCartOpen(true);
-    void loadRazorpayCheckout().catch(() => {
-      // Checkout reports a useful error if the provider is unavailable at payment time.
-    });
     window.setTimeout(() => setCartBusyProductId(""), 350);
   }
 
   function handleCartOpen() {
     setCartOpen(true);
-    void loadRazorpayCheckout().catch(() => {
-      // Keep browsing and cart editing available if the payment script cannot preload.
-    });
   }
 
   function handleCartQuantityChange(productId, nextQuantity) {
@@ -9664,14 +9792,100 @@ export default function App() {
     setCartItems((current) =>
       current.map((item) => (String(item.productId) === String(productId) ? { ...item, quantity } : item))
     );
+    checkoutAttemptRef.current = "";
+    setCheckoutStatus("idle");
+    setCheckoutResult(null);
   }
 
   function handleCartRemove(productId) {
     setCartItems((current) => current.filter((item) => String(item.productId) !== String(productId)));
+    checkoutAttemptRef.current = "";
+    setCheckoutStatus("idle");
+    setCheckoutResult(null);
+  }
+
+  function handleCheckoutDetailsChange(updater) {
+    setCheckoutDetails(updater);
+    checkoutAttemptRef.current = "";
+    setCheckoutStatus("idle");
+    setCheckoutResult(null);
+  }
+
+  function completeCustomerCheckout(verification, purchasedLines, totalAmount) {
+    const orderReference = verification.orderReference || verification.orderId || "Confirmed";
+    trackCustomerEvent("Customer Checkout Paid", {
+      amount: totalAmount,
+      itemCount: purchasedLines.length,
+      orderReference,
+      provider: verification.provider || "online"
+    });
+    trackCommerceEvent("purchase", {
+      transactionId: orderReference,
+      value: totalAmount,
+      items: purchasedLines.map((line) => toCommerceItem(line.product, line.quantity))
+    });
+    setCheckoutStatus("paid");
+    setCheckoutResult({
+      ...verification,
+      orderReference,
+      amount: totalAmount
+    });
+    setCheckoutSuccess(`Payment confirmed. Order reference: ${orderReference}. We’ll confirm delivery shortly.`);
+    setCheckoutError("");
+    setCartItems([]);
+    setCheckoutDetails(createEmptyCheckoutDetails());
+    checkoutAttemptRef.current = "";
+  }
+
+  async function reconcileCustomerCashfreeOrder(orderId, purchasedLines = cartLines) {
+    setCheckoutStatus("verifying");
+    setCheckoutResult((current) => ({ ...current, provider: "cashfree", orderId }));
+    setCheckoutError("");
+    const verifyResponse = await fetch("/api/verify-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "cashfree", cashfree_order_id: orderId })
+    });
+    const verification = await verifyResponse.json().catch(() => null);
+    if (verifyResponse.status === 202) {
+      setCheckoutStatus("pending");
+      setCheckoutResult({ ...verification, provider: "cashfree", orderId });
+      setCheckoutSuccess("");
+      setCheckoutError("");
+      return { status: "pending", verification };
+    }
+    if (!verifyResponse.ok || !verification?.verified || !verification?.recorded) {
+      throw new Error(verification?.error || "Payment could not be confirmed yet.");
+    }
+    const totalAmount = Number(verification.amount || purchasedLines.reduce((sum, line) => sum + line.lineTotal, 0));
+    completeCustomerCheckout({ ...verification, provider: "cashfree" }, purchasedLines, totalAmount);
+    return { status: "paid", verification };
+  }
+
+  async function handleRetryCheckoutVerification() {
+    const orderId = safeText(checkoutResult?.orderId);
+    if (!orderId || checkoutSubmissionRef.current) {
+      return;
+    }
+    checkoutSubmissionRef.current = true;
+    setCheckoutBusy(true);
+    try {
+      await reconcileCustomerCashfreeOrder(orderId);
+    } catch (error) {
+      console.error("Payment status refresh failed:", error);
+      setCheckoutStatus("failed");
+      setCheckoutError(error.message || "Could not refresh payment status. Please try again.");
+    } finally {
+      checkoutSubmissionRef.current = false;
+      setCheckoutBusy(false);
+    }
   }
 
   async function handleCheckoutSubmit(event) {
     event.preventDefault();
+    if (checkoutSubmissionRef.current) {
+      return;
+    }
     if (!cartLines.length) {
       setCheckoutError("Add at least one product before checkout.");
       return;
@@ -9690,94 +9904,106 @@ export default function App() {
       return;
     }
 
+    const submittedLines = cartLines.map((line) => ({ ...line }));
+    const submittedDetails = { ...checkoutDetails };
+    const checkoutAttemptId = checkoutAttemptRef.current || createCheckoutAttemptId();
+    checkoutAttemptRef.current = checkoutAttemptId;
+    checkoutSubmissionRef.current = true;
     setCheckoutBusy(true);
+    setCheckoutStatus("creating");
+    setCheckoutResult(null);
     setCheckoutError("");
     setCheckoutSuccess("");
     trackCommerceEvent("begin_checkout", {
-      value: cartLines.reduce((sum, line) => sum + line.lineTotal, 0),
-      items: cartLines.map((line) => toCommerceItem(line.product, line.quantity))
+      value: submittedLines.reduce((sum, line) => sum + line.lineTotal, 0),
+      items: submittedLines.map((line) => toCommerceItem(line.product, line.quantity))
     });
 
     try {
-      await loadRazorpayCheckout();
-
       const orderResponse = await fetch("/api/create-order", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: cartLines.map((line) => ({
+          checkoutAttemptId,
+          items: submittedLines.map((line) => ({
             productId: line.product.id,
             quantity: line.quantity
           })),
-          customer: checkoutDetails
+          customer: submittedDetails
         })
       });
-      const order = await orderResponse.json();
+      const order = await orderResponse.json().catch(() => null);
       if (!orderResponse.ok) {
         throw new Error(order?.error || "Could not start payment.");
       }
 
+      if (order.provider === "cashfree") {
+        setCheckoutStatus("opening");
+        setCheckoutResult({ provider: "cashfree", orderId: order.orderId, orderReference: order.orderReference });
+        await loadCashfreeCheckout();
+        const cashfree = window.Cashfree({ mode: order.environment === "production" ? "production" : "sandbox" });
+        const redirectTarget = window.matchMedia("(max-width: 767px)").matches ? "_self" : "_modal";
+        const checkoutOutcome = await cashfree.checkout({
+          paymentSessionId: order.paymentSessionId,
+          redirectTarget
+        });
+        const reconciliation = await reconcileCustomerCashfreeOrder(order.orderId, submittedLines);
+        if (checkoutOutcome?.error && reconciliation.status !== "paid") {
+          const cancelledError = new Error("Payment was closed before confirmation. Your cart is still saved.");
+          cancelledError.cancelled = true;
+          throw cancelledError;
+        }
+        return;
+      }
+
+      await loadRazorpayCheckout();
       const paymentResponse = await new Promise((resolve, reject) => {
         let settled = false;
         const rejectOnce = (error) => {
-          if (settled) {
-            return;
+          if (!settled) {
+            settled = true;
+            reject(error);
           }
-          settled = true;
-          reject(error);
         };
         const resolveOnce = (value) => {
-          if (settled) {
-            return;
+          if (!settled) {
+            settled = true;
+            resolve(value);
           }
-          settled = true;
-          resolve(value);
         };
-
         const checkout = new window.Razorpay({
           key: order.keyId,
           amount: order.amount,
           currency: order.currency,
           name: "Decorbeats",
-          description: `${cartLines.length} item${cartLines.length === 1 ? "" : "s"} from Decorbeats`,
+          description: `${submittedLines.length} item${submittedLines.length === 1 ? "" : "s"} from Decorbeats`,
           image: `${window.location.origin}${brandLogo}`,
           order_id: order.order_id,
           prefill: {
-            name: checkoutDetails.customerName,
-            email: checkoutDetails.email,
-            contact: checkoutDetails.phone
+            name: submittedDetails.customerName,
+            email: submittedDetails.email,
+            contact: submittedDetails.phone
           },
-          notes: {
-            customer_name: checkoutDetails.customerName,
-            customer_phone: checkoutDetails.phone,
-            item_count: String(cartLines.length)
-          },
-          theme: {
-            color: "#8B4A2A"
-          },
+          theme: { color: "#8B4A2A" },
           handler: async (razorpayResponse) => {
             try {
               const verifyResponse = await fetch("/api/verify-payment", {
                 method: "POST",
-                headers: {
-                  "Content-Type": "application/json"
-                },
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   ...razorpayResponse,
-                  customer: checkoutDetails,
-                  items: (order.items?.length ? order.items : cartLines).map((item) => ({
+                  customer: submittedDetails,
+                  items: (order.items?.length ? order.items : submittedLines).map((item) => ({
                     productId: item.id ?? item.product?.id,
                     quantity: item.quantity
                   }))
                 })
               });
-              const verifyResult = await verifyResponse.json();
-              if (!verifyResponse.ok || !verifyResult.verified) {
-                throw new Error(verifyResult?.error || "Payment could not be verified.");
+              const verifyResult = await verifyResponse.json().catch(() => null);
+              if (!verifyResponse.ok || !verifyResult?.verified || !verifyResult?.recorded) {
+                throw new Error(verifyResult?.error || "Payment could not be recorded.");
               }
-              resolveOnce({ razorpayResponse, verifyResult });
+              resolveOnce(verifyResult);
             } catch (error) {
               rejectOnce(error);
             }
@@ -9790,40 +10016,30 @@ export default function App() {
             }
           }
         });
-
         checkout.on("payment.failed", (failureResponse) => {
           const paymentError = failureResponse?.error ?? {};
-          rejectOnce(new Error(paymentError.description || "Payment failed in Razorpay Checkout."));
+          rejectOnce(new Error(paymentError.description || "Payment failed in secure checkout."));
         });
-
+        setCheckoutStatus("opening");
         checkout.open();
       });
 
-      const totalAmount = Number(order.amount || 0) / 100;
-
-      trackCustomerEvent("Customer Checkout Paid", {
-        amount: totalAmount,
-        itemCount: cartLines.length,
-        orderReference: paymentResponse.verifyResult.orderReference
-      });
-      trackCommerceEvent("purchase", {
-        transactionId: paymentResponse.verifyResult.orderReference,
-        value: totalAmount,
-        items: cartLines.map((line) => toCommerceItem(line.product, line.quantity))
-      });
-      setCheckoutSuccess(
-        `Payment successful. Order reference: ${paymentResponse.verifyResult.orderReference}. We’ll confirm delivery shortly.`
+      completeCustomerCheckout(
+        { ...paymentResponse, provider: "razorpay" },
+        submittedLines,
+        Number(order.amount || 0) / 100
       );
-      setCartItems([]);
-      setCheckoutDetails(createEmptyCheckoutDetails());
     } catch (error) {
       if (error?.cancelled) {
+        setCheckoutStatus("cancelled");
         setCheckoutError("Payment was cancelled. Your cart is still saved.");
       } else {
         console.error("Checkout failed:", error);
+        setCheckoutStatus("failed");
         setCheckoutError(error.message || "Could not complete checkout. Please try again.");
       }
     } finally {
+      checkoutSubmissionRef.current = false;
       setCheckoutBusy(false);
     }
   }
@@ -10658,14 +10874,17 @@ export default function App() {
         open={cartOpen}
         items={cartLines}
         details={checkoutDetails}
-        setDetails={setCheckoutDetails}
+        setDetails={handleCheckoutDetailsChange}
         busy={checkoutBusy}
         error={checkoutError}
         success={checkoutSuccess}
+        checkoutStatus={checkoutStatus}
+        checkoutResult={checkoutResult}
         onClose={() => setCartOpen(false)}
         onQuantityChange={handleCartQuantityChange}
         onRemove={handleCartRemove}
         onCheckout={handleCheckoutSubmit}
+        onRetryVerification={handleRetryCheckoutVerification}
       />
     </div>
   ) : (

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test tests/*.test.js",
     "preview": "vite preview",
     "migrate:images:supabase:dry-run": "node --env-file-if-exists=.env scripts/migrate-vercel-blob-images-to-supabase.mjs",
     "migrate:images:supabase": "node --env-file-if-exists=.env scripts/migrate-vercel-blob-images-to-supabase.mjs --apply"
