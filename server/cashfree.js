@@ -8,6 +8,7 @@ import {
 } from "./checkout-store.js";
 
 export const DEFAULT_CASHFREE_API_VERSION = "2026-01-01";
+export const DEFAULT_CASHFREE_WEBHOOK_VERSION = "2025-01-01";
 
 export function getCashfreeConfig() {
   const environment = cleanText(requiredEnv("CASHFREE_ENVIRONMENT"), 20).toLowerCase();
@@ -112,6 +113,24 @@ export function verifyCashfreeWebhookSignature({ rawBody, timestamp, signature }
   const received = Buffer.from(String(signature), "utf8");
   if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
     throw new CheckoutError(401, "Cashfree webhook signature is invalid");
+  }
+  return true;
+}
+
+export function verifyCashfreeWebhookVersion(version) {
+  const expectedVersion = cleanText(
+    process.env.CASHFREE_WEBHOOK_VERSION || DEFAULT_CASHFREE_WEBHOOK_VERSION,
+    20
+  );
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(expectedVersion)) {
+    throw new Error("CASHFREE_WEBHOOK_VERSION must use YYYY-MM-DD format");
+  }
+  const receivedVersion = cleanText(version, 20);
+  if (!receivedVersion) {
+    throw new CheckoutError(400, "Cashfree webhook version header is missing");
+  }
+  if (receivedVersion !== expectedVersion) {
+    throw new CheckoutError(400, "Cashfree webhook version is not supported");
   }
   return true;
 }

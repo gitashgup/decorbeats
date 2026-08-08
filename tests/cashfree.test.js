@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { beforeEach, describe, it } from "node:test";
 import { CheckoutError, normalizeIndianPhone, roundMoney } from "../server/checkout-store.js";
-import { buildCashfreeOrderId, verifyCashfreeWebhookSignature } from "../server/cashfree.js";
+import {
+  buildCashfreeOrderId,
+  verifyCashfreeWebhookSignature,
+  verifyCashfreeWebhookVersion
+} from "../server/cashfree.js";
 
 beforeEach(() => {
   process.env.CASHFREE_CLIENT_ID = "test-client-id";
   process.env.CASHFREE_CLIENT_SECRET = "test-client-secret";
   process.env.CASHFREE_ENVIRONMENT = "sandbox";
+  process.env.CASHFREE_WEBHOOK_VERSION = "2025-01-01";
 });
 
 describe("Cashfree checkout helpers", () => {
@@ -48,6 +53,18 @@ describe("Cashfree checkout helpers", () => {
       .update(`${timestamp}${rawBody}`)
       .digest("base64");
     assert.equal(verifyCashfreeWebhookSignature({ rawBody, timestamp, signature }), true);
+  });
+
+  it("requires the configured Cashfree webhook version", () => {
+    assert.equal(verifyCashfreeWebhookVersion("2025-01-01"), true);
+    assert.throws(
+      () => verifyCashfreeWebhookVersion("2024-01-01"),
+      (error) => error instanceof CheckoutError && error.statusCode === 400
+    );
+    assert.throws(
+      () => verifyCashfreeWebhookVersion(""),
+      (error) => error instanceof CheckoutError && error.statusCode === 400
+    );
   });
 
   it("normalizes Indian phone numbers and rupee precision", () => {

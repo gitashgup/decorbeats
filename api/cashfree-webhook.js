@@ -1,5 +1,9 @@
 import { CheckoutError, cleanText, updateCheckoutProviderStatus } from "../server/checkout-store.js";
-import { reconcileCashfreeOrder, verifyCashfreeWebhookSignature } from "../server/cashfree.js";
+import {
+  reconcileCashfreeOrder,
+  verifyCashfreeWebhookSignature,
+  verifyCashfreeWebhookVersion
+} from "../server/cashfree.js";
 
 const MAX_BODY_BYTES = 150 * 1024;
 
@@ -37,6 +41,7 @@ export default async function handler(request, response) {
 
   try {
     const rawBody = await readRawBody(request);
+    verifyCashfreeWebhookVersion(request.headers["x-webhook-version"]);
     verifyCashfreeWebhookSignature({
       rawBody,
       timestamp: request.headers["x-webhook-timestamp"],
