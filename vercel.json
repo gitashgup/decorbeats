@@ -38,6 +38,26 @@
     {
       "source": "/catalog/:path*",
       "destination": "/"
+    },
+    {
+      "source": "/contact",
+      "destination": "/"
+    },
+    {
+      "source": "/terms-and-conditions",
+      "destination": "/"
+    },
+    {
+      "source": "/refund-cancellation-policy",
+      "destination": "/"
+    },
+    {
+      "source": "/shipping-policy",
+      "destination": "/"
+    },
+    {
+      "source": "/privacy-policy",
+      "destination": "/"
     }
   ]
 }

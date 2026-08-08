@@ -1,4 +1,10 @@
 import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  PRIMARY_SITE_ORIGIN,
+  PUBLIC_PAGE_LIST,
+  getPublicPageByPath,
+  getPublicPageBySlug
+} from "./content/publicPages";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -50,6 +56,12 @@ const TICKER_MESSAGES = [
   { text: "50–400+ PIECES · CUSTOM BUSINESS & OCCASION GIFTING", action: "whatsapp" },
   { text: "PAN-INDIA DELIVERY · PERSONAL HELP FROM A BRASS SPECIALIST", action: "whatsapp" }
 ];
+const DEFAULT_SITE_METADATA = {
+  title: "Decorbeats | Brass Décor, Diyas & Gifts from Moradabad",
+  description:
+    "Shop handcrafted brass décor, diyas, urlis, serveware and gifts curated by Decorbeats, brass specialists rooted in Moradabad. Retail, festive and business gifting across India.",
+  path: "/"
+};
 const emptyForm = {
   id: "",
   name: "",
@@ -277,7 +289,7 @@ function getInitialPublicScreen() {
     return "customer";
   }
 
-  return window.location.pathname === "/admin" ? "admin-auth" : "customer";
+  return parseLegacyPath(window.location.pathname).screen;
 }
 
 function humanizeSlug(slug) {
@@ -310,7 +322,49 @@ function parseLegacyPath(pathname) {
     return { screen: "customer", type: "product", slug: productMatch[1] };
   }
 
+  const publicPage = getPublicPageByPath(path);
+  if (publicPage) {
+    return { screen: "policy", type: "policy", slug: publicPage.slug };
+  }
+
   return { screen: "customer", type: "home", slug: "" };
+}
+
+function updateMetaContent(selector, content) {
+  const element = document.head.querySelector(selector);
+  if (element) {
+    element.setAttribute("content", content);
+  }
+}
+
+function updatePublicDocumentMetadata(page) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const metadata = page
+    ? {
+        title: `${page.title} | Decorbeats`,
+        description: page.description,
+        path: page.path
+      }
+    : DEFAULT_SITE_METADATA;
+  const canonicalUrl = `${PRIMARY_SITE_ORIGIN}${metadata.path}`;
+  let canonical = document.head.querySelector('link[rel="canonical"]');
+  if (!canonical) {
+    canonical = document.createElement("link");
+    canonical.setAttribute("rel", "canonical");
+    document.head.appendChild(canonical);
+  }
+
+  document.title = metadata.title;
+  canonical.setAttribute("href", canonicalUrl);
+  updateMetaContent('meta[name="description"]', metadata.description);
+  updateMetaContent('meta[property="og:title"]', metadata.title);
+  updateMetaContent('meta[property="og:description"]', metadata.description);
+  updateMetaContent('meta[property="og:url"]', canonicalUrl);
+  updateMetaContent('meta[name="twitter:title"]', metadata.title);
+  updateMetaContent('meta[name="twitter:description"]', metadata.description);
 }
 
 const emptyInquiryDraft = {
@@ -5812,7 +5866,21 @@ function CustomerCartDrawer({
                         : "Confirming payment…"
                     : `Pay ${formatCurrency(total)} securely`}
                 </button>
-                <small className="customer-payment-provider-note">Payment details are handled securely by our payment partner.</small>
+                <small className="customer-payment-provider-note">
+                  Payment details are handled securely by our payment partner. By paying, you agree to our terms and
+                  acknowledge our return and privacy policies.
+                </small>
+                <nav className="customer-checkout-policy-links" aria-label="Checkout policies">
+                  <a href="/terms-and-conditions" target="_blank" rel="noopener noreferrer">
+                    Terms
+                  </a>
+                  <a href="/refund-cancellation-policy" target="_blank" rel="noopener noreferrer">
+                    Refunds & cancellations
+                  </a>
+                  <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">
+                    Privacy
+                  </a>
+                </nav>
               </div>
               </form>
             ) : null}
@@ -5832,7 +5900,119 @@ function CustomerCartDrawer({
   );
 }
 
-function CustomerFooter({ onAdmin, showAdminLink = true }) {
+function PublicPageSection({ section, pageSlug }) {
+  return (
+    <section className="customer-policy-section" aria-labelledby={`${pageSlug}-${slugify(section.heading)}`}>
+      <h2 id={`${pageSlug}-${slugify(section.heading)}`}>{section.heading}</h2>
+      {(section.paragraphs || []).map((paragraph, index) => (
+        <p key={`${section.heading}-paragraph-${index}`}>{paragraph}</p>
+      ))}
+      {section.list?.length ? (
+        <ul>
+          {section.list.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
+      {(section.paragraphsAfter || []).map((paragraph, index) => (
+        <p key={`${section.heading}-after-${index}`}>{paragraph}</p>
+      ))}
+      {section.links?.length ? (
+        <div className="customer-policy-section-links">
+          {section.links.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              target={link.external ? "_blank" : undefined}
+              rel={link.external ? "noopener noreferrer" : undefined}
+            >
+              {link.label} <span aria-hidden="true">→</span>
+            </a>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function CustomerPolicyPage({ page }) {
+  return (
+    <div className="customer-page customer-shell customer-policy-page">
+      <a className="customer-skip-link" href="#policy-content">
+        Skip to policy content
+      </a>
+      <header className="customer-policy-header">
+        <a className="customer-policy-brand" href="/" aria-label="Decorbeats home">
+          <img src={brandLogo} alt="" width="74" height="54" />
+          <span>
+            <strong>DECORBEATS</strong>
+            <small>THE BRASS HOUSE OF INDIA</small>
+          </span>
+        </a>
+        <nav aria-label="Policy page shortcuts">
+          <a href="/">Shop brass</a>
+          <a href="/contact" aria-current={page.path === "/contact" ? "page" : undefined}>
+            Contact
+          </a>
+        </nav>
+      </header>
+      <main id="policy-content" className="customer-policy-main" tabIndex="-1">
+        <nav className="customer-policy-breadcrumb" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">{page.title}</span>
+        </nav>
+        <article className="customer-policy-article">
+          <header className="customer-policy-title">
+            <p className="eyebrow">{page.eyebrow}</p>
+            <h1>{page.title}</h1>
+            <p>{page.intro}</p>
+            <p className="customer-policy-updated">
+              Last updated: <time dateTime={page.updatedDate}>{page.updatedLabel}</time>
+            </p>
+          </header>
+          {page.contactDetails?.length ? (
+            <div className="customer-policy-contact-grid">
+              {page.contactDetails.map((detail) => (
+                <section key={detail.label}>
+                  <h2>{detail.label}</h2>
+                  <address>
+                    {detail.lines.map((line) => (
+                      <span key={line}>{line}</span>
+                    ))}
+                    {detail.email ? <a href={`mailto:${detail.email}`}>{detail.email}</a> : null}
+                    {detail.phone ? <a href="tel:+919811133661">{detail.phone}</a> : null}
+                  </address>
+                </section>
+              ))}
+            </div>
+          ) : null}
+          <div className="customer-policy-sections">
+            {page.sections.map((section) => (
+              <PublicPageSection key={section.heading} section={section} pageSlug={page.slug} />
+            ))}
+          </div>
+          {page.slug !== "contact" ? (
+            <aside className="customer-policy-help" aria-label="Policy support">
+              <div>
+                <p className="eyebrow">Need a clear answer?</p>
+                <h2>Talk to our customer care team.</h2>
+                <p>Keep your order number ready so we can help quickly.</p>
+              </div>
+              <div>
+                <a href="mailto:meghagoel@decorbeats.com">Email customer care</a>
+                <a href="tel:+919811133661">Call +91 98111 33661</a>
+              </div>
+            </aside>
+          ) : null}
+        </article>
+      </main>
+      <CustomerFooter showAdminLink={false} activePolicyPath={page.path} />
+    </div>
+  );
+}
+
+function CustomerFooter({ onAdmin, showAdminLink = true, activePolicyPath = "" }) {
   return (
     <footer className="customer-footer">
       <div className="customer-footer-contact">
@@ -5890,6 +6070,14 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
           ) : null}
         </div>
       </div>
+      <div className="customer-footer-divider" aria-hidden="true" />
+      <nav className="customer-footer-policies" aria-label="Customer care and policies">
+        {PUBLIC_PAGE_LIST.map((page) => (
+          <a key={page.path} href={page.path} aria-current={activePolicyPath === page.path ? "page" : undefined}>
+            {page.navLabel}
+          </a>
+        ))}
+      </nav>
       <div className="customer-footer-divider" aria-hidden="true" />
       <div className="customer-footer-bottom">
         <span>© {new Date().getFullYear()} Decorbeats.</span>
@@ -7730,7 +7918,7 @@ export default function App() {
   }, [adminActive, session?.user?.id]);
 
   useEffect(() => {
-    if (adminActive && routeIntent.type !== "catalogue") {
+    if (adminActive && routeIntent.type !== "catalogue" && routeIntent.type !== "policy") {
       setPublicScreen("customer");
       setActiveTab("products");
     }
@@ -7751,6 +7939,11 @@ export default function App() {
     window.addEventListener("popstate", syncPublicScreenFromPath);
     return () => window.removeEventListener("popstate", syncPublicScreenFromPath);
   }, []);
+
+  useEffect(() => {
+    const publicPage = routeIntent.type === "policy" ? getPublicPageBySlug(routeIntent.slug) : null;
+    updatePublicDocumentMetadata(publicPage);
+  }, [routeIntent.slug, routeIntent.type]);
 
   useEffect(() => {
     setUploadError("");
@@ -9697,7 +9890,7 @@ export default function App() {
     }
     const productUrl =
       typeof window === "undefined"
-        ? `https://decorbeats.in/product/${product.slug}`
+        ? `${PRIMARY_SITE_ORIGIN}/product/${product.slug}`
         : `${window.location.origin}/product/${product.slug}`;
     const message = [
       product.name,
@@ -10693,7 +10886,10 @@ export default function App() {
     );
   }
 
-  const rootElement = publicScreen === "catalogue" ? (
+  const activePublicPage = routeIntent.type === "policy" ? getPublicPageBySlug(routeIntent.slug) : null;
+  const rootElement = publicScreen === "policy" && activePublicPage ? (
+    <CustomerPolicyPage page={activePublicPage} />
+  ) : publicScreen === "catalogue" ? (
     <ShareCataloguePage
       catalogue={publicCatalogue}
       products={products}

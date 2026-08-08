@@ -13026,3 +13026,551 @@ body .app-shell.app-shell-admin {
     animation-duration: 1.8s;
   }
 }
+
+/* Public customer-care pages and checkout policy disclosure. */
+.customer-shell .customer-checkout-policy-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 14px;
+}
+
+.customer-shell .customer-checkout-policy-links a {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--house-oxblood, #8b2d2a);
+  font-size: 0.68rem;
+  font-weight: 780;
+  text-underline-offset: 3px;
+}
+
+.customer-policy-page {
+  min-height: 100dvh;
+  background: #f7f1e9;
+  color: var(--house-ink, #2a1c16);
+}
+
+.customer-policy-page .customer-skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 200;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  border-radius: 2px;
+  background: #fffaf4;
+  color: #2a1c16;
+  padding: 0 16px;
+  box-shadow: 0 10px 30px rgba(42, 28, 22, 0.2);
+  font-size: 0.8rem;
+  font-weight: 800;
+  transform: translateY(-150%);
+  transition: transform 160ms ease;
+}
+
+.customer-policy-page .customer-skip-link:focus {
+  transform: translateY(0);
+}
+
+.customer-policy-page .customer-policy-header {
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 12px max(24px, calc((100vw - 1380px) / 2));
+  border-bottom: 1px solid rgba(78, 45, 30, 0.12);
+  background: rgba(255, 253, 249, 0.96);
+}
+
+.customer-policy-page .customer-policy-brand {
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.customer-policy-page .customer-policy-brand img {
+  width: 62px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.customer-policy-page .customer-policy-brand span {
+  display: grid;
+  gap: 2px;
+}
+
+.customer-policy-page .customer-policy-brand strong {
+  font-family: var(--display-font, Georgia, serif);
+  font-size: 1.18rem;
+  letter-spacing: 0.1em;
+}
+
+.customer-policy-page .customer-policy-brand small {
+  color: #93652f;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+}
+
+.customer-policy-page .customer-policy-header > nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.customer-policy-page .customer-policy-header > nav a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  color: #3b2921;
+  padding: 0 15px;
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.customer-policy-page .customer-policy-header > nav a:last-child {
+  border-color: rgba(78, 45, 30, 0.18);
+}
+
+.customer-policy-page .customer-policy-header > nav a[aria-current="page"] {
+  border-color: #8b2d2a;
+  color: #8b2d2a;
+}
+
+.customer-policy-page .customer-policy-main {
+  min-height: 70vh;
+  padding: 30px max(24px, calc((100vw - 1380px) / 2)) 110px;
+  outline: none;
+}
+
+.customer-policy-page .customer-policy-breadcrumb {
+  max-width: 1080px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 auto 58px;
+  color: #806f63;
+  font-size: 0.72rem;
+}
+
+.customer-policy-page .customer-policy-breadcrumb a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: #6c5141;
+  text-underline-offset: 4px;
+}
+
+.customer-policy-page .customer-policy-article {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.customer-policy-page .customer-policy-title {
+  max-width: 830px;
+  margin-bottom: 72px;
+}
+
+.customer-policy-page .customer-policy-title .eyebrow,
+.customer-policy-page .customer-policy-help .eyebrow {
+  margin: 0 0 16px;
+  color: #986334;
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.customer-policy-page .customer-policy-title h1 {
+  margin: 0;
+  color: #261813;
+  font-family: var(--display-font, "Cormorant Garamond", Georgia, serif);
+  font-size: clamp(3.2rem, 7.2vw, 6.3rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 0.92;
+}
+
+.customer-policy-page .customer-policy-title > p:not(.eyebrow, .customer-policy-updated) {
+  max-width: 760px;
+  margin: 30px 0 0;
+  color: #66584f;
+  font-size: 1.08rem;
+  line-height: 1.75;
+}
+
+.customer-policy-page .customer-policy-updated {
+  margin: 24px 0 0;
+  color: #8b7d73;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.customer-policy-page .customer-policy-contact-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: -20px 0 66px;
+  font-style: normal;
+}
+
+.customer-policy-page .customer-policy-contact-grid section {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 28px;
+  border: 1px solid rgba(78, 45, 30, 0.13);
+  background: #fffaf4;
+}
+
+.customer-policy-page .customer-policy-contact-grid address {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-style: normal;
+}
+
+.customer-policy-page .customer-policy-contact-grid h2 {
+  margin: 0 0 18px;
+  color: #8b2d2a;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.customer-policy-page .customer-policy-contact-grid span,
+.customer-policy-page .customer-policy-contact-grid a {
+  max-width: 100%;
+  color: #5c4a40;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.customer-policy-page .customer-policy-contact-grid a {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  color: #8b2d2a;
+  font-weight: 720;
+  text-underline-offset: 4px;
+}
+
+.customer-policy-page .customer-policy-sections {
+  border-top: 1px solid rgba(78, 45, 30, 0.16);
+}
+
+.customer-policy-page .customer-policy-section {
+  display: grid;
+  grid-template-columns: minmax(200px, 0.72fr) minmax(0, 1.6fr);
+  column-gap: clamp(38px, 7vw, 110px);
+  padding: 48px 0 54px;
+  border-bottom: 1px solid rgba(78, 45, 30, 0.16);
+}
+
+.customer-policy-page .customer-policy-section h2 {
+  grid-column: 1;
+  grid-row: 1 / span 12;
+  margin: 0;
+  color: #3a261e;
+  font-family: var(--display-font, "Cormorant Garamond", Georgia, serif);
+  font-size: clamp(1.55rem, 2.5vw, 2.2rem);
+  font-weight: 550;
+  line-height: 1.08;
+}
+
+.customer-policy-page .customer-policy-section p,
+.customer-policy-page .customer-policy-section ul,
+.customer-policy-page .customer-policy-section-links {
+  grid-column: 2;
+}
+
+.customer-policy-page .customer-policy-section p,
+.customer-policy-page .customer-policy-section li {
+  color: #5d5048;
+  font-size: 1rem;
+  line-height: 1.78;
+}
+
+.customer-policy-page .customer-policy-section p {
+  margin: 0 0 16px;
+}
+
+.customer-policy-page .customer-policy-section ul {
+  display: grid;
+  gap: 12px;
+  margin: 2px 0 18px;
+  padding-left: 21px;
+}
+
+.customer-policy-page .customer-policy-section li {
+  padding-left: 5px;
+}
+
+.customer-policy-page .customer-policy-section li::marker {
+  color: #a6783e;
+}
+
+.customer-policy-page .customer-policy-section-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 2px;
+}
+
+.customer-policy-page .customer-policy-section-links a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #8b2d2a;
+  font-size: 0.84rem;
+  font-weight: 780;
+  text-underline-offset: 4px;
+}
+
+.customer-policy-page .customer-policy-help {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 48px;
+  margin-top: 72px;
+  padding: 42px;
+  background: #2a1b16;
+  color: #fff8ef;
+}
+
+.customer-policy-page .customer-policy-help h2 {
+  margin: 0;
+  color: inherit;
+  font-family: var(--display-font, "Cormorant Garamond", Georgia, serif);
+  font-size: clamp(2rem, 4vw, 3.3rem);
+  font-weight: 500;
+  line-height: 1;
+}
+
+.customer-policy-page .customer-policy-help p:not(.eyebrow) {
+  margin: 15px 0 0;
+  color: rgba(255, 248, 239, 0.68);
+  line-height: 1.6;
+}
+
+.customer-policy-page .customer-policy-help > div:last-child {
+  display: grid;
+  gap: 8px;
+}
+
+.customer-policy-page .customer-policy-help a {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 248, 239, 0.35);
+  color: #fff8ef;
+  padding: 0 18px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.customer-shell .customer-footer-policies {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 24px;
+  padding: 19px 0;
+}
+
+.customer-shell .customer-footer-policies a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: rgba(255, 248, 239, 0.72);
+  font-size: 0.7rem;
+  font-weight: 720;
+  text-decoration-color: transparent;
+  text-underline-offset: 5px;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+
+.customer-shell .customer-footer-policies a:hover,
+.customer-shell .customer-footer-policies a[aria-current="page"] {
+  color: #fff8ef;
+  text-decoration-color: #c79a5d;
+}
+
+.customer-policy-page a:focus-visible,
+.customer-shell .customer-checkout-policy-links a:focus-visible,
+.customer-shell .customer-footer-policies a:focus-visible {
+  outline: 3px solid #d9a35f;
+  outline-offset: 3px;
+}
+
+@media (max-width: 767px) {
+  body:has(.customer-policy-page) {
+    padding-bottom: 0 !important;
+  }
+
+  .customer-shell .customer-checkout-policy-links a {
+    min-height: 42px;
+    font-size: 0.65rem;
+  }
+
+  .customer-policy-page .customer-policy-header {
+    min-height: 74px;
+    gap: 10px;
+    padding: 9px 16px;
+  }
+
+  .customer-policy-page .customer-policy-brand {
+    gap: 8px;
+  }
+
+  .customer-policy-page .customer-policy-brand img {
+    width: 46px;
+    height: 42px;
+  }
+
+  .customer-policy-page .customer-policy-brand strong {
+    font-size: 0.9rem;
+    letter-spacing: 0.07em;
+  }
+
+  .customer-policy-page .customer-policy-brand small {
+    display: none;
+  }
+
+  .customer-policy-page .customer-policy-header > nav {
+    gap: 0;
+  }
+
+  .customer-policy-page .customer-policy-header > nav a {
+    min-height: 44px;
+    padding: 0 9px;
+    font-size: 0.63rem;
+    letter-spacing: 0.035em;
+  }
+
+  .customer-policy-page .customer-policy-header > nav a:first-child {
+    display: none;
+  }
+
+  .customer-policy-page .customer-policy-main {
+    padding: 16px 18px 72px;
+  }
+
+  .customer-policy-page .customer-policy-breadcrumb {
+    margin: 0 0 35px;
+    font-size: 0.68rem;
+  }
+
+  .customer-policy-page .customer-policy-title {
+    margin-bottom: 50px;
+  }
+
+  .customer-policy-page .customer-policy-title h1 {
+    font-size: clamp(2.85rem, 15vw, 4.3rem);
+    line-height: 0.94;
+  }
+
+  .customer-policy-page .customer-policy-title > p:not(.eyebrow, .customer-policy-updated) {
+    margin-top: 24px;
+    font-size: 1rem;
+    line-height: 1.68;
+  }
+
+  .customer-policy-page .customer-policy-contact-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 52px;
+  }
+
+  .customer-policy-page .customer-policy-contact-grid section {
+    padding: 23px;
+  }
+
+  .customer-policy-page .customer-policy-contact-grid a {
+    min-height: 44px;
+  }
+
+  .customer-policy-page .customer-policy-section {
+    grid-template-columns: 1fr;
+    padding: 36px 0 40px;
+  }
+
+  .customer-policy-page .customer-policy-section h2,
+  .customer-policy-page .customer-policy-section p,
+  .customer-policy-page .customer-policy-section ul,
+  .customer-policy-page .customer-policy-section-links {
+    grid-column: 1;
+  }
+
+  .customer-policy-page .customer-policy-section h2 {
+    grid-row: auto;
+    margin-bottom: 22px;
+    font-size: 1.75rem;
+  }
+
+  .customer-policy-page .customer-policy-section p,
+  .customer-policy-page .customer-policy-section li {
+    font-size: 1rem;
+    line-height: 1.72;
+  }
+
+  .customer-policy-page .customer-policy-section-links {
+    display: grid;
+  }
+
+  .customer-policy-page .customer-policy-help {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    margin: 52px -4px 0;
+    padding: 30px 24px;
+  }
+
+  .customer-policy-page .customer-policy-help a {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .customer-shell .customer-footer-policies {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 12px;
+    padding: 15px 0;
+  }
+
+  .customer-shell .customer-footer-policies a {
+    min-width: 0;
+    min-height: 46px;
+    font-size: 0.68rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .customer-policy-page .customer-skip-link,
+  .customer-shell .customer-footer-policies a {
+    transition: none;
+  }
+}
