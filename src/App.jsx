@@ -380,6 +380,7 @@ const emptyInquiryDraft = {
 };
 
 const inquiryStatusOrder = ["new", "contacted", "quoted", "follow_up", "converted", "lost"];
+const quickSheetOrderStatuses = ["confirmed", "procurement", "packing", "shipped", "delivered"];
 const SALE_NOTES_META_PREFIX = "[[DECORBEATS_ORDER_V1]]";
 const catalogueLeadTimeOptions = [
   "Ready to ship",
@@ -665,6 +666,7 @@ function toInquiry(raw) {
   return {
     id: raw.id,
     createdAt: raw.created_at,
+    entryDate: safeText(raw.entry_date) || raw.created_at,
     customerName: safeText(raw.customer_name, "Unnamed inquiry"),
     customerPhone: safeText(raw.customer_phone),
     source: safeText(raw.source, "phone"),
@@ -1178,12 +1180,95 @@ function formatPurchaseStatus(status) {
 }
 
 function createEmptyInquiryDraft() {
-  return JSON.parse(JSON.stringify(emptyInquiryDraft));
+  return {
+    ...JSON.parse(JSON.stringify(emptyInquiryDraft)),
+    client_inquiry_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `inquiry-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    entry_date: new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
+  };
+}
+
+function createEmptyQuickSheetItem() {
+  return {
+    client_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `quick-item-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    product_name: "",
+    quantity: 1,
+    unit_price: "",
+    unit_cost: ""
+  };
+}
+
+function createEmptyQuickSheetDraft(recordType = "inquiry") {
+  return {
+    client_record_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `quick-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    record_type: recordType,
+    entry_date: new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10),
+    customer_name: "",
+    courier_cost: "",
+    amount_received: "",
+    status: recordType === "order" ? "confirmed" : "new",
+    items: [createEmptyQuickSheetItem()]
+  };
+}
+
+function getSaleDraftConfirmation(draft) {
+  const orderItems = draft.items.filter((item) => safeText(item.product_name));
+  if (!safeText(draft.customer_name) && !safeText(draft.customer_phone)) {
+    return { error: "Add the customer name or mobile number." };
+  }
+  if (!safeText(draft.order_date)) {
+    return { error: "Choose the order date." };
+  }
+  if (!orderItems.length) {
+    return { error: "Add at least one item before saving." };
+  }
+  const invalidItem = orderItems.find(
+    (item) =>
+      !Number.isInteger(Number(item.quantity_sold)) ||
+      Number(item.quantity_sold) <= 0 ||
+      item.selling_price === "" ||
+      !Number.isFinite(Number(item.selling_price)) ||
+      Number(item.selling_price) < 0
+  );
+  if (invalidItem) {
+    return { error: `Add a valid quantity and unit price for ${invalidItem.product_name || "each item"}.` };
+  }
+  const invalidOptionalNumber = [draft.amount_received, draft.delivery_charge, draft.courier_cost].some(
+    (value) => value !== "" && (!Number.isFinite(Number(value)) || Number(value) < 0)
+  );
+  if (invalidOptionalNumber) {
+    return { error: "Payment and delivery amounts cannot be negative." };
+  }
+
+  return {
+    error: "",
+    orderItems,
+    total: orderItems.reduce(
+      (sum, item) => sum + Number(item.quantity_sold || 0) * Number(item.selling_price || 0),
+      0
+    )
+  };
 }
 
 function normalizeInquiryDraft(payload, products = []) {
   const normalizedProducts = Array.isArray(payload?.products) && payload.products.length ? payload.products : emptyInquiryDraft.products;
   return {
+    client_inquiry_id:
+      safeText(payload?.client_inquiry_id) ||
+      (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `inquiry-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`),
+    entry_date:
+      safeText(payload?.entry_date) ||
+      new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10),
     customer_name: safeText(payload?.customer_name),
     customer_phone: safeText(payload?.customer_phone),
     source: ["phone", "whatsapp", "walkin", "instagram", "google", "website", "referral"].includes(
@@ -2958,6 +3043,415 @@ function InquiryStatusFilters({ activeStatus, onChange }) {
   );
 }
 
+function formatQuickSheetValue(value) {
+  return value === null || value === undefined || value === "" ? "—" : formatCurrency(Number(value));
+}
+
+function buildQuickSheetHistoryRows(inquiries, sales) {
+  const rows = [];
+
+  inquiries.forEach((inquiry) => {
+    const items = inquiry.items.length
+      ? inquiry.items
+      : [{ id: "requirement", productName: inquiry.notes || "Requirement not itemised", quantityRequested: 0, quotedPrice: null }];
+    items.forEach((item, index) => {
+      const quantity = Number(item.quantityRequested || 0);
+      const unitPrice = item.quotedPrice == null ? null : Number(item.quotedPrice);
+      rows.push({
+        id: `inquiry-${inquiry.id}-${item.id || index}`,
+        sortDate: inquiry.entryDate || inquiry.createdAt,
+        date: inquiry.entryDate || inquiry.createdAt,
+        recordType: "inquiry",
+        customerName: inquiry.customerName,
+        productName: item.productName || item.productSku || "Requirement",
+        quantity,
+        unitPrice,
+        lineTotal: unitPrice == null ? null : quantity * unitPrice,
+        unitCost: null,
+        courierCost: null,
+        amountReceived: null,
+        status: inquiry.status
+      });
+    });
+  });
+
+  sales.forEach((sale) => {
+    const items = sale.items.length
+      ? sale.items
+      : [{ id: "order", productName: "Order not itemised", quantitySold: 0, sellingPrice: null, costPrice: null }];
+    items.forEach((item, index) => {
+      const quantity = Number(item.quantitySold || 0);
+      const unitPrice = item.sellingPrice == null ? null : Number(item.sellingPrice);
+      rows.push({
+        id: `order-${sale.id}-${item.id || index}`,
+        sortDate: sale.orderDate || sale.createdAt,
+        date: sale.orderDate || sale.createdAt,
+        recordType: "order",
+        customerName: sale.customerName,
+        productName: item.productName || item.productSku || "Order item",
+        quantity,
+        unitPrice,
+        lineTotal: unitPrice == null ? null : quantity * unitPrice,
+        unitCost: item.costPrice,
+        courierCost: index === 0 ? sale.courierCost : null,
+        amountReceived: index === 0 ? sale.amountReceived : null,
+        status: sale.fulfilmentStatus
+      });
+    });
+  });
+
+  return rows.sort((left, right) => new Date(right.sortDate) - new Date(left.sortDate));
+}
+
+function QuickSheetEntryForm({ products, busy, onSave }) {
+  const [draft, setDraft] = useState(createEmptyQuickSheetDraft);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const customerInputRef = useRef(null);
+  const isOrder = draft.record_type === "order";
+  const entryTotal = draft.items.reduce(
+    (sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0),
+    0
+  );
+  const statusOptions = isOrder ? quickSheetOrderStatuses : inquiryStatusOrder;
+
+  function updateDraft(field, value) {
+    setDraft((current) => ({ ...current, [field]: value }));
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+  function handleRecordTypeChange(nextType) {
+    setDraft((current) => ({
+      ...current,
+      record_type: nextType,
+      status: nextType === "order" ? "confirmed" : "new",
+      courier_cost: nextType === "order" ? current.courier_cost : "",
+      amount_received: nextType === "order" ? current.amount_received : "",
+      items: current.items.map((item) => ({ ...item, unit_cost: nextType === "order" ? item.unit_cost : "" }))
+    }));
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+  function updateItem(index, field, value) {
+    setDraft((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item))
+    }));
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+  function addItem() {
+    setDraft((current) => ({ ...current, items: [...current.items, createEmptyQuickSheetItem()] }));
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+  function removeItem(index) {
+    setDraft((current) => ({
+      ...current,
+      items: current.items.length > 1 ? current.items.filter((_, itemIndex) => itemIndex !== index) : current.items
+    }));
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const enteredItems = draft.items.filter((item) => safeText(item.product_name));
+    const optionalAmounts = [
+      draft.courier_cost,
+      draft.amount_received,
+      ...enteredItems.map((item) => item.unit_cost)
+    ];
+
+    if (!safeText(draft.customer_name)) {
+      setErrorMessage("Add the client name.");
+      customerInputRef.current?.focus();
+      return;
+    }
+    if (!safeText(draft.entry_date)) {
+      setErrorMessage("Choose the business date.");
+      return;
+    }
+    if (!enteredItems.length) {
+      setErrorMessage("Add at least one product or custom requirement.");
+      return;
+    }
+    const invalidQuantity = enteredItems.find(
+      (item) => !Number.isInteger(Number(item.quantity)) || Number(item.quantity) <= 0
+    );
+    if (invalidQuantity) {
+      setErrorMessage(`Add a whole-number quantity for ${invalidQuantity.product_name}.`);
+      return;
+    }
+    const invalidPrice = enteredItems.find(
+      (item) => item.unit_price !== "" && (!Number.isFinite(Number(item.unit_price)) || Number(item.unit_price) < 0)
+    );
+    if (invalidPrice) {
+      setErrorMessage(`Unit price cannot be negative for ${invalidPrice.product_name}.`);
+      return;
+    }
+    const missingOrderPrice = isOrder && enteredItems.find((item) => item.unit_price === "");
+    if (missingOrderPrice) {
+      setErrorMessage(`Add the unit price for ${missingOrderPrice.product_name} before saving the order.`);
+      return;
+    }
+    if (optionalAmounts.some((value) => value !== "" && (!Number.isFinite(Number(value)) || Number(value) < 0))) {
+      setErrorMessage("Cost, courier and received amounts cannot be negative.");
+      return;
+    }
+
+    try {
+      await onSave({
+        ...draft,
+        items: enteredItems.map((item) => ({
+          ...item,
+          quantity: Number(item.quantity),
+          unit_price: item.unit_price === "" ? null : Number(item.unit_price)
+        }))
+      });
+      const savedType = draft.record_type;
+      setDraft(createEmptyQuickSheetDraft(savedType));
+      setErrorMessage("");
+      setSuccessMessage(savedType === "order" ? "Order saved in Orders · stock unchanged." : "Inquiry saved in Follow-ups.");
+      window.requestAnimationFrame(() => customerInputRef.current?.focus());
+    } catch (error) {
+      setErrorMessage(error?.message || `Could not save this ${draft.record_type}.`);
+    }
+  }
+
+  return (
+    <form className="quick-sheet-entry" onSubmit={handleSubmit} noValidate>
+      <fieldset className="quick-sheet-fieldset" disabled={busy}>
+      <div className="quick-sheet-entry-heading">
+        <div>
+          <p className="eyebrow">New row</p>
+          <h3>Record it while the customer is on the phone</h3>
+        </div>
+        <p>Choose Inquiry for a lead. Choose Order only when the sale is confirmed.</p>
+      </div>
+      <div className="quick-sheet-entry-grid">
+        <label>
+          Record type
+          <select value={draft.record_type} onChange={(event) => handleRecordTypeChange(event.target.value)}>
+            <option value="inquiry">Inquiry</option>
+            <option value="order">Order</option>
+          </select>
+        </label>
+        <label>
+          Date
+          <input type="date" required value={draft.entry_date} onChange={(event) => updateDraft("entry_date", event.target.value)} />
+        </label>
+        <label className="quick-sheet-client-field">
+          Client name
+          <input
+            ref={customerInputRef}
+            autoComplete="name"
+            value={draft.customer_name}
+            onChange={(event) => updateDraft("customer_name", event.target.value)}
+            placeholder="Name or business"
+          />
+        </label>
+        <label>
+          Courier cost
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            disabled={!isOrder}
+            value={draft.courier_cost}
+            onChange={(event) => updateDraft("courier_cost", event.target.value)}
+            placeholder={isOrder ? "Optional" : "Orders only"}
+          />
+        </label>
+        <label>
+          Amount received
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            disabled={!isOrder}
+            value={draft.amount_received}
+            onChange={(event) => updateDraft("amount_received", event.target.value)}
+            placeholder={isOrder ? "Optional" : "Orders only"}
+          />
+        </label>
+        <label>
+          Status
+          <select value={draft.status} onChange={(event) => updateDraft("status", event.target.value)}>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>{formatInquiryStatus(status)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <section className="quick-sheet-items" aria-labelledby="quick-sheet-items-heading">
+        <div className="quick-sheet-items-heading">
+          <div>
+            <span className="eyebrow">Items</span>
+            <strong id="quick-sheet-items-heading">One customer can have several products</strong>
+          </div>
+          <button type="button" className="ghost-button" onClick={addItem}>+ Another item</button>
+        </div>
+        <datalist id="quick-sheet-product-options">
+          {products.map((product) => (
+            <option key={product.id} value={product.name}>{product.sku}</option>
+          ))}
+        </datalist>
+        <div className="quick-sheet-item-list">
+          {draft.items.map((item, index) => {
+            const lineTotal = Number(item.quantity || 0) * Number(item.unit_price || 0);
+            return (
+              <div className="quick-sheet-item-row" key={item.client_id}>
+                <label className="quick-sheet-product-field">
+                  Product / requirement
+                  <input
+                    list="quick-sheet-product-options"
+                    value={item.product_name}
+                    onChange={(event) => updateItem(index, "product_name", event.target.value)}
+                    placeholder="Listed or custom product"
+                  />
+                </label>
+                <label>
+                  Qty
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    step="1"
+                    value={item.quantity}
+                    onChange={(event) => updateItem(index, "quantity", event.target.value)}
+                  />
+                </label>
+                <label>
+                  Unit price
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    value={item.unit_price}
+                    onChange={(event) => updateItem(index, "unit_price", event.target.value)}
+                    placeholder={isOrder ? "Required" : "Optional"}
+                  />
+                </label>
+                <div className="quick-sheet-line-total" aria-live="polite">
+                  <span>Line total</span>
+                  <strong>{item.unit_price === "" ? "—" : formatCurrency(lineTotal)}</strong>
+                </div>
+                <label>
+                  Unit cost
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    disabled={!isOrder}
+                    value={item.unit_cost}
+                    onChange={(event) => updateItem(index, "unit_cost", event.target.value)}
+                    placeholder={isOrder ? "Optional" : "Orders only"}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="quick-sheet-remove-item"
+                  disabled={draft.items.length === 1}
+                  aria-label={`Remove item ${index + 1}`}
+                  onClick={() => removeItem(index)}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <div className="quick-sheet-entry-actions">
+        <div className="quick-sheet-entry-feedback" aria-live="polite">
+          {errorMessage ? <span className="quick-sheet-error" role="alert">{errorMessage}</span> : null}
+          {!errorMessage && successMessage ? <span className="quick-sheet-success">{successMessage}</span> : null}
+          {!errorMessage && !successMessage ? <span>Custom products are welcome. Quick orders never change inventory.</span> : null}
+        </div>
+        <div className="quick-sheet-save-group">
+          <span>{draft.items.some((item) => item.unit_price !== "") ? formatCurrency(entryTotal) : "Total —"}</span>
+          <button type="submit" className="primary-button" disabled={busy}>
+            {busy ? "Saving…" : isOrder ? "Save order" : "Save inquiry"}
+          </button>
+        </div>
+      </div>
+      </fieldset>
+    </form>
+  );
+}
+
+function QuickSheetHistory({ inquiries, sales }) {
+  const rows = useMemo(() => buildQuickSheetHistoryRows(inquiries, sales), [inquiries, sales]);
+  const columns = ["Date", "Type", "Client", "Product", "Qty", "Unit price", "Total", "Unit cost", "Courier cost", "Amount received", "Status"];
+
+  return (
+    <section className="quick-sheet-history-panel" aria-labelledby="quick-sheet-history-title">
+      <div className="quick-sheet-history-heading">
+        <div>
+          <p className="eyebrow">One familiar list</p>
+          <h3 id="quick-sheet-history-title">Inquiries and orders</h3>
+        </div>
+        <span>{rows.length} line {rows.length === 1 ? "item" : "items"}</span>
+      </div>
+      {rows.length ? (
+        <div className="quick-sheet-table" role="table" aria-label="Inquiry and order history">
+          <div className="quick-sheet-header-row" role="row">
+            {columns.map((column) => <span key={column} role="columnheader">{column}</span>)}
+          </div>
+          <div className="quick-sheet-body" role="rowgroup">
+            {rows.map((row) => {
+              const values = [
+                formatPurchaseDate(row.date),
+                row.recordType === "order" ? "Order" : "Inquiry",
+                row.customerName,
+                row.productName,
+                row.quantity || "—",
+                formatQuickSheetValue(row.unitPrice),
+                formatQuickSheetValue(row.lineTotal),
+                formatQuickSheetValue(row.unitCost),
+                formatQuickSheetValue(row.courierCost),
+                formatQuickSheetValue(row.amountReceived),
+                formatInquiryStatus(row.status)
+              ];
+              return (
+                <div className="quick-sheet-history-row" role="row" key={row.id}>
+                  {values.map((value, index) => (
+                    <span
+                      className={index === 1 ? `quick-sheet-record-type ${row.recordType}` : index === 10 ? "quick-sheet-row-status" : ""}
+                      role="cell"
+                      key={`${row.id}-${columns[index]}`}
+                    >
+                      <small className="quick-sheet-cell-label" aria-hidden="true">{columns[index]}</small>
+                      {value}
+                    </span>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="quick-sheet-empty">
+          <strong>No rows yet.</strong>
+          <span>Save the first inquiry above—orders will appear here too.</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function QuickSheetWorkspace({ inquiries, sales, products, busy, onSave }) {
+  return (
+    <div className="quick-sheet-workspace">
+      <QuickSheetEntryForm products={products} busy={busy} onSave={onSave} />
+      <QuickSheetHistory inquiries={inquiries} sales={sales} />
+    </div>
+  );
+}
+
 function InquiryCard({ inquiry, expanded, onToggle, onStatusUpdate, busy }) {
   const requestedUnits = inquiry.items.reduce((sum, item) => sum + Number(item.quantityRequested || 0), 0);
   const productsMentioned = inquiry.items.map((item) => item.productName || item.productSku).filter(Boolean).join(", ");
@@ -3041,42 +3535,85 @@ function InquiryCard({ inquiry, expanded, onToggle, onStatusUpdate, busy }) {
 
 function InquiriesScreen({
   inquiries,
+  allInquiries,
+  sales,
+  products,
   statusFilter,
   setStatusFilter,
   expandedInquiryId,
   onToggleInquiry,
   onStatusUpdate,
   onNewInquiry,
+  onQuickSave,
+  orderBusy,
   busy
 }) {
+  const [activeView, setActiveView] = useState("sheet");
+
   return (
     <section className="inquiries-screen">
-      <div className="inquiries-toolbar">
-        <InquiryStatusFilters activeStatus={statusFilter} onChange={setStatusFilter} />
-        <button type="button" className="inquiry-create-button" onClick={onNewInquiry}>
-          <PlusIcon />
-          <span>New inquiry</span>
+      <div className="inquiry-view-tabs" role="tablist" aria-label="Inquiry workspace view">
+        <button
+          id="inquiry-sheet-tab"
+          type="button"
+          role="tab"
+          aria-controls="inquiry-sheet-panel"
+          aria-selected={activeView === "sheet"}
+          className={activeView === "sheet" ? "active" : ""}
+          onClick={() => setActiveView("sheet")}
+        >
+          Quick sheet
+        </button>
+        <button
+          id="inquiry-followups-tab"
+          type="button"
+          role="tab"
+          aria-controls="inquiry-followups-panel"
+          aria-selected={activeView === "followups"}
+          className={activeView === "followups" ? "active" : ""}
+          onClick={() => setActiveView("followups")}
+        >
+          Follow-ups
         </button>
       </div>
-      <section className="inquiry-list">
-        {inquiries.length ? (
-          inquiries.map((inquiry) => (
-            <InquiryCard
-              key={inquiry.id}
-              inquiry={inquiry}
-              expanded={expandedInquiryId === inquiry.id}
-              onToggle={onToggleInquiry}
-              onStatusUpdate={onStatusUpdate}
-              busy={busy}
-            />
-          ))
-        ) : (
-          <div className="panel-card empty-state">
-            <p className="eyebrow">No inquiries yet</p>
-            <h3>Your customer requests will appear here.</h3>
+
+      <div id="inquiry-sheet-panel" role="tabpanel" aria-labelledby="inquiry-sheet-tab" hidden={activeView !== "sheet"}>
+        <QuickSheetWorkspace
+          inquiries={allInquiries}
+          sales={sales}
+          products={products}
+          busy={busy || orderBusy}
+          onSave={onQuickSave}
+        />
+      </div>
+      <div id="inquiry-followups-panel" role="tabpanel" aria-labelledby="inquiry-followups-tab" hidden={activeView !== "followups"}>
+          <div className="inquiries-toolbar">
+            <InquiryStatusFilters activeStatus={statusFilter} onChange={setStatusFilter} />
+            <button type="button" className="inquiry-create-button" onClick={onNewInquiry}>
+              <PlusIcon />
+              <span>New inquiry</span>
+            </button>
           </div>
-        )}
-      </section>
+          <section className="inquiry-list">
+            {inquiries.length ? (
+              inquiries.map((inquiry) => (
+                <InquiryCard
+                  key={inquiry.id}
+                  inquiry={inquiry}
+                  expanded={expandedInquiryId === inquiry.id}
+                  onToggle={onToggleInquiry}
+                  onStatusUpdate={onStatusUpdate}
+                  busy={busy}
+                />
+              ))
+            ) : (
+              <div className="panel-card empty-state">
+                <p className="eyebrow">No inquiries yet</p>
+                <h3>Your customer requests will appear here.</h3>
+              </div>
+            )}
+          </section>
+      </div>
     </section>
   );
 }
@@ -8629,48 +9166,12 @@ export default function App() {
   }
 
   function buildSaleConfirmation() {
-    const orderItems = saleDraft.items.filter((item) => safeText(item.product_name));
-    if (!safeText(saleDraft.customer_name) && !safeText(saleDraft.customer_phone)) {
-      setSaleModalError("Add the customer name or mobile number.");
+    const confirmation = getSaleDraftConfirmation(saleDraft);
+    if (confirmation.error) {
+      setSaleModalError(confirmation.error);
       return null;
     }
-    if (!safeText(saleDraft.order_date)) {
-      setSaleModalError("Choose the order date.");
-      return null;
-    }
-    if (!orderItems.length) {
-      setSaleModalError("Add at least one item before saving.");
-      return null;
-    }
-    const invalidItem = orderItems.find(
-      (item) =>
-        !Number.isInteger(Number(item.quantity_sold)) ||
-        Number(item.quantity_sold) <= 0 ||
-        item.selling_price === "" ||
-        !Number.isFinite(Number(item.selling_price)) ||
-        Number(item.selling_price) < 0
-    );
-    if (invalidItem) {
-      setSaleModalError(`Add a valid quantity and unit price for ${invalidItem.product_name || "each item"}.`);
-      return null;
-    }
-    const invalidOptionalNumber = [saleDraft.amount_received, saleDraft.delivery_charge, saleDraft.courier_cost].some(
-      (value) => value !== "" && (!Number.isFinite(Number(value)) || Number(value) < 0)
-    );
-    if (invalidOptionalNumber) {
-      setSaleModalError("Payment and delivery amounts cannot be negative.");
-      return null;
-    }
-
-    const total = orderItems.reduce(
-      (sum, item) => sum + Number(item.quantity_sold || 0) * Number(item.selling_price || 0),
-      0
-    );
-
-    return {
-      orderItems,
-      total
-    };
+    return confirmation;
   }
 
   function handleSaveSale() {
@@ -8682,16 +9183,21 @@ export default function App() {
     void handleConfirmSale(confirmation);
   }
 
-  async function handleConfirmSale(confirmationOverride = null) {
+  async function handleConfirmSale(confirmationOverride = null, draftOverride = null, options = {}) {
     try {
-      const confirmation = confirmationOverride || buildSaleConfirmation();
-      if (!confirmation) {
+      const sourceDraft = draftOverride || saleDraft;
+      const confirmation = confirmationOverride || getSaleDraftConfirmation(sourceDraft);
+      if (!confirmation || confirmation.error) {
+        if (options.throwOnError) {
+          throw new Error(confirmation?.error || "Could not validate this order.");
+        }
+        setSaleModalError(confirmation?.error || "Could not validate this order.");
         return;
       }
 
       const { orderItems, total } = confirmation;
       const submittedDraft = {
-        ...saleDraft,
+        ...sourceDraft,
         items: orderItems.map((item) => ({ ...item }))
       };
 
@@ -8762,12 +9268,18 @@ export default function App() {
         });
       }
 
-      setSales((current) => [savedSale, ...current]);
+      setSales((current) => [savedSale, ...current.filter((entry) => entry.id !== savedSale.id)]);
       setExpandedSaleId(savedSale.id);
       setStatusMessage("Order saved · stock unchanged ✓");
-      resetSaleModal();
+      if (!draftOverride) {
+        resetSaleModal();
+      }
+      return savedSale;
     } catch (error) {
       console.error("Order save error:", error);
+      if (options.throwOnError) {
+        throw error;
+      }
       setSaleModalError(formatSaleSaveError(error));
     } finally {
       setSalesBusy(false);
@@ -9595,101 +10107,179 @@ export default function App() {
     }
   }
 
-  async function saveInquiry() {
-    const transcriptText = inquiryTranscript.trim() || manualInquiryTranscript.trim();
-    const inquiryItems = inquiryDraft.products.filter((item) => safeText(item.product_name));
-    if (!safeText(inquiryDraft.customer_name) && !safeText(inquiryDraft.customer_phone)) {
-      setInquiryModalError("Add the customer name or mobile number.");
-      return;
+  async function persistInquiryDraft(submittedDraft, transcriptText = "") {
+    const inquiryItems = submittedDraft.products.filter((item) => safeText(item.product_name));
+    if (!safeText(submittedDraft.customer_name) && !safeText(submittedDraft.customer_phone)) {
+      throw new Error("Add the customer name or mobile number.");
     }
-    if (!inquiryItems.length && !safeText(inquiryDraft.notes)) {
-      setInquiryModalError("Add at least one item or a short requirement note.");
-      return;
+    if (!inquiryItems.length && !safeText(submittedDraft.notes)) {
+      throw new Error("Add at least one item or a short requirement note.");
     }
-    if (inquiryItems.some((item) => item.quantity_requested !== "" && Number(item.quantity_requested) <= 0)) {
-      setInquiryModalError("Item quantities must be greater than zero.");
-      return;
+    if (
+      inquiryItems.some(
+        (item) =>
+          item.quantity_requested !== "" &&
+          (!Number.isInteger(Number(item.quantity_requested)) || Number(item.quantity_requested) <= 0)
+      )
+    ) {
+      throw new Error("Item quantities must be whole numbers greater than zero.");
     }
+
+    const inquiryPayload = {
+      entry_date: safeText(submittedDraft.entry_date) || new Date().toISOString().slice(0, 10),
+      customer_name: safeText(submittedDraft.customer_name) || null,
+      customer_phone: safeText(submittedDraft.customer_phone) || null,
+      source: safeText(submittedDraft.source, "whatsapp"),
+      occasion: safeText(submittedDraft.occasion) || null,
+      required_by_date: safeText(submittedDraft.required_by_date) || null,
+      budget_per_unit: submittedDraft.budget_per_unit === "" ? null : Number(submittedDraft.budget_per_unit),
+      total_budget: submittedDraft.total_budget === "" ? null : Number(submittedDraft.total_budget),
+      notes: safeText(submittedDraft.notes) || null,
+      raw_transcript: safeText(transcriptText) || null,
+      status: inquiryStatusOrder.includes(submittedDraft.status) ? submittedDraft.status : "new"
+    };
+    const itemsPayload = inquiryItems.map((item) => ({
+      product_sku: safeText(item.matched_sku) || null,
+      product_name: safeText(item.product_name),
+      quantity_requested: item.quantity_requested === "" ? null : Number(item.quantity_requested),
+      quoted_price: item.quoted_price === "" || item.quoted_price == null ? null : Number(item.quoted_price)
+    }));
 
     setInquiryBusy(true);
-    setInquiryModalError("");
-    let insertedInquiryId = "";
     try {
-      const inquiryPayload = {
-        customer_name: safeText(inquiryDraft.customer_name) || null,
-        customer_phone: safeText(inquiryDraft.customer_phone) || null,
-        source: safeText(inquiryDraft.source, "whatsapp"),
-        occasion: safeText(inquiryDraft.occasion) || null,
-        required_by_date: safeText(inquiryDraft.required_by_date) || null,
-        budget_per_unit: inquiryDraft.budget_per_unit === "" ? null : Number(inquiryDraft.budget_per_unit),
-        total_budget: inquiryDraft.total_budget === "" ? null : Number(inquiryDraft.total_budget),
-        notes: safeText(inquiryDraft.notes) || null,
-        raw_transcript: transcriptText || null,
-        status: "new"
-      };
-
       let savedInquiry;
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase.from("inquiries").insert(inquiryPayload).select().single();
-        if (error) {
-          throw error;
+        const accessToken = session?.access_token;
+        if (!accessToken) {
+          throw new Error("Your admin session has expired. Please sign in again before recording the inquiry.");
         }
-        insertedInquiryId = data.id;
-
-        const itemsPayload = inquiryItems.map((item) => ({
-            inquiry_id: data.id,
-            product_sku: safeText(item.matched_sku) || null,
-            product_name: safeText(item.product_name),
-            quantity_requested: item.quantity_requested === "" ? null : Number(item.quantity_requested),
-            quoted_price: item.quoted_price === "" ? null : Number(item.quoted_price)
-          }));
-
-        let items = [];
-        if (itemsPayload.length) {
-          const { data: insertedItems, error: itemsError } = await supabase.from("inquiry_items").insert(itemsPayload).select();
-          if (itemsError) {
-            throw itemsError;
-          }
-          items = insertedItems ?? [];
+        const response = await fetch("/api/admin-record-inquiry", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            client_inquiry_id: safeText(submittedDraft.client_inquiry_id),
+            inquiry_payload: inquiryPayload,
+            inquiry_items_payload: itemsPayload
+          })
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not save this inquiry.");
         }
-
-        savedInquiry = toInquiry({ ...data, inquiry_items: items });
+        savedInquiry = payload?.inquiry ? toInquiry(payload.inquiry) : null;
+        if (!savedInquiry) {
+          throw new Error("The inquiry was saved, but the response could not be read. Refresh before trying again.");
+        }
       } else {
+        const localInquiryId =
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `inquiry-${Date.now()}`;
         savedInquiry = toInquiry({
-          id: crypto.randomUUID(),
+          id: localInquiryId,
           created_at: new Date().toISOString(),
           ...inquiryPayload,
-          inquiry_items: inquiryItems.map((item) => ({
-              id: crypto.randomUUID(),
-              product_sku: safeText(item.matched_sku) || null,
-              product_name: safeText(item.product_name),
-              quantity_requested: item.quantity_requested === "" ? null : Number(item.quantity_requested),
-              quoted_price: item.quoted_price === "" ? null : Number(item.quoted_price)
-            }))
+          inquiry_items: itemsPayload.map((item, index) => ({ id: `${localInquiryId}-${index}`, ...item }))
         });
       }
 
-      setInquiries((current) => [savedInquiry, ...current]);
+      setInquiries((current) => [savedInquiry, ...current.filter((item) => item.id !== savedInquiry.id)]);
       setExpandedInquiryId(savedInquiry.id);
       setStatusMessage("Inquiry saved ✓");
-      resetInquiryModal();
-    } catch (error) {
-      console.log("Inquiry save failed:", error);
-      if (insertedInquiryId && isSupabaseConfigured) {
-        try {
-          const { error: cleanupError } = await supabase.from("inquiries").delete().eq("id", insertedInquiryId);
-          if (cleanupError) {
-            console.error("Could not remove incomplete inquiry:", cleanupError);
-          }
-        } catch (cleanupError) {
-          console.error("Could not remove incomplete inquiry:", cleanupError);
-        }
-      }
-      setInquiryModalError(error?.message || "Could not save this inquiry.");
-      setInquiryModalStep("confirm");
+      return savedInquiry;
     } finally {
       setInquiryBusy(false);
     }
+  }
+
+  async function saveInquiry() {
+    const transcriptText = inquiryTranscript.trim() || manualInquiryTranscript.trim();
+    setInquiryModalError("");
+    try {
+      await persistInquiryDraft(inquiryDraft, transcriptText);
+      resetInquiryModal();
+    } catch (error) {
+      console.log("Inquiry save failed:", error);
+      setInquiryModalError(error?.message || "Could not save this inquiry.");
+      setInquiryModalStep("confirm");
+    }
+  }
+
+  async function handleQuickSheetSave(entry) {
+    if (entry.record_type === "inquiry") {
+      const quickInquiryDraft = {
+        ...createEmptyInquiryDraft(),
+        client_inquiry_id: entry.client_record_id,
+        entry_date: entry.entry_date,
+        customer_name: entry.customer_name,
+        status: inquiryStatusOrder.includes(entry.status) ? entry.status : "new",
+        products: entry.items.map((item) => {
+          const normalizedName = safeText(item.product_name).toLowerCase();
+          const matched = products.find(
+            (product) =>
+              safeText(product.name).toLowerCase() === normalizedName ||
+              safeText(product.sku).toLowerCase() === normalizedName
+          );
+          return {
+            product_name: safeText(item.product_name),
+            matched_sku: matched?.sku ?? "",
+            quantity_requested: Number(item.quantity),
+            quoted_price: item.unit_price == null ? "" : Number(item.unit_price)
+          };
+        })
+      };
+      return persistInquiryDraft(quickInquiryDraft);
+    }
+
+    const total = entry.items.reduce(
+      (sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0),
+      0
+    );
+    const amountReceived = entry.amount_received === "" ? null : Number(entry.amount_received);
+    const paymentStatus =
+      amountReceived == null
+        ? "not_recorded"
+        : amountReceived <= 0
+          ? "pending"
+          : amountReceived < total
+            ? "part_paid"
+            : "paid";
+    const quickOrderDraft = {
+      ...createEmptySaleDraft(),
+      client_order_id: entry.client_record_id,
+      order_date: entry.entry_date,
+      customer_name: entry.customer_name,
+      payment_status: paymentStatus,
+      fulfillment_status: quickSheetOrderStatuses.includes(entry.status) ? entry.status : "confirmed",
+      amount_received: amountReceived == null ? "" : amountReceived,
+      courier_cost: entry.courier_cost === "" ? "" : Number(entry.courier_cost),
+      items: entry.items.map((item) => {
+        const normalizedName = safeText(item.product_name).toLowerCase();
+        const matched = products.find(
+          (product) =>
+            safeText(product.name).toLowerCase() === normalizedName ||
+            safeText(product.sku).toLowerCase() === normalizedName
+        );
+        return createSaleItemDraft({
+          product_id: matched?.id ? String(matched.id) : "",
+          product_sku: matched?.sku ?? "",
+          product_name: safeText(item.product_name),
+          quantity_sold: Number(item.quantity),
+          selling_price: Number(item.unit_price),
+          cost_price: item.unit_cost === "" ? "" : Number(item.unit_cost),
+          track_inventory: false,
+          fulfillment_source: "vendor_direct"
+        });
+      })
+    };
+    const confirmation = getSaleDraftConfirmation(quickOrderDraft);
+    if (confirmation.error) {
+      throw new Error(confirmation.error);
+    }
+    return handleConfirmSale(confirmation, quickOrderDraft, { throwOnError: true });
   }
 
   function handleScrollToCollection() {
@@ -11125,12 +11715,17 @@ export default function App() {
             <StatusStrip statusMessage={statusMessage} />
             <InquiriesScreen
               inquiries={filteredInquiries}
+              allInquiries={inquiries}
+              sales={sales}
+              products={products.filter((product) => !product.archivedAt)}
               statusFilter={inquiryStatusFilter}
               setStatusFilter={setInquiryStatusFilter}
               expandedInquiryId={expandedInquiryId}
               onToggleInquiry={(id) => setExpandedInquiryId((current) => (current === id ? null : id))}
               onStatusUpdate={handleInquiryStatusUpdate}
               onNewInquiry={handleNewInquiry}
+              onQuickSave={handleQuickSheetSave}
+              orderBusy={salesBusy}
               busy={inquiryBusy}
             />
           </>
