@@ -1,54 +1,67 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { track } from "@vercel/analytics";
-import { products as seedProducts } from "./data/products";
-import { isSupabaseConfigured, supabase } from "./lib/supabase";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  PRIMARY_SITE_ORIGIN,
+  PUBLIC_PAGE_LIST,
+  getPublicPageByPath,
+  getPublicPageBySlug
+} from "./content/publicPages";
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+const configuredAdminEmails = String(import.meta.env.VITE_ADMIN_EMAILS || "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+let supabase = null;
+let supabaseClientPromise = null;
+
+async function getSupabaseClient() {
+  if (!isSupabaseConfigured) {
+    return null;
+  }
+  if (supabase) {
+    return supabase;
+  }
+  if (!supabaseClientPromise) {
+    supabaseClientPromise = import("./lib/supabase").then((module) => {
+      supabase = module.supabase;
+      return supabase;
+    });
+  }
+  return supabaseClientPromise;
+}
+
+function isConfiguredAdminEmail(email) {
+  const normalizedEmail = safeText(email).toLowerCase();
+  return Boolean(normalizedEmail) && (!configuredAdminEmails.length || configuredAdminEmails.includes(normalizedEmail));
+}
 
 const brandLogo = "/assets/brand/decorbeats-logo.svg";
 const WHATSAPP_NUMBER = "919811133661";
 const PRODUCT_STORAGE_BUCKET = "products";
-const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+const CART_STORAGE_KEY = "decorbeats-cart-v1";
 const RAZORPAY_CHECKOUT_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
+const CASHFREE_CHECKOUT_SCRIPT = "https://sdk.cashfree.com/js/v3/cashfree.js";
 const GOOGLE_ADS_CONTACT_CONVERSION = "AW-18084439764/kF1hCNnLiK4cENTNqq9D";
+const LOW_STOCK_THRESHOLD = 10;
 const ANNOUNCEMENTS = [
-  "𝄞 Decorbeats — where every gift finds its rhythm",
-  "✦ Summer Sale — Up to 30% off selected items",
-  "♪ Bulk orders welcome · 50 to 400+ units",
-  "♫ Handcrafted in India · Shipped across the country",
-  "✦ WhatsApp us for custom gifting solutions",
-  "𝄞 New arrivals added weekly"
+  "Varalakshmi gifts now live",
+  "Handpicked in Moradabad",
+  "Pan-India delivery"
 ];
 const TICKER_MESSAGES = [
-  { text: "𝄞  DECORBEATS — WHERE EVERY GIFT FINDS ITS RHYTHM  𝄞", action: null },
-  { text: "🚚  SAME-DAY DELIVERY ACROSS BANGALORE — ORDER BEFORE 2PM", action: "collection" },
-  { text: "✦  BRASS NEVER LIES. NEITHER DOES OUR CRAFTSMANSHIP.", action: null },
-  { text: "📦  OVERNIGHT TO MUMBAI · CHENNAI · PUNE · HYDERABAD VIA AMAZON", action: "collection" },
-  { text: "🎁  50 TO 400 UNITS — BULK GIFTING IS OUR FORTE", action: "whatsapp" },
-  { text: "✦  SAND-BLASTED. HAND-FINISHED. MADE TO BE REMEMBERED.", action: null },
-  { text: "𝄞  THE BEAT OF GOOD GIFTING — DECORBEATS STUDIO", action: null },
-  { text: "⭐  CUSTOM CORPORATE GIFTING — TELL US YOUR OCCASION", action: null },
-  { text: "✦  ARTISANAL DECOR · GIFTED WITH LOVE · SINCE INDIA BEGAN CELEBRATING", action: null }
+  { text: "VARALAKSHMI GIFTS · AUSPICIOUS BRASS FOR BEAUTIFUL HOMES", action: "collection" },
+  { text: "THE BRASS HOUSE OF INDIA · ROOTED IN MORADABAD", action: null },
+  { text: "50–400+ PIECES · CUSTOM BUSINESS & OCCASION GIFTING", action: "whatsapp" },
+  { text: "PAN-INDIA DELIVERY · PERSONAL HELP FROM A BRASS SPECIALIST", action: "whatsapp" }
 ];
-const INQUIRY_SYSTEM_PROMPT = `You are a data extraction assistant for Decorbeats, an Indian gifting and decor business. Extract structured information from this sales inquiry transcript. Return ONLY a valid JSON object, no explanation, no markdown.
-
-Fields to extract:
-{
-  "customer_name": string or null,
-  "customer_phone": string or null,
-  "source": "phone" | "whatsapp" | "walkin",
-  "occasion": string or null,
-  "required_by_date": string or null,
-  "budget_per_unit": number or null,
-  "total_budget": number or null,
-  "notes": string or null,
-  "products": [
-    {
-      "product_name": string,
-      "quantity_requested": number or null,
-      "quoted_price": number or null
-    }
-  ]
-}`;
-
+const DEFAULT_SITE_METADATA = {
+  title: "Decorbeats | Brass Décor, Diyas & Gifts from Moradabad",
+  description:
+    "Shop handcrafted brass décor, diyas, urlis, serveware and gifts curated by Decorbeats, brass specialists rooted in Moradabad. Retail, festive and business gifting across India.",
+  path: "/"
+};
 const emptyForm = {
   id: "",
   name: "",
@@ -71,47 +84,179 @@ const materialOptions = ["Brass", "Metal", "Ceramic", "Wood", "Glass", "Clay", "
 const marketingTagOptions = ["", "Featured", "New Arrival", "Best for Gifting", "Festive Pick", "Handpicked", "Limited Edition"];
 const customerOccasions = [
   {
-    label: "Festive Gifting",
+    label: "Pooja & Ritual",
     category: "Diya",
-    note: "Diyas, urlis and pooja accents",
-    beat: "Raaga of light",
-    preferredImageProducts: ["Hanging peacock diya with chain heavy"]
+    note: "Diyas, lamps and sacred accents",
+    beat: "For everyday devotion",
+    preferredImageProducts: ["Hanging Peacock Brass Diya"]
   },
-  { label: "Home Decor", category: "Decor", note: "Statement pieces for warm corners", beat: "A room with rhythm" },
-  { label: "Corporate Orders", category: "Box", note: "Bulk-ready gifts and keepsakes", beat: "Gifting in harmony" },
-  { label: "Wall Stories", category: "Wall Decor", note: "Brass details for beautiful walls", beat: "Notes for your walls" }
+  { label: "Brass for Home", category: "Decor", note: "Objects that warm every room", beat: "For considered spaces" },
+  { label: "Festive Gifts", category: "Box", note: "Meaningful keepsakes and gift sets", beat: "For generous moments" },
+  { label: "Statement Walls", category: "Wall Decor", note: "Sculptural details with presence", beat: "For memorable rooms" }
 ];
-const customerBeatStories = [
-  { title: "Beat 01", text: "Hand-finished brass and metal pieces selected for celebrations." },
-  { title: "Beat 02", text: "Bulk gifting support for 50 to 400+ units with quick WhatsApp coordination." },
-  { title: "Beat 03", text: "A living catalogue that keeps new arrivals, stock and enquiries in tune." }
-];
-const defaultHeroSlides = [
+const CUSTOMER_COLLECTIONS = [
+  { id: "all", label: "Shop All", path: "/" },
   {
-    id: "default-credibility",
-    eyebrow: "Decorbeats Trust",
-    title: "See the craft|gift with confidence.",
-    body: "Bengaluru experience center, GST presence across KA, TN & MH, and bulk gifting support from 50 to 400+ units.",
-    ctaLabel: "Enquire on WhatsApp",
-    ctaAction: "whatsapp",
-    contentPosition: "left",
-    imageUrl: "/assets/images/slider-credibility-studio.svg",
-    active: true,
-    sortOrder: 1
+    id: "varalakshmi",
+    label: "Varalakshmi Gifts",
+    path: "/category/varalakshmi",
+    categories: ["Diya", "Urli"],
+    terms: ["diya", "deepam", "lamp", "urli", "lakshmi", "kamakshi"]
   },
   {
-    id: "default-hero",
-    eyebrow: "Decorbeats",
-    title: "Handcrafted for every celebration.",
-    body: "Brass, metal & artisanal decor - made in India, gifted with rhythm.",
-    ctaLabel: "Shop the Collection",
-    ctaAction: "collection",
-    contentPosition: "left",
-    imageUrl: "",
-    active: true,
-    sortOrder: 2
+    id: "pooja-diyas",
+    label: "Pooja & Diyas",
+    path: "/category/pooja-diyas",
+    categories: ["Diya"],
+    terms: ["diya", "deepam", "lamp", "ghanti", "loban", "pooja", "puja", "shankh", "shakh", "chakra"]
+  },
+  {
+    id: "urlis-serveware",
+    label: "Urlis & Serveware",
+    path: "/category/urlis-serveware",
+    categories: ["Urli", "Bowl", "Plate", "Jars"],
+    terms: ["urli", "bowl", "plate", "tray", "serve", "cup", "jar", "basket"]
+  },
+  {
+    id: "idols-spiritual",
+    label: "Idols & Spiritual",
+    path: "/category/idols-spiritual",
+    categories: ["Idol"],
+    terms: ["ganesh", "ganesha", "krishna", "lakshmi", "kamakshi", "durga", "saraswati", "ram darbar", "hanuman", "buddha", "avatar"]
+  },
+  {
+    id: "wall-home",
+    label: "Wall & Hanging",
+    path: "/category/wall-home",
+    categories: ["Wall Decor", "Bell"],
+    terms: ["wall", "hanging", "bell", "ghanti"]
+  },
+  {
+    id: "festive-gifts",
+    label: "Festive Gifts",
+    path: "/category/festive-gifts",
+    categories: ["Box"],
+    terms: ["gift", "festive", "boxed", "box set"]
+  },
+  {
+    id: "home-accents",
+    label: "Décor & Accents",
+    path: "/category/home-accents",
+    categories: ["Decor", "Planter", "Tree", "Misc"],
+    terms: ["planter", "tree", "candle", "decor", "accent"]
   }
 ];
+const CUSTOMER_QUICK_COLLECTIONS = [
+  { id: "pooja-diyas", label: "Diyas", image: "/assets/images/mobile-categories/diyas.jpg" },
+  { id: "urlis-serveware", label: "Urlis", image: "/assets/images/mobile-categories/urlis.jpg" },
+  { id: "idols-spiritual", label: "Idols", image: "/assets/images/mobile-categories/idols.jpg" },
+  { id: "wall-home", label: "Wall décor", image: "/assets/images/mobile-categories/wall.jpg" }
+];
+const CUSTOMER_COLLECTION_ALIASES = new Map([
+  ["", "all"],
+  ["all", "all"],
+  ["shop-all", "all"],
+  ["diya", "pooja-diyas"],
+  ["pooja-and-diyas", "pooja-diyas"],
+  ["pooja-diyas", "pooja-diyas"],
+  ["urli", "urlis-serveware"],
+  ["bowl", "urlis-serveware"],
+  ["plate", "urlis-serveware"],
+  ["jars", "urlis-serveware"],
+  ["urlis-and-serveware", "urlis-serveware"],
+  ["urlis-serveware", "urlis-serveware"],
+  ["idol", "idols-spiritual"],
+  ["idols-and-spiritual", "idols-spiritual"],
+  ["idols-spiritual", "idols-spiritual"],
+  ["wall-decor", "wall-home"],
+  ["bell", "wall-home"],
+  ["wall-and-hanging", "wall-home"],
+  ["wall-home", "wall-home"],
+  ["box", "festive-gifts"],
+  ["gifting", "festive-gifts"],
+  ["festive-gifts", "festive-gifts"],
+  ["decor", "home-accents"],
+  ["planter", "home-accents"],
+  ["tree", "home-accents"],
+  ["misc", "home-accents"],
+  ["home-decor", "home-accents"],
+  ["home-accents", "home-accents"],
+  ["varalakshmi", "varalakshmi"],
+  ["varalakshmi-gifts", "varalakshmi"]
+]);
+const VARALAKSHMI_EDIT_NAMES = [
+  "Small Brass Diyas in Gift Box — Set of 2",
+  "Designer Brass Diya",
+  "Brass Urli Diya Design",
+  "Peacock Rim Brass Diya",
+  "Hanging Peacock Brass Diya",
+  "Copper & Brass Diya in Gift Box",
+  "Brass Diyas in Red Gift Box — Set of 3",
+  "Peacock Three-Step Brass Diya"
+];
+const CUSTOMER_FEATURED_PRODUCT_NAMES = [
+  ...VARALAKSHMI_EDIT_NAMES,
+  "Brass Bowl & Spoon Gift Box — Set of 2",
+  "Elephant Urli Pair",
+  "Ganesha Brass Murti",
+  "Big Kamal wall",
+  "Brass Coconut Tree Décor — Set of 2",
+  "Brass Deer Candle Stand",
+  "Coffee Cup Set Premium",
+  "Hanging peacock bell"
+];
+const CUSTOMER_FEATURED_PRODUCT_RANK = new Map(
+  CUSTOMER_FEATURED_PRODUCT_NAMES.map((name, index) => [name.toLowerCase(), index])
+);
+const defaultHeroSlides = [
+  {
+    id: "default-varalakshmi",
+    eyebrow: "Varalakshmi gifting · Curated by brass specialists",
+    title: "Bring home|blessings in brass.",
+    body: "Auspicious diyas and meaningful gifts, handpicked in Moradabad and delivered across India for homes filled with light and abundance.",
+    ctaLabel: "Shop Varalakshmi gifts",
+    ctaAction: "collection",
+    collectionId: "varalakshmi",
+    contentPosition: "left",
+    imageUrl: "/assets/images/decorbeats-varalakshmi-gifting-v3.jpg",
+    mobileImageUrl: "/assets/images/decorbeats-varalakshmi-gifting-mobile-v3.jpg",
+    active: true,
+    sortOrder: 0
+  },
+  {
+    id: "default-credibility",
+    eyebrow: "From Moradabad · India’s brass city",
+    title: "India’s home|of brass.",
+    body: "Brass décor, pooja essentials, serveware and gifts—sourced, finished and curated by specialists with roots in Pital Nagri.",
+    ctaLabel: "Explore brass collection",
+    ctaAction: "collection",
+    collectionId: "all",
+    contentPosition: "left",
+    imageUrl: "/assets/images/decorbeats-atelier-campaign-v2.jpg",
+    mobileImageUrl: "/assets/images/decorbeats-atelier-campaign-mobile-v2.jpg",
+    active: true,
+    sortOrder: 1
+  }
+];
+
+function getStoredCartItems() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) || "[]");
+    return Array.isArray(stored)
+      ? stored
+          .filter((item) => item && item.productId != null)
+          .map((item) => ({
+            productId: item.productId,
+            quantity: Math.max(1, Math.min(Number(item.quantity || 1) || 1, 25))
+          }))
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 const materialSkuCodes = {
   Brass: "BR",
@@ -144,7 +289,7 @@ function getInitialPublicScreen() {
     return "customer";
   }
 
-  return window.location.pathname === "/admin" ? "admin-auth" : "customer";
+  return parseLegacyPath(window.location.pathname).screen;
 }
 
 function humanizeSlug(slug) {
@@ -177,22 +322,66 @@ function parseLegacyPath(pathname) {
     return { screen: "customer", type: "product", slug: productMatch[1] };
   }
 
+  const publicPage = getPublicPageByPath(path);
+  if (publicPage) {
+    return { screen: "policy", type: "policy", slug: publicPage.slug };
+  }
+
   return { screen: "customer", type: "home", slug: "" };
+}
+
+function updateMetaContent(selector, content) {
+  const element = document.head.querySelector(selector);
+  if (element) {
+    element.setAttribute("content", content);
+  }
+}
+
+function updatePublicDocumentMetadata(page) {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  const metadata = page
+    ? {
+        title: `${page.title} | Decorbeats`,
+        description: page.description,
+        path: page.path
+      }
+    : DEFAULT_SITE_METADATA;
+  const canonicalUrl = `${PRIMARY_SITE_ORIGIN}${metadata.path}`;
+  let canonical = document.head.querySelector('link[rel="canonical"]');
+  if (!canonical) {
+    canonical = document.createElement("link");
+    canonical.setAttribute("rel", "canonical");
+    document.head.appendChild(canonical);
+  }
+
+  document.title = metadata.title;
+  canonical.setAttribute("href", canonicalUrl);
+  updateMetaContent('meta[name="description"]', metadata.description);
+  updateMetaContent('meta[property="og:title"]', metadata.title);
+  updateMetaContent('meta[property="og:description"]', metadata.description);
+  updateMetaContent('meta[property="og:url"]', canonicalUrl);
+  updateMetaContent('meta[name="twitter:title"]', metadata.title);
+  updateMetaContent('meta[name="twitter:description"]', metadata.description);
 }
 
 const emptyInquiryDraft = {
   customer_name: "",
   customer_phone: "",
-  source: "phone",
+  source: "whatsapp",
   occasion: "",
   required_by_date: "",
   budget_per_unit: "",
   total_budget: "",
   notes: "",
-  products: [{ product_name: "", matched_sku: "", quantity_requested: "", quoted_price: "" }]
+  products: [{ product_name: "", matched_sku: "", quantity_requested: 1, quoted_price: "" }]
 };
 
-const inquiryStatusOrder = ["new", "quoted", "converted", "lost"];
+const inquiryStatusOrder = ["new", "contacted", "quoted", "follow_up", "converted", "lost"];
+const quickSheetOrderStatuses = ["confirmed", "procurement", "packing", "shipped", "delivered"];
+const SALE_NOTES_META_PREFIX = "[[DECORBEATS_ORDER_V1]]";
 const catalogueLeadTimeOptions = [
   "Ready to ship",
   "2-3 days",
@@ -393,16 +582,20 @@ function openWhatsAppChat(message) {
 
 const BULK_WHATSAPP_MESSAGE =
   "Hi Decorbeats! I am interested in placing a bulk order of 50+ units. Please share your catalogue, pricing and delivery details.";
+const RETAIL_WHATSAPP_MESSAGE =
+  "Hi Decorbeats! I am choosing a brass piece for my home or an occasion. Could a brass specialist help me find the right product?";
 
 function trackCustomerEvent(eventName, properties = {}) {
-  try {
-    track(eventName, {
-      ...properties,
-      surface: "customer"
+  void import("@vercel/analytics")
+    .then(({ track }) =>
+      track(eventName, {
+        ...properties,
+        surface: "customer"
+      })
+    )
+    .catch((error) => {
+      console.debug("Analytics event skipped:", eventName, error);
     });
-  } catch (error) {
-    console.debug("Analytics event skipped:", eventName, error);
-  }
 }
 
 function trackGoogleAdsContactConversion(value = 1) {
@@ -416,8 +609,35 @@ function trackGoogleAdsContactConversion(value = 1) {
   });
 }
 
+function trackCommerceEvent(eventName, { transactionId, value, items = [] } = {}) {
+  if (typeof window === "undefined" || typeof window.gtag !== "function") {
+    return;
+  }
+  window.gtag("event", eventName, {
+    ...(transactionId ? { transaction_id: transactionId } : {}),
+    ...(Number.isFinite(Number(value)) ? { value: Number(value) } : {}),
+    currency: "INR",
+    items
+  });
+}
+
+function toCommerceItem(product, quantity = 1) {
+  return {
+    item_id: product?.sku || String(product?.id || ""),
+    item_name: product?.name || "Decorbeats product",
+    item_category: product?.category || "",
+    price: parsePrice(product?.pricing?.mrp) || 0,
+    quantity
+  };
+}
+
 function trackBulkWhatsAppClick(source) {
   trackCustomerEvent("Bulk WhatsApp Clicked", { source });
+  trackGoogleAdsContactConversion();
+}
+
+function trackRetailWhatsAppClick(source) {
+  trackCustomerEvent("Retail WhatsApp Clicked", { source });
   trackGoogleAdsContactConversion();
 }
 
@@ -428,6 +648,10 @@ function openBulkWhatsApp(source = "direct") {
 
 function getBulkWhatsAppUrl() {
   return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(BULK_WHATSAPP_MESSAGE)}`;
+}
+
+function getRetailWhatsAppUrl() {
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(RETAIL_WHATSAPP_MESSAGE)}`;
 }
 
 function getProductWhatsAppUrl(product) {
@@ -442,6 +666,7 @@ function toInquiry(raw) {
   return {
     id: raw.id,
     createdAt: raw.created_at,
+    entryDate: safeText(raw.entry_date) || raw.created_at,
     customerName: safeText(raw.customer_name, "Unnamed inquiry"),
     customerPhone: safeText(raw.customer_phone),
     source: safeText(raw.source, "phone"),
@@ -464,31 +689,179 @@ function toInquiry(raw) {
   };
 }
 
+function parseSaleNotes(value) {
+  const rawNotes = safeText(value);
+  if (!rawNotes.startsWith(SALE_NOTES_META_PREFIX)) {
+    return { metadata: {}, notes: rawNotes };
+  }
+
+  const firstLineEnd = rawNotes.indexOf("\n");
+  const metadataText = rawNotes.slice(
+    SALE_NOTES_META_PREFIX.length,
+    firstLineEnd === -1 ? undefined : firstLineEnd
+  );
+  try {
+    return {
+      metadata: JSON.parse(metadataText) || {},
+      notes: firstLineEnd === -1 ? "" : rawNotes.slice(firstLineEnd + 1).trim()
+    };
+  } catch {
+    return { metadata: {}, notes: rawNotes };
+  }
+}
+
+function limitSaleText(value, maxLength) {
+  return safeText(value).slice(0, maxLength);
+}
+
+function buildSaleNotes(draft) {
+  const metadata = {
+    client_order_id: limitSaleText(draft.client_order_id, 100),
+    order_date: limitSaleText(draft.order_date, 20),
+    customer_phone: limitSaleText(draft.customer_phone, 40),
+    source_channel: limitSaleText(safeText(draft.source_channel, "whatsapp"), 40),
+    fulfillment_status: limitSaleText(safeText(draft.fulfillment_status, "confirmed"), 40),
+    amount_received: draft.amount_received === "" ? null : Number(draft.amount_received || 0),
+    delivery_charge: draft.delivery_charge === "" ? null : Number(draft.delivery_charge || 0),
+    courier_cost: draft.courier_cost === "" ? null : Number(draft.courier_cost || 0),
+    item_sources: draft.items
+      .filter((item) => safeText(item.product_name))
+      .map((item) => ({
+        product_name: limitSaleText(item.product_name, 240),
+        quantity_sold: Number(item.quantity_sold || 0),
+        selling_price: Number(item.selling_price || 0),
+        cost_price: item.cost_price === "" || item.cost_price == null ? null : Number(item.cost_price),
+        catalog_sku: limitSaleText(item.product_sku, 100),
+        fulfillment_source: item.track_inventory ? "inventory" : "vendor_direct",
+        vendor_name: limitSaleText(item.vendor_name, 160)
+      }))
+  };
+  const userNotes = limitSaleText(draft.notes, 2_000);
+  const packedNotes = `${SALE_NOTES_META_PREFIX}${JSON.stringify(metadata)}${userNotes ? `\n${userNotes}` : ""}`;
+  if (packedNotes.length > 8_000) {
+    throw new Error("This order has too much optional detail. Shorten the notes or split it into two orders.");
+  }
+  return packedNotes;
+}
+
 function toSale(raw) {
-  return {
-    id: raw.id,
-    createdAt: raw.created_at,
-    customerName: safeText(raw.customer_name, "Walk-in sale"),
-    paymentMethod: safeText(raw.payment_method, "upi").toLowerCase(),
-    paymentStatus: safeText(raw.payment_status, "paid").toLowerCase(),
-    notes: safeText(raw.notes),
-    totalAmount: Number(raw.total_amount ?? 0),
-    items: Array.isArray(raw.sale_items)
-      ? raw.sale_items.map((item) => ({
+  const parsedNotes = parseSaleNotes(raw.notes);
+  const metadata = parsedNotes.metadata;
+  const sourceRows = Array.isArray(metadata.item_sources) ? metadata.item_sources : [];
+  const usedSourceRows = new Set();
+  const saleItems = Array.isArray(raw.sale_items)
+    ? raw.sale_items.map((item) => {
+        const exactSourceIndex = sourceRows.findIndex(
+          (source, index) =>
+            !usedSourceRows.has(index) &&
+            safeText(source.product_name).toLowerCase() === safeText(item.product_name).toLowerCase() &&
+            Number(source.quantity_sold || 0) === Number(item.quantity_sold || 0) &&
+            Number(source.selling_price || 0) === Number(item.selling_price || 0) &&
+            (source.cost_price == null ? null : Number(source.cost_price)) ===
+              (item.cost_price == null ? null : Number(item.cost_price))
+        );
+        const skuSourceIndex = safeText(item.product_sku)
+          ? sourceRows.findIndex(
+              (source, index) =>
+                !usedSourceRows.has(index) && safeText(source.catalog_sku) === safeText(item.product_sku)
+            )
+          : -1;
+        const fallbackSourceIndex = sourceRows.findIndex((_source, index) => !usedSourceRows.has(index));
+        const sourceIndex = exactSourceIndex >= 0 ? exactSourceIndex : skuSourceIndex >= 0 ? skuSourceIndex : fallbackSourceIndex;
+        if (sourceIndex >= 0) {
+          usedSourceRows.add(sourceIndex);
+        }
+        const source = sourceIndex >= 0 ? sourceRows[sourceIndex] : {};
+        const tracked = Boolean(safeText(item.product_sku));
+        return {
           id: item.id,
           productSku: safeText(item.product_sku),
+          catalogSku: safeText(item.product_sku) || safeText(source.catalog_sku),
           productName: safeText(item.product_name),
           quantitySold: Number(item.quantity_sold ?? 0),
           sellingPrice: Number(item.selling_price ?? 0),
-          costPrice: item.cost_price == null ? null : Number(item.cost_price)
-        }))
-      : []
+          costPrice: item.cost_price == null ? null : Number(item.cost_price),
+          trackInventory: tracked,
+          fulfillmentSource: tracked ? "inventory" : safeText(source.fulfillment_source, "vendor_direct"),
+          vendorName: safeText(source.vendor_name)
+        };
+      })
+    : [];
+  return {
+    id: raw.id,
+    createdAt: raw.created_at,
+    orderDate: safeText(metadata.order_date) || raw.created_at,
+    customerName: safeText(raw.customer_name, "Walk-in sale"),
+    customerPhone: safeText(metadata.customer_phone),
+    sourceChannel: safeText(metadata.source_channel, "not_recorded").toLowerCase(),
+    fulfilmentStatus: safeText(metadata.fulfillment_status, "delivered").toLowerCase(),
+    paymentMethod: safeText(raw.payment_method, "not_recorded").toLowerCase(),
+    paymentStatus: safeText(raw.payment_status, "not_recorded").toLowerCase(),
+    amountReceived:
+      safeText(raw.payment_status, "paid").toLowerCase() === "paid"
+        ? Number(raw.total_amount ?? 0)
+        : metadata.amount_received == null
+          ? 0
+          : Number(metadata.amount_received || 0),
+    deliveryCharge: metadata.delivery_charge == null ? null : Number(metadata.delivery_charge || 0),
+    courierCost: metadata.courier_cost == null ? null : Number(metadata.courier_cost || 0),
+    notes: parsedNotes.notes,
+    totalAmount: Number(raw.total_amount ?? 0),
+    items: saleItems
   };
 }
 
-function isMissingSaleRpcError(error) {
-  const message = safeText(error?.message).toLowerCase();
-  return error?.code === "PGRST202" || message.includes("record_sale_with_items") || message.includes("could not find the function");
+function toCheckoutSale(raw) {
+  const customer = raw?.customer && typeof raw.customer === "object" ? raw.customer : {};
+  const payment = raw?.payment && typeof raw.payment === "object" ? raw.payment : {};
+  const paymentStatus = safeText(payment.status, "pending").toLowerCase();
+  const provider = safeText(payment.provider, "online").toLowerCase();
+  const orderStatus = safeText(raw?.orderStatus, "new").toLowerCase();
+  const fulfilmentStatus =
+    orderStatus === "new" || orderStatus === "payment_pending"
+      ? "confirmed"
+      : orderStatus;
+  const totalAmount = Number(raw?.totalAmount || 0);
+
+  return {
+    id: `checkout-${raw.id}`,
+    databaseId: raw.id,
+    recordType: "checkout",
+    orderReference: safeText(raw.reference, `DB-${safeText(raw.id).slice(0, 8).toUpperCase()}`),
+    createdAt: raw.createdAt,
+    orderDate: raw.createdAt,
+    customerName: safeText(customer.name, "Website customer"),
+    customerPhone: safeText(customer.phone),
+    customerEmail: safeText(customer.email),
+    sourceChannel: "website",
+    fulfilmentStatus,
+    paymentMethod: provider,
+    paymentStatus,
+    amountReceived: paymentStatus === "paid" ? totalAmount : 0,
+    deliveryCharge: null,
+    courierCost: null,
+    notes: safeText(customer.notes),
+    totalAmount,
+    currency: safeText(raw.currency, "INR"),
+    providerOrderId: safeText(payment.providerOrderId),
+    providerPaymentId: safeText(payment.providerPaymentId),
+    providerOrderStatus: safeText(payment.providerOrderStatus),
+    paidAt: payment.paidAt || null,
+    items: Array.isArray(raw.items)
+      ? raw.items.map((item) => ({
+          id: item.id,
+          productSku: safeText(item.sku),
+          catalogSku: safeText(item.sku),
+          productName: safeText(item.name),
+          quantitySold: Number(item.quantity || 0),
+          sellingPrice: Number(item.unitPrice || 0),
+          costPrice: null,
+          trackInventory: false,
+          fulfillmentSource: "website",
+          vendorName: ""
+        }))
+      : []
+  };
 }
 
 function isMissingDeleteSaleRpcError(error) {
@@ -498,30 +871,13 @@ function isMissingDeleteSaleRpcError(error) {
 
 function formatSaleSaveError(error) {
   const message = safeText(error?.message);
-  if (isMissingSaleRpcError(error)) {
-    return "The safe sale-saving function is not installed in Supabase yet. Please run the latest sales SQL migration, then try again.";
-  }
   if (message === "Load failed" || error?.name === "TypeError") {
-    return "Could not reach Supabase from this phone. Please check the connection, then try once more. If it repeats, update the app after the next deploy.";
+    return "Could not reach Decorbeats right now. Your order details are still here—check the connection and tap Save order again.";
   }
   if (message.toLowerCase().includes("row-level security")) {
     return "Supabase security is blocking this sale. Please check the sales, sale_items, and products RLS policies.";
   }
-  return message || "Could not save this sale.";
-}
-
-function saleFromRpcData(data) {
-  const payload = Array.isArray(data) ? data[0] : data;
-  if (!payload) {
-    return null;
-  }
-  if (payload.sale && Array.isArray(payload.sale_items)) {
-    return toSale({ ...payload.sale, sale_items: payload.sale_items });
-  }
-  if (payload.id) {
-    return toSale(payload);
-  }
-  return null;
+  return message || "Could not save this order.";
 }
 
 function toPurchase(raw) {
@@ -647,11 +1003,42 @@ function getCatalogueShareMessage(catalogue) {
 
 function createEmptySaleDraft() {
   return {
+    client_order_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `order-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    order_date: new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10),
     customer_name: "",
-    payment_method: "upi",
-    payment_status: "paid",
+    customer_phone: "",
+    source_channel: "whatsapp",
+    payment_method: "not_recorded",
+    payment_status: "not_recorded",
+    fulfillment_status: "confirmed",
+    amount_received: "",
+    delivery_charge: "",
+    courier_cost: "",
     notes: "",
-    items: []
+    items: [createSaleItemDraft()]
+  };
+}
+
+function createSaleItemDraft(overrides = {}) {
+  return {
+    client_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `sale-item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    product_id: "",
+    product_sku: "",
+    product_name: "",
+    quantity_sold: 1,
+    selling_price: "",
+    cost_price: "",
+    max_quantity: 0,
+    track_inventory: false,
+    fulfillment_source: "vendor_direct",
+    vendor_name: "",
+    ...overrides
   };
 }
 
@@ -704,12 +1091,50 @@ function getCartLineId(product) {
 }
 
 function formatPaymentMethod(value) {
-  return safeText(value, "upi").toUpperCase();
+  const normalized = safeText(value, "not_recorded").toLowerCase();
+  if (normalized === "not_recorded") {
+    return "Not recorded";
+  }
+  if (normalized === "bank_transfer") {
+    return "Bank transfer";
+  }
+  return normalized.toUpperCase();
 }
 
 function formatPaymentStatus(value) {
-  const normalized = safeText(value, "paid").toLowerCase();
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  const normalized = safeText(value, "not_recorded").toLowerCase();
+  return normalized
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatFulfilmentStatus(value) {
+  const normalized = safeText(value, "confirmed").toLowerCase();
+  const labels = {
+    confirmed: "Confirmed",
+    payment_pending: "Awaiting payment",
+    stock_review: "Stock review",
+    procurement: "Vendor procurement",
+    packing: "Packing / ready",
+    shipped: "Shipped",
+    delivered: "Delivered",
+    cancelled: "Cancelled"
+  };
+  return labels[normalized] || formatPaymentStatus(normalized);
+}
+
+function getSaleInventoryLabel(sale) {
+  if (sale.recordType === "checkout") {
+    return "Website checkout";
+  }
+  const inventorySourceCount = sale.items.filter(
+    (item) => item.trackInventory || item.fulfillmentSource === "inventory"
+  ).length;
+  if (!inventorySourceCount) {
+    return "Vendor / custom";
+  }
+  return inventorySourceCount === sale.items.length ? "Inventory source" : "Mixed source";
 }
 
 function formatSaleDate(value) {
@@ -741,7 +1166,10 @@ function formatPurchaseDate(value) {
 
 function formatInquiryStatus(status) {
   const normalized = safeText(status, "new").toLowerCase();
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+  return normalized
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function formatPurchaseStatus(status) {
@@ -752,17 +1180,102 @@ function formatPurchaseStatus(status) {
 }
 
 function createEmptyInquiryDraft() {
-  return JSON.parse(JSON.stringify(emptyInquiryDraft));
+  return {
+    ...JSON.parse(JSON.stringify(emptyInquiryDraft)),
+    client_inquiry_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `inquiry-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    entry_date: new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10)
+  };
+}
+
+function createEmptyQuickSheetItem() {
+  return {
+    client_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `quick-item-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    product_name: "",
+    quantity: 1,
+    unit_price: "",
+    unit_cost: ""
+  };
+}
+
+function createEmptyQuickSheetDraft(recordType = "inquiry") {
+  return {
+    client_record_id:
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `quick-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    record_type: recordType,
+    entry_date: new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10),
+    customer_name: "",
+    courier_cost: "",
+    amount_received: "",
+    status: recordType === "order" ? "confirmed" : "new",
+    items: [createEmptyQuickSheetItem()]
+  };
+}
+
+function getSaleDraftConfirmation(draft) {
+  const orderItems = draft.items.filter((item) => safeText(item.product_name));
+  if (!safeText(draft.customer_name) && !safeText(draft.customer_phone)) {
+    return { error: "Add the customer name or mobile number." };
+  }
+  if (!safeText(draft.order_date)) {
+    return { error: "Choose the order date." };
+  }
+  if (!orderItems.length) {
+    return { error: "Add at least one item before saving." };
+  }
+  const invalidItem = orderItems.find(
+    (item) =>
+      !Number.isInteger(Number(item.quantity_sold)) ||
+      Number(item.quantity_sold) <= 0 ||
+      item.selling_price === "" ||
+      !Number.isFinite(Number(item.selling_price)) ||
+      Number(item.selling_price) < 0
+  );
+  if (invalidItem) {
+    return { error: `Add a valid quantity and unit price for ${invalidItem.product_name || "each item"}.` };
+  }
+  const invalidOptionalNumber = [draft.amount_received, draft.delivery_charge, draft.courier_cost].some(
+    (value) => value !== "" && (!Number.isFinite(Number(value)) || Number(value) < 0)
+  );
+  if (invalidOptionalNumber) {
+    return { error: "Payment and delivery amounts cannot be negative." };
+  }
+
+  return {
+    error: "",
+    orderItems,
+    total: orderItems.reduce(
+      (sum, item) => sum + Number(item.quantity_sold || 0) * Number(item.selling_price || 0),
+      0
+    )
+  };
 }
 
 function normalizeInquiryDraft(payload, products = []) {
   const normalizedProducts = Array.isArray(payload?.products) && payload.products.length ? payload.products : emptyInquiryDraft.products;
   return {
+    client_inquiry_id:
+      safeText(payload?.client_inquiry_id) ||
+      (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `inquiry-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`),
+    entry_date:
+      safeText(payload?.entry_date) ||
+      new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10),
     customer_name: safeText(payload?.customer_name),
     customer_phone: safeText(payload?.customer_phone),
-    source: ["phone", "whatsapp", "walkin"].includes(safeText(payload?.source).toLowerCase())
+    source: ["phone", "whatsapp", "walkin", "instagram", "google", "website", "referral"].includes(
+      safeText(payload?.source).toLowerCase()
+    )
       ? safeText(payload?.source).toLowerCase()
-      : "phone",
+      : "whatsapp",
     occasion: safeText(payload?.occasion),
     required_by_date: safeText(payload?.required_by_date),
     budget_per_unit: payload?.budget_per_unit ?? "",
@@ -822,7 +1335,7 @@ function findMatchingProduct(products, query) {
       bestScore = score;
     }
   });
-  return bestScore >= 40 ? best : null;
+  return bestScore >= 100 ? best : null;
 }
 
 function GridIcon() {
@@ -933,12 +1446,186 @@ function safeText(value, fallback = "") {
   return String(value ?? "").trim() || fallback;
 }
 
+const productNameCorrections = new Map([
+  ["braas shiva head heavy", "Heavy Brass Shiva Head"],
+  ["brass bowl spoon in gift bax set of 2", "Brass Bowl & Spoon Gift Box — Set of 2"],
+  ["brass coconut tree home decor set of 2", "Brass Coconut Tree Décor — Set of 2"],
+  ["brass diya big designer", "Designer Brass Diya"],
+  ["brass shakh", "Decorative Brass Shankh"],
+  ["copper and brass diya big in box", "Copper & Brass Diya in Gift Box"],
+  ["coffe cup set", "Coffee Cup Set"],
+  ["coffe cup set premium", "Coffee Cup Set Premium"],
+  ["dasavatar gift set", "Dashavatara Brass Gift Set"],
+  ["dus avatar set", "Dashavatara Brass Set"],
+  ["elephant urli set", "Elephant Urli Pair"],
+  ["brass gamesha 4 inch", "Brass Ganesha — 4 inch"],
+  ["brass urli diya design", "Brass Urli Diya Design"],
+  ["hanging peacock diya with chain heavy", "Hanging Peacock Brass Diya"],
+  ["horse set", "Brass Horse Pair"],
+  ["metal gold plated basket", "Gold-Finish Metal Basket"],
+  ["peacock 3 step diya", "Peacock Three-Step Brass Diya"],
+  ["peacock diya big rim", "Peacock Rim Brass Diya"],
+  ["shakh chakra diya set", "Shankh Chakra Diya Set"],
+  ["small brass diya in gift box set of 2", "Small Brass Diyas in Gift Box — Set of 2"],
+  ["tlight holder", "Tealight Holder"],
+  ["3 diya in a red gift box", "Brass Diyas in Red Gift Box — Set of 3"]
+]);
+
+function normalizeProductName(value) {
+  const name = safeText(value);
+  return productNameCorrections.get(name.toLowerCase()) ?? name;
+}
+
+function normalizeProductCategory(value) {
+  const category = safeText(value, "Uncategorized");
+  return categoryOptions.find((option) => option.toLowerCase() === category.toLowerCase()) ?? category;
+}
+
+function resolveCustomerCollectionId(value) {
+  const normalized = slugify(safeText(value)).toLowerCase();
+  return (
+    CUSTOMER_COLLECTIONS.find((collection) => collection.id === normalized)?.id ??
+    CUSTOMER_COLLECTION_ALIASES.get(normalized) ??
+    null
+  );
+}
+
+function getCustomerCollectionById(value) {
+  const collectionId = resolveCustomerCollectionId(value) ?? "all";
+  return CUSTOMER_COLLECTIONS.find((collection) => collection.id === collectionId) ?? CUSTOMER_COLLECTIONS[0];
+}
+
+function getCustomerProductHaystack(product) {
+  return [
+    product?.name,
+    product?.category,
+    product?.material,
+    product?.marketingTag,
+    getCustomerProductStory(product)
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function matchesCustomerCollection(product, value) {
+  const collection = getCustomerCollectionById(value);
+  if (collection.id === "all") {
+    return true;
+  }
+
+  const normalizedCategory = safeText(product?.category).toLowerCase();
+  const categoryMatch = (collection.categories ?? []).some(
+    (category) => category.toLowerCase() === normalizedCategory
+  );
+  const haystack = getCustomerProductHaystack(product);
+  const termMatch = (collection.terms ?? []).some((term) => haystack.includes(term));
+
+  if (collection.id === "varalakshmi") {
+    const curatedMatch = VARALAKSHMI_EDIT_NAMES.some(
+      (name) => name.toLowerCase() === safeText(product?.name).toLowerCase()
+    );
+    return safeText(product?.material).toLowerCase() === "brass" && (curatedMatch || categoryMatch || termMatch);
+  }
+
+  return categoryMatch || termMatch;
+}
+
+function isCustomerSellReady(product) {
+  return Boolean(
+    product &&
+      getPrimaryImage(product) &&
+      parsePrice(product?.pricing?.mrp) &&
+      Number(product?.quantity || 0) > 0
+  );
+}
+
+function getCustomerFeaturedRank(product) {
+  return CUSTOMER_FEATURED_PRODUCT_RANK.get(safeText(product?.name).toLowerCase()) ?? Number.POSITIVE_INFINITY;
+}
+
+function getCustomerProductCollectionLabel(product) {
+  const preferredOrder = [
+    "pooja-diyas",
+    "urlis-serveware",
+    "idols-spiritual",
+    "wall-home",
+    "festive-gifts",
+    "home-accents"
+  ];
+  const matchedId = preferredOrder.find((collectionId) => matchesCustomerCollection(product, collectionId));
+  return getCustomerCollectionById(matchedId ?? "home-accents").label;
+}
+
+function getProductExpertNote(product) {
+  const collectionId = resolveCustomerCollectionId(
+    CUSTOMER_COLLECTIONS.find((collection) => collection.label === getCustomerProductCollectionLabel(product))?.id
+  );
+  const notes = {
+    "pooja-diyas": "A meaningful choice for pooja rooms, festive rituals and gifts that bring warmth to the home.",
+    "urlis-serveware": "A decorative centrepiece selected for tables, entrances and festive styling with presence.",
+    "idols-spiritual": "A devotional accent chosen to bring material richness and quiet presence to a sacred corner.",
+    "wall-home": "A sculptural detail selected to add dimension, warmth and a distinctly Indian character to the room.",
+    "festive-gifts": "A memorable keepsake selected for thoughtful festive, wedding and housewarming gifting.",
+    "home-accents": "Selected by the Decorbeats team for proportion, material presence and its place in a considered home."
+  };
+  return notes[collectionId] ?? notes["home-accents"];
+}
+
+function pushCustomerPath(path) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.history.pushState({}, "", `${path}${window.location.search}`);
+}
+
+function getCustomerProductStory(product) {
+  const note = safeText(product?.notes);
+  if (!note || note.toLowerCase() === safeText(product?.name).toLowerCase()) {
+    return "";
+  }
+
+  const internalNotePattern =
+    /\b(qc|quality check|requires? review|pending|internal|inventory|stock|cost|photo|image|amazon|listing)\b/i;
+  return internalNotePattern.test(note) ? "" : note;
+}
+
 function normalizeUrl(value) {
   const url = safeText(value);
   if (!url || url === "[URL]") {
     return "";
   }
   return url;
+}
+
+function getOptimizedImageUrl(value, width = 720, quality = 72, resize = "cover") {
+  const url = normalizeUrl(value);
+  if (!url || !url.includes(".supabase.co/storage/v1/object/public/")) {
+    return url;
+  }
+
+  try {
+    const optimizedUrl = new URL(
+      url.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/")
+    );
+    optimizedUrl.searchParams.set("width", String(width));
+    optimizedUrl.searchParams.set("quality", String(quality));
+    optimizedUrl.searchParams.set("resize", resize);
+    return optimizedUrl.toString();
+  } catch (_error) {
+    return url;
+  }
+}
+
+function getOptimizedImageSrcSet(value, widths, quality = 72, resize = "cover") {
+  const url = normalizeUrl(value);
+  if (!url || !url.includes(".supabase.co/storage/v1/object/public/")) {
+    return undefined;
+  }
+
+  return widths
+    .map((width) => `${getOptimizedImageUrl(url, width, quality, resize)} ${width}w`)
+    .join(", ");
 }
 
 function normalizeImageUrls(value) {
@@ -1110,6 +1797,45 @@ function loadRazorpayCheckout() {
   });
 }
 
+function loadCashfreeCheckout() {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Payments are only available in the browser"));
+  }
+
+  if (window.Cashfree) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const existingScript = document.querySelector(`script[src="${CASHFREE_CHECKOUT_SCRIPT}"]`);
+    if (existingScript) {
+      existingScript.addEventListener("load", () => resolve(), { once: true });
+      existingScript.addEventListener("error", () => reject(new Error("Could not load secure payment checkout")), {
+        once: true
+      });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = CASHFREE_CHECKOUT_SCRIPT;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Could not load secure payment checkout"));
+    document.body.appendChild(script);
+  });
+}
+
+function createCheckoutAttemptId() {
+  if (typeof window !== "undefined" && window.crypto?.randomUUID) {
+    return window.crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
 function getMarginMeta(mrp, costPrice) {
   if (!hasDisplayValue(mrp) || !hasDisplayValue(costPrice)) {
     return null;
@@ -1185,11 +1911,11 @@ function toProduct(raw, index = 0) {
     id: raw.id ?? index + 1,
     slug: raw.slug ?? slugify(`${raw.sku}-${raw.name}`),
     sku: raw.sku ?? "",
-    name: raw.name ?? "",
-    category: raw.category ?? "Uncategorized",
+    name: normalizeProductName(raw.name),
+    category: normalizeProductCategory(raw.category),
     material: raw.material ?? "Unspecified",
     quantity,
-    stockStatus: quantity <= 0 ? "Out of stock" : quantity <= 10 ? "Low stock" : "In stock",
+    stockStatus: quantity <= 0 ? "Out of stock" : quantity <= LOW_STOCK_THRESHOLD ? "Low stock" : "In stock",
     driveUrl: raw.driveUrl ?? raw.drive_url ?? "",
     imageUrl: primaryImage,
     imageUrls,
@@ -1211,17 +1937,44 @@ function toProduct(raw, index = 0) {
 }
 
 function toHeroSlide(raw, index = 0) {
+  const rawImageUrl = normalizeUrl(raw.image_url ?? raw.imageUrl);
+  const isLegacyLeadSlide =
+    rawImageUrl === "/assets/images/slider-credibility-studio.svg" ||
+    rawImageUrl.includes("/hero-slides/1778733194643.jpg");
+  const isVaralakshmiCampaignSlide = rawImageUrl.includes("/hero-slides/1778948763595.jpg");
+  const isLegacyPosterSlide = rawImageUrl.includes("/hero-slides/1778697872686.jpg");
+  const campaignSlide = isVaralakshmiCampaignSlide
+    ? defaultHeroSlides[0]
+    : isLegacyLeadSlide
+      ? defaultHeroSlides[1]
+      : null;
+  const imageUrl = campaignSlide?.imageUrl || rawImageUrl;
   return {
     id: raw.id ?? `hero-slide-${index}`,
-    eyebrow: safeText(raw.eyebrow, "Decorbeats"),
-    title: safeText(raw.title, "Handcrafted for every celebration."),
-    body: safeText(raw.body, "Brass, metal & artisanal decor - made in India, gifted with rhythm."),
-    ctaLabel: safeText(raw.cta_label ?? raw.ctaLabel, "Shop the Collection"),
-    ctaAction: safeText(raw.cta_action ?? raw.ctaAction, "collection"),
+    eyebrow: campaignSlide
+      ? campaignSlide.eyebrow
+      : safeText(raw.eyebrow, "Decorbeats"),
+    title: campaignSlide
+      ? campaignSlide.title
+      : safeText(raw.title, "Handcrafted for every celebration."),
+    body: campaignSlide
+      ? campaignSlide.body
+      : safeText(raw.body, "Brass, metal & artisanal decor - made in India, gifted with rhythm."),
+    ctaLabel: campaignSlide
+      ? campaignSlide.ctaLabel
+      : safeText(raw.cta_label ?? raw.ctaLabel, "Shop the Collection"),
+    ctaAction: campaignSlide
+      ? campaignSlide.ctaAction
+      : safeText(raw.cta_action ?? raw.ctaAction, "collection"),
+    collectionId: campaignSlide?.collectionId ?? resolveCustomerCollectionId(raw.collection_id ?? raw.collectionId) ?? "all",
     contentPosition: safeText(raw.content_position ?? raw.contentPosition, "left"),
-    imageUrl: normalizeUrl(raw.image_url ?? raw.imageUrl),
+    imageUrl,
+    mobileImageUrl: campaignSlide?.mobileImageUrl ?? normalizeUrl(raw.mobile_image_url ?? raw.mobileImageUrl),
+    posterOnly: Boolean(raw.poster_only ?? raw.posterOnly ?? isLegacyPosterSlide),
     active: raw.active ?? raw.is_active ?? true,
-    sortOrder: Number(raw.sort_order ?? raw.sortOrder ?? index + 1),
+    sortOrder: isVaralakshmiCampaignSlide
+      ? 0
+      : Number(raw.sort_order ?? raw.sortOrder ?? index + 1),
     createdAt: raw.created_at ?? raw.createdAt ?? null
   };
 }
@@ -1405,14 +2158,22 @@ function ProductThumb({ product }) {
   if (primaryImage) {
     return (
       <div className="product-thumb">
-        <img className="product-thumb-image" src={primaryImage} alt={product.name} loading="lazy" />
+        <img
+          className="product-thumb-image"
+          src={getOptimizedImageUrl(primaryImage, 112, 64)}
+          alt={product.name}
+          width="56"
+          height="56"
+          loading="lazy"
+          decoding="async"
+        />
       </div>
     );
   }
 
   return (
     <div className="product-thumb product-thumb-fallback">
-      <img src={brandLogo} alt="Decorbeats" className="product-thumb-logo" loading="lazy" />
+      <img src={brandLogo} alt="Decorbeats" className="product-thumb-logo" width="44" height="44" loading="lazy" decoding="async" />
     </div>
   );
 }
@@ -1765,7 +2526,7 @@ on hero_slides for all to authenticated using (true) with check (true);
 do $$
 begin
   if not exists (
-    select 1 from hero_slides where image_url = '/assets/images/slider-credibility-studio.svg'
+    select 1 from hero_slides where image_url = '/assets/images/decorbeats-atelier-campaign.jpg'
   ) then
     update hero_slides
     set sort_order = coalesce(sort_order, 1) + 1
@@ -1781,7 +2542,7 @@ begin
       'Enquire on WhatsApp',
       'whatsapp',
       'left',
-      '/assets/images/slider-credibility-studio.svg',
+      '/assets/images/decorbeats-atelier-campaign.jpg',
       1,
       true
     );
@@ -2282,10 +3043,421 @@ function InquiryStatusFilters({ activeStatus, onChange }) {
   );
 }
 
+function formatQuickSheetValue(value) {
+  return value === null || value === undefined || value === "" ? "—" : formatCurrency(Number(value));
+}
+
+function buildQuickSheetHistoryRows(inquiries, sales) {
+  const rows = [];
+
+  inquiries.forEach((inquiry) => {
+    const items = inquiry.items.length
+      ? inquiry.items
+      : [{ id: "requirement", productName: inquiry.notes || "Requirement not itemised", quantityRequested: 0, quotedPrice: null }];
+    items.forEach((item, index) => {
+      const quantity = Number(item.quantityRequested || 0);
+      const unitPrice = item.quotedPrice == null ? null : Number(item.quotedPrice);
+      rows.push({
+        id: `inquiry-${inquiry.id}-${item.id || index}`,
+        sortDate: inquiry.entryDate || inquiry.createdAt,
+        date: inquiry.entryDate || inquiry.createdAt,
+        recordType: "inquiry",
+        customerName: inquiry.customerName,
+        productName: item.productName || item.productSku || "Requirement",
+        quantity,
+        unitPrice,
+        lineTotal: unitPrice == null ? null : quantity * unitPrice,
+        unitCost: null,
+        courierCost: null,
+        amountReceived: null,
+        status: inquiry.status
+      });
+    });
+  });
+
+  sales.forEach((sale) => {
+    const items = sale.items.length
+      ? sale.items
+      : [{ id: "order", productName: "Order not itemised", quantitySold: 0, sellingPrice: null, costPrice: null }];
+    items.forEach((item, index) => {
+      const quantity = Number(item.quantitySold || 0);
+      const unitPrice = item.sellingPrice == null ? null : Number(item.sellingPrice);
+      rows.push({
+        id: `order-${sale.id}-${item.id || index}`,
+        sortDate: sale.orderDate || sale.createdAt,
+        date: sale.orderDate || sale.createdAt,
+        recordType: "order",
+        customerName: sale.customerName,
+        productName: item.productName || item.productSku || "Order item",
+        quantity,
+        unitPrice,
+        lineTotal: unitPrice == null ? null : quantity * unitPrice,
+        unitCost: item.costPrice,
+        courierCost: index === 0 ? sale.courierCost : null,
+        amountReceived: index === 0 ? sale.amountReceived : null,
+        status: sale.fulfilmentStatus
+      });
+    });
+  });
+
+  return rows.sort((left, right) => new Date(right.sortDate) - new Date(left.sortDate));
+}
+
+function QuickSheetEntryForm({ products, busy, onSave }) {
+  const [draft, setDraft] = useState(createEmptyQuickSheetDraft);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const customerInputRef = useRef(null);
+  const isOrder = draft.record_type === "order";
+  const entryTotal = draft.items.reduce(
+    (sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0),
+    0
+  );
+  const statusOptions = isOrder ? quickSheetOrderStatuses : inquiryStatusOrder;
+
+  function updateDraft(field, value) {
+    setDraft((current) => ({ ...current, [field]: value }));
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+  function handleRecordTypeChange(nextType) {
+    setDraft((current) => ({
+      ...current,
+      record_type: nextType,
+      status: nextType === "order" ? "confirmed" : "new",
+      courier_cost: nextType === "order" ? current.courier_cost : "",
+      amount_received: nextType === "order" ? current.amount_received : "",
+      items: current.items.map((item) => ({ ...item, unit_cost: nextType === "order" ? item.unit_cost : "" }))
+    }));
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+  function updateItem(index, field, value) {
+    setDraft((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) => (itemIndex === index ? { ...item, [field]: value } : item))
+    }));
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+  function addItem() {
+    setDraft((current) => ({ ...current, items: [...current.items, createEmptyQuickSheetItem()] }));
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+  function removeItem(index) {
+    setDraft((current) => ({
+      ...current,
+      items: current.items.length > 1 ? current.items.filter((_, itemIndex) => itemIndex !== index) : current.items
+    }));
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const enteredItems = draft.items.filter((item) => safeText(item.product_name));
+    const optionalAmounts = [
+      draft.courier_cost,
+      draft.amount_received,
+      ...enteredItems.map((item) => item.unit_cost)
+    ];
+
+    if (!safeText(draft.customer_name)) {
+      setErrorMessage("Add the client name.");
+      customerInputRef.current?.focus();
+      return;
+    }
+    if (!safeText(draft.entry_date)) {
+      setErrorMessage("Choose the business date.");
+      return;
+    }
+    if (!enteredItems.length) {
+      setErrorMessage("Add at least one product or custom requirement.");
+      return;
+    }
+    const invalidQuantity = enteredItems.find(
+      (item) => !Number.isInteger(Number(item.quantity)) || Number(item.quantity) <= 0
+    );
+    if (invalidQuantity) {
+      setErrorMessage(`Add a whole-number quantity for ${invalidQuantity.product_name}.`);
+      return;
+    }
+    const invalidPrice = enteredItems.find(
+      (item) => item.unit_price !== "" && (!Number.isFinite(Number(item.unit_price)) || Number(item.unit_price) < 0)
+    );
+    if (invalidPrice) {
+      setErrorMessage(`Unit price cannot be negative for ${invalidPrice.product_name}.`);
+      return;
+    }
+    const missingOrderPrice = isOrder && enteredItems.find((item) => item.unit_price === "");
+    if (missingOrderPrice) {
+      setErrorMessage(`Add the unit price for ${missingOrderPrice.product_name} before saving the order.`);
+      return;
+    }
+    if (optionalAmounts.some((value) => value !== "" && (!Number.isFinite(Number(value)) || Number(value) < 0))) {
+      setErrorMessage("Cost, courier and received amounts cannot be negative.");
+      return;
+    }
+
+    try {
+      await onSave({
+        ...draft,
+        items: enteredItems.map((item) => ({
+          ...item,
+          quantity: Number(item.quantity),
+          unit_price: item.unit_price === "" ? null : Number(item.unit_price)
+        }))
+      });
+      const savedType = draft.record_type;
+      setDraft(createEmptyQuickSheetDraft(savedType));
+      setErrorMessage("");
+      setSuccessMessage(savedType === "order" ? "Order saved in Orders · stock unchanged." : "Inquiry saved in Follow-ups.");
+      window.requestAnimationFrame(() => customerInputRef.current?.focus());
+    } catch (error) {
+      setErrorMessage(error?.message || `Could not save this ${draft.record_type}.`);
+    }
+  }
+
+  return (
+    <form className="quick-sheet-entry" onSubmit={handleSubmit} noValidate>
+      <fieldset className="quick-sheet-fieldset" disabled={busy}>
+      <div className="quick-sheet-entry-heading">
+        <div>
+          <p className="eyebrow">New row</p>
+          <h3>Record it while the customer is on the phone</h3>
+        </div>
+        <p>Choose Inquiry for a lead. Choose Order only when the sale is confirmed.</p>
+      </div>
+      <div className="quick-sheet-entry-grid">
+        <label>
+          Record type
+          <select value={draft.record_type} onChange={(event) => handleRecordTypeChange(event.target.value)}>
+            <option value="inquiry">Inquiry</option>
+            <option value="order">Order</option>
+          </select>
+        </label>
+        <label>
+          Date
+          <input type="date" required value={draft.entry_date} onChange={(event) => updateDraft("entry_date", event.target.value)} />
+        </label>
+        <label className="quick-sheet-client-field">
+          Client name
+          <input
+            ref={customerInputRef}
+            autoComplete="name"
+            value={draft.customer_name}
+            onChange={(event) => updateDraft("customer_name", event.target.value)}
+            placeholder="Name or business"
+          />
+        </label>
+        <label>
+          Courier cost
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            disabled={!isOrder}
+            value={draft.courier_cost}
+            onChange={(event) => updateDraft("courier_cost", event.target.value)}
+            placeholder={isOrder ? "Optional" : "Orders only"}
+          />
+        </label>
+        <label>
+          Amount received
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            disabled={!isOrder}
+            value={draft.amount_received}
+            onChange={(event) => updateDraft("amount_received", event.target.value)}
+            placeholder={isOrder ? "Optional" : "Orders only"}
+          />
+        </label>
+        <label>
+          Status
+          <select value={draft.status} onChange={(event) => updateDraft("status", event.target.value)}>
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>{formatInquiryStatus(status)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <section className="quick-sheet-items" aria-labelledby="quick-sheet-items-heading">
+        <div className="quick-sheet-items-heading">
+          <div>
+            <span className="eyebrow">Items</span>
+            <strong id="quick-sheet-items-heading">One customer can have several products</strong>
+          </div>
+          <button type="button" className="ghost-button" onClick={addItem}>+ Another item</button>
+        </div>
+        <datalist id="quick-sheet-product-options">
+          {products.map((product) => (
+            <option key={product.id} value={product.name}>{product.sku}</option>
+          ))}
+        </datalist>
+        <div className="quick-sheet-item-list">
+          {draft.items.map((item, index) => {
+            const lineTotal = Number(item.quantity || 0) * Number(item.unit_price || 0);
+            return (
+              <div className="quick-sheet-item-row" key={item.client_id}>
+                <label className="quick-sheet-product-field">
+                  Product / requirement
+                  <input
+                    list="quick-sheet-product-options"
+                    value={item.product_name}
+                    onChange={(event) => updateItem(index, "product_name", event.target.value)}
+                    placeholder="Listed or custom product"
+                  />
+                </label>
+                <label>
+                  Qty
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    step="1"
+                    value={item.quantity}
+                    onChange={(event) => updateItem(index, "quantity", event.target.value)}
+                  />
+                </label>
+                <label>
+                  Unit price
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    value={item.unit_price}
+                    onChange={(event) => updateItem(index, "unit_price", event.target.value)}
+                    placeholder={isOrder ? "Required" : "Optional"}
+                  />
+                </label>
+                <div className="quick-sheet-line-total" aria-live="polite">
+                  <span>Line total</span>
+                  <strong>{item.unit_price === "" ? "—" : formatCurrency(lineTotal)}</strong>
+                </div>
+                <label>
+                  Unit cost
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    disabled={!isOrder}
+                    value={item.unit_cost}
+                    onChange={(event) => updateItem(index, "unit_cost", event.target.value)}
+                    placeholder={isOrder ? "Optional" : "Orders only"}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="quick-sheet-remove-item"
+                  disabled={draft.items.length === 1}
+                  aria-label={`Remove item ${index + 1}`}
+                  onClick={() => removeItem(index)}
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <div className="quick-sheet-entry-actions">
+        <div className="quick-sheet-entry-feedback" aria-live="polite">
+          {errorMessage ? <span className="quick-sheet-error" role="alert">{errorMessage}</span> : null}
+          {!errorMessage && successMessage ? <span className="quick-sheet-success">{successMessage}</span> : null}
+          {!errorMessage && !successMessage ? <span>Custom products are welcome. Quick orders never change inventory.</span> : null}
+        </div>
+        <div className="quick-sheet-save-group">
+          <span>{draft.items.some((item) => item.unit_price !== "") ? formatCurrency(entryTotal) : "Total —"}</span>
+          <button type="submit" className="primary-button" disabled={busy}>
+            {busy ? "Saving…" : isOrder ? "Save order" : "Save inquiry"}
+          </button>
+        </div>
+      </div>
+      </fieldset>
+    </form>
+  );
+}
+
+function QuickSheetHistory({ inquiries, sales }) {
+  const rows = useMemo(() => buildQuickSheetHistoryRows(inquiries, sales), [inquiries, sales]);
+  const columns = ["Date", "Type", "Client", "Product", "Qty", "Unit price", "Total", "Unit cost", "Courier cost", "Amount received", "Status"];
+
+  return (
+    <section className="quick-sheet-history-panel" aria-labelledby="quick-sheet-history-title">
+      <div className="quick-sheet-history-heading">
+        <div>
+          <p className="eyebrow">One familiar list</p>
+          <h3 id="quick-sheet-history-title">Inquiries and orders</h3>
+        </div>
+        <span>{rows.length} line {rows.length === 1 ? "item" : "items"}</span>
+      </div>
+      {rows.length ? (
+        <div className="quick-sheet-table" role="table" aria-label="Inquiry and order history">
+          <div className="quick-sheet-header-row" role="row">
+            {columns.map((column) => <span key={column} role="columnheader">{column}</span>)}
+          </div>
+          <div className="quick-sheet-body" role="rowgroup">
+            {rows.map((row) => {
+              const values = [
+                formatPurchaseDate(row.date),
+                row.recordType === "order" ? "Order" : "Inquiry",
+                row.customerName,
+                row.productName,
+                row.quantity || "—",
+                formatQuickSheetValue(row.unitPrice),
+                formatQuickSheetValue(row.lineTotal),
+                formatQuickSheetValue(row.unitCost),
+                formatQuickSheetValue(row.courierCost),
+                formatQuickSheetValue(row.amountReceived),
+                formatInquiryStatus(row.status)
+              ];
+              return (
+                <div className="quick-sheet-history-row" role="row" key={row.id}>
+                  {values.map((value, index) => (
+                    <span
+                      className={index === 1 ? `quick-sheet-record-type ${row.recordType}` : index === 10 ? "quick-sheet-row-status" : ""}
+                      role="cell"
+                      key={`${row.id}-${columns[index]}`}
+                    >
+                      <small className="quick-sheet-cell-label" aria-hidden="true">{columns[index]}</small>
+                      {value}
+                    </span>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="quick-sheet-empty">
+          <strong>No rows yet.</strong>
+          <span>Save the first inquiry above—orders will appear here too.</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function QuickSheetWorkspace({ inquiries, sales, products, busy, onSave }) {
+  return (
+    <div className="quick-sheet-workspace">
+      <QuickSheetEntryForm products={products} busy={busy} onSave={onSave} />
+      <QuickSheetHistory inquiries={inquiries} sales={sales} />
+    </div>
+  );
+}
+
 function InquiryCard({ inquiry, expanded, onToggle, onStatusUpdate, busy }) {
   const requestedUnits = inquiry.items.reduce((sum, item) => sum + Number(item.quantityRequested || 0), 0);
   const productsMentioned = inquiry.items.map((item) => item.productName || item.productSku).filter(Boolean).join(", ");
-  const nextStatus = inquiryStatusOrder[inquiryStatusOrder.indexOf(inquiry.status) + 1] ?? null;
+  const nextStatus = ["converted", "lost"].includes(inquiry.status)
+    ? null
+    : inquiryStatusOrder[inquiryStatusOrder.indexOf(inquiry.status) + 1] ?? null;
 
   return (
     <article className={expanded ? "inquiry-card expanded" : "inquiry-card"}>
@@ -2363,40 +3535,85 @@ function InquiryCard({ inquiry, expanded, onToggle, onStatusUpdate, busy }) {
 
 function InquiriesScreen({
   inquiries,
+  allInquiries,
+  sales,
+  products,
   statusFilter,
   setStatusFilter,
   expandedInquiryId,
   onToggleInquiry,
   onStatusUpdate,
   onNewInquiry,
+  onQuickSave,
+  orderBusy,
   busy
 }) {
+  const [activeView, setActiveView] = useState("sheet");
+
   return (
-    <section className="stack-grid">
-      <button type="button" className="primary-button inquiry-log-button" onClick={onNewInquiry}>
-        <MicIcon />
-        <span>Log New Inquiry</span>
-      </button>
-      <InquiryStatusFilters activeStatus={statusFilter} onChange={setStatusFilter} />
-      <section className="inquiry-list">
-        {inquiries.length ? (
-          inquiries.map((inquiry) => (
-            <InquiryCard
-              key={inquiry.id}
-              inquiry={inquiry}
-              expanded={expandedInquiryId === inquiry.id}
-              onToggle={onToggleInquiry}
-              onStatusUpdate={onStatusUpdate}
-              busy={busy}
-            />
-          ))
-        ) : (
-          <div className="panel-card empty-state">
-            <p className="eyebrow">No inquiries yet</p>
-            <h3>Your customer requests will appear here.</h3>
+    <section className="inquiries-screen">
+      <div className="inquiry-view-tabs" role="tablist" aria-label="Inquiry workspace view">
+        <button
+          id="inquiry-sheet-tab"
+          type="button"
+          role="tab"
+          aria-controls="inquiry-sheet-panel"
+          aria-selected={activeView === "sheet"}
+          className={activeView === "sheet" ? "active" : ""}
+          onClick={() => setActiveView("sheet")}
+        >
+          Quick sheet
+        </button>
+        <button
+          id="inquiry-followups-tab"
+          type="button"
+          role="tab"
+          aria-controls="inquiry-followups-panel"
+          aria-selected={activeView === "followups"}
+          className={activeView === "followups" ? "active" : ""}
+          onClick={() => setActiveView("followups")}
+        >
+          Follow-ups
+        </button>
+      </div>
+
+      <div id="inquiry-sheet-panel" role="tabpanel" aria-labelledby="inquiry-sheet-tab" hidden={activeView !== "sheet"}>
+        <QuickSheetWorkspace
+          inquiries={allInquiries}
+          sales={sales}
+          products={products}
+          busy={busy || orderBusy}
+          onSave={onQuickSave}
+        />
+      </div>
+      <div id="inquiry-followups-panel" role="tabpanel" aria-labelledby="inquiry-followups-tab" hidden={activeView !== "followups"}>
+          <div className="inquiries-toolbar">
+            <InquiryStatusFilters activeStatus={statusFilter} onChange={setStatusFilter} />
+            <button type="button" className="inquiry-create-button" onClick={onNewInquiry}>
+              <PlusIcon />
+              <span>New inquiry</span>
+            </button>
           </div>
-        )}
-      </section>
+          <section className="inquiry-list">
+            {inquiries.length ? (
+              inquiries.map((inquiry) => (
+                <InquiryCard
+                  key={inquiry.id}
+                  inquiry={inquiry}
+                  expanded={expandedInquiryId === inquiry.id}
+                  onToggle={onToggleInquiry}
+                  onStatusUpdate={onStatusUpdate}
+                  busy={busy}
+                />
+              ))
+            ) : (
+              <div className="panel-card empty-state">
+                <p className="eyebrow">No inquiries yet</p>
+                <h3>Your customer requests will appear here.</h3>
+              </div>
+            )}
+          </section>
+      </div>
     </section>
   );
 }
@@ -2406,7 +3623,7 @@ function SalesSummaryStrip({ items }) {
 }
 
 function SalesPaymentFilters({ activeStatus, onChange }) {
-  const filters = ["all", "pending", "paid"];
+  const filters = ["all", "not_recorded", "pending", "part_paid", "paid"];
 
   return (
     <div className="inquiry-status-row" aria-label="Filter sales by payment status">
@@ -2426,29 +3643,30 @@ function SalesPaymentFilters({ activeStatus, onChange }) {
 
 function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markingPaidId, deletingSaleId }) {
   const itemsSummary = sale.items.map((item) => `${item.quantitySold}× ${item.productName || item.productSku}`).join(" + ");
-  const badgeClass =
-    sale.paymentMethod === "upi" ? "sale-payment-badge upi" : sale.paymentMethod === "cash" ? "sale-payment-badge cash" : "sale-payment-badge";
-  const paymentStatusClass = sale.paymentStatus === "pending" ? "sale-payment-status pending" : "sale-payment-status paid";
-  const isPending = sale.paymentStatus === "pending";
+  const paymentStatusClass = `sale-payment-status ${sale.paymentStatus}`;
+  const fulfilmentClass = `sale-fulfilment-status ${sale.fulfilmentStatus}`;
+  const isPending = ["pending", "part_paid"].includes(sale.paymentStatus);
   const isBusy = markingPaidId === sale.id;
   const isDeleting = deletingSaleId === sale.id;
+  const isCheckoutOrder = sale.recordType === "checkout";
 
   return (
     <article className={expanded ? "sale-card expanded" : "sale-card"}>
       <button type="button" className="sale-card-main" onClick={() => onToggle(sale.id)}>
         <div className="sale-card-top">
           <div>
-            <p className="sale-card-date">{formatSaleDate(sale.createdAt)}</p>
+            <p className="sale-card-date">{formatPurchaseDate(sale.orderDate)}</p>
             <h3>{sale.customerName}</h3>
           </div>
           <div className="sale-card-badges">
-            <span className={badgeClass}>{formatPaymentMethod(sale.paymentMethod)}</span>
-            <span className={paymentStatusClass}>{isPending ? "₹ PENDING" : "PAID"}</span>
+            <span className={fulfilmentClass}>{formatFulfilmentStatus(sale.fulfilmentStatus)}</span>
+            <span className={paymentStatusClass}>{formatPaymentStatus(sale.paymentStatus)}</span>
           </div>
         </div>
         <p className="sale-card-items">{itemsSummary || "No items recorded"}</p>
         <div className="sale-card-meta">
           <strong>{formatCurrency(sale.totalAmount)}</strong>
+          <span>{getSaleInventoryLabel(sale)}</span>
         </div>
       </button>
       {expanded ? (
@@ -2459,28 +3677,50 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markin
               <strong>{sale.customerName}</strong>
             </div>
             <div>
+              <span>Mobile</span>
+              <strong>{sale.customerPhone || "Not recorded"}</strong>
+            </div>
+            <div>
               <span>Payment</span>
-              <strong>{formatPaymentMethod(sale.paymentMethod)}</strong>
+              <strong>{formatPaymentStatus(sale.paymentStatus)} · {formatPaymentMethod(sale.paymentMethod)}</strong>
             </div>
             <div>
-              <span>Status</span>
-              <strong>{formatPaymentStatus(sale.paymentStatus)}</strong>
+              <span>Fulfilment</span>
+              <strong>{formatFulfilmentStatus(sale.fulfilmentStatus)}</strong>
             </div>
             <div>
-              <span>Time</span>
-              <strong>{formatSaleDate(sale.createdAt)}</strong>
+              <span>Order date</span>
+              <strong>{formatPurchaseDate(sale.orderDate)}</strong>
             </div>
             <div>
-              <span>Total</span>
-              <strong>{formatCurrency(sale.totalAmount)}</strong>
+              <span>Source</span>
+              <strong>{formatPaymentStatus(sale.sourceChannel)}</strong>
             </div>
+            <div>
+              <span>Received</span>
+              <strong>{formatCurrency(sale.amountReceived)}</strong>
+            </div>
+            {isCheckoutOrder ? (
+              <div>
+                <span>Order reference</span>
+                <strong>{sale.orderReference}</strong>
+              </div>
+            ) : null}
           </div>
           <ul className="sale-item-list">
             {sale.items.map((item) => (
               <li key={item.id || `${item.productSku}-${item.productName}`}>
                 <div>
                   <strong>{item.productName || item.productSku}</strong>
-                  <span>{item.productSku}</span>
+                  <span>
+                    {isCheckoutOrder
+                      ? "Website checkout · stock handled automatically"
+                      : item.trackInventory
+                      ? `${item.productSku} · Inventory deducted`
+                      : item.fulfillmentSource === "inventory"
+                        ? `${item.catalogSku || "Inventory item"} · Stock not adjusted`
+                        : "Custom / vendor direct · No stock change"}
+                  </span>
                 </div>
                 <div>
                   <strong>{item.quantitySold} × {formatCurrency(item.sellingPrice)}</strong>
@@ -2489,6 +3729,9 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markin
             ))}
           </ul>
           {sale.notes ? <p className="detail-note">{sale.notes}</p> : null}
+          {isCheckoutOrder ? (
+            <p className="detail-note">Online payment and inventory are reconciled automatically. Use the payment provider reference for support.</p>
+          ) : (
           <div className="sale-card-actions">
             {isPending ? (
               <button
@@ -2509,6 +3752,7 @@ function SaleCard({ sale, expanded, onToggle, onMarkAsPaid, onDeleteSale, markin
               {isDeleting ? "Deleting..." : "Delete Sale"}
             </button>
           </div>
+          )}
         </div>
       ) : null}
     </article>
@@ -2532,7 +3776,7 @@ function SalesScreen({
     <section className="stack-grid">
       <button type="button" className="primary-button inquiry-log-button" onClick={onRecordSale}>
         <ReceiptIcon />
-        <span>Record Sale</span>
+        <span>Record Order</span>
       </button>
       <SalesSummaryStrip items={summaryItems} />
       <SalesPaymentFilters activeStatus={paymentFilter} onChange={setPaymentFilter} />
@@ -2950,11 +4194,9 @@ function RecordSaleModal({
   setPickerOpen,
   busy,
   errorMessage,
-  confirmation,
-  onCancelConfirmation,
-  onConfirmSale,
   onClose,
   onAddProduct,
+  onAddCustomItem,
   onRemoveProduct,
   onUpdateItem,
   onSave
@@ -2966,95 +4208,102 @@ function RecordSaleModal({
   const matchingProducts = products.filter((product) => {
     const query = productSearch.trim().toLowerCase();
     if (!query) {
-      return product.quantity > 0;
+      return true;
     }
-    return (
-      product.quantity > 0 &&
-      [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase().includes(query)
-    );
-  });
+    return [product.name, product.sku, product.category, product.material]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(query);
+  }).slice(0, 20);
 
   const total = draft.items.reduce(
     (sum, item) => sum + (Number(item.quantity_sold || 0) * Number(item.selling_price || 0)),
     0
   );
-
   return (
-    <div className="inquiry-modal-overlay" onClick={onClose}>
-      <div className="inquiry-modal sale-modal" onClick={(event) => event.stopPropagation()}>
+    <div className="inquiry-modal-overlay" onClick={() => !busy && onClose()}>
+      <div className="inquiry-modal sale-modal quick-order-modal" onClick={(event) => event.stopPropagation()}>
         <form
-          className="inquiry-modal-body inquiry-confirm-form sale-form"
+          className="inquiry-modal-body quick-order-form"
+          aria-busy={busy}
           noValidate
           onSubmit={(event) => {
             event.preventDefault();
-            onSave();
+            if (!busy) {
+              onSave();
+            }
           }}
         >
-          <div className="section-head">
+          <fieldset className="quick-order-fieldset" disabled={busy}>
+          <div className="quick-order-header">
             <div>
-              <p className="eyebrow">Record Sale</p>
-              <h3>Complete a new sale</h3>
+              <p className="eyebrow">Quick order</p>
+              <h3>Record an order</h3>
+              <p>Inventory, custom work, and vendor-direct items all belong here.</p>
             </div>
-          </div>
-          {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
-          <label>
-            Customer name
-            <input
-              value={draft.customer_name}
-              onChange={(event) => setDraft((current) => ({ ...current, customer_name: event.target.value }))}
-              placeholder="Optional"
-            />
-          </label>
-          <div className="sale-payment-toggle">
-            <button
-              type="button"
-              className={draft.payment_method === "cash" ? "payment-toggle active" : "payment-toggle"}
-              onClick={() => setDraft((current) => ({ ...current, payment_method: "cash" }))}
-            >
-              💵 Cash
-            </button>
-            <button
-              type="button"
-              className={draft.payment_method === "upi" ? "payment-toggle active" : "payment-toggle"}
-              onClick={() => setDraft((current) => ({ ...current, payment_method: "upi" }))}
-            >
-              📱 UPI
+            <button type="button" className="quick-order-close" aria-label="Close order recorder" onClick={onClose}>
+              ×
             </button>
           </div>
-          <div className="payment-status-block">
-            <p className="eyebrow">Payment Status</p>
-            <div className="sale-payment-toggle payment-status-toggle">
-              <button
-                type="button"
-                className={draft.payment_status === "paid" ? "payment-toggle active payment-toggle-paid" : "payment-toggle"}
-                onClick={() => setDraft((current) => ({ ...current, payment_status: "paid" }))}
-              >
-                ✓ Paid
-              </button>
-              <button
-                type="button"
-                className={draft.payment_status === "pending" ? "payment-toggle active payment-toggle-pending" : "payment-toggle"}
-                onClick={() => setDraft((current) => ({ ...current, payment_status: "pending" }))}
-              >
-                ⏳ Pending
-              </button>
-            </div>
-            {draft.payment_status === "pending" ? (
-              <p className="support-copy payment-status-note">
-                Stock will still be reduced. Payment can be marked as received later.
-              </p>
-            ) : null}
+          {errorMessage ? <p className="inline-upload-error quick-order-error" role="alert">{errorMessage}</p> : null}
+
+          <div className="quick-order-customer-grid">
+            <label>
+              Order date
+              <input
+                type="date"
+                value={draft.order_date}
+                onChange={(event) => setDraft((current) => ({ ...current, order_date: event.target.value }))}
+              />
+            </label>
+            <label>
+              Customer name
+              <input
+                autoFocus
+                autoComplete="name"
+                value={draft.customer_name}
+                onChange={(event) => setDraft((current) => ({ ...current, customer_name: event.target.value }))}
+                placeholder="e.g. Ranjini"
+              />
+            </label>
+            <label>
+              Mobile <span>optional</span>
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={draft.customer_phone}
+                onChange={(event) => setDraft((current) => ({ ...current, customer_phone: event.target.value }))}
+                placeholder="Customer number"
+              />
+            </label>
           </div>
-          <div className="inquiry-products-editor span-2">
-            <div className="section-head">
+
+          <section className="quick-order-items" aria-labelledby="quick-order-items-title">
+            <div className="quick-order-section-head">
               <div>
-                <p className="eyebrow">Products</p>
-                <h3>Sale items</h3>
+                <p className="eyebrow">Line items</p>
+                <h4 id="quick-order-items-title">What did they order?</h4>
               </div>
-              <button type="button" className="ghost-button" onClick={() => setPickerOpen((value) => !value)}>
-                Add Product
+              <span>{draft.items.length} {draft.items.length === 1 ? "item" : "items"}</span>
+            </div>
+
+            <div className="quick-order-add-actions">
+              <button type="button" className="quick-order-add inventory" onClick={() => setPickerOpen((value) => !value)}>
+                <span aria-hidden="true">⌕</span>
+                Choose inventory
+              </button>
+              <button type="button" className="quick-order-add vendor" onClick={onAddCustomItem}>
+                <span aria-hidden="true">＋</span>
+                Custom / vendor item
               </button>
             </div>
+
+            <p className="quick-order-stock-note" role="status">
+              Quick orders never change stock automatically. After dispatch, update the quantity from Inventory.
+            </p>
+
             {pickerOpen ? (
               <div className="sale-picker">
                 <input
@@ -3062,7 +4311,8 @@ function RecordSaleModal({
                   type="search"
                   value={productSearch}
                   onChange={(event) => setProductSearch(event.target.value)}
-                  placeholder="Search products by name or SKU"
+                  placeholder="Search inventory by product or SKU"
+                  autoFocus
                 />
                 <div className="sale-picker-results">
                   {matchingProducts.map((product) => (
@@ -3071,113 +4321,263 @@ function RecordSaleModal({
                         <strong>{product.name}</strong>
                         <span>{product.sku}</span>
                       </div>
-                      <small>{product.quantity} in stock</small>
+                      <small className={product.quantity > 0 ? "" : "out"}>
+                        {product.quantity > 0 ? `${product.quantity} in stock` : "Vendor-direct only"}
+                      </small>
                     </button>
                   ))}
+                  {!matchingProducts.length ? (
+                    <button type="button" className="sale-picker-item sale-picker-custom" onClick={onAddCustomItem}>
+                      <div>
+                        <strong>Add “{productSearch || "custom item"}”</strong>
+                        <span>No catalogue match required</span>
+                      </div>
+                      <small>Vendor direct</small>
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
-            <div className="inquiry-product-editor-list">
-              {draft.items.length ? (
-                draft.items.map((item, index) => (
-                  <div key={`${item.product_sku}-${index}`} className="inquiry-product-editor-card sale-item-card">
-                    <div className="sale-item-head">
-                      <div>
-                        <strong>{item.product_name}</strong>
-                        <span>{item.product_sku}</span>
-                      </div>
-                      <button type="button" className="detail-cancel-link" onClick={() => onRemoveProduct(index)}>
-                        ×
+
+            <div className="quick-order-item-list">
+              {draft.items.map((item, index) => {
+                const stockShort = item.track_inventory && Number(item.quantity_sold || 0) > Number(item.max_quantity || 0);
+                return (
+                  <article key={item.client_id || `${item.product_sku}-${index}`} className="quick-order-item-card">
+                    <div className="quick-order-item-head">
+                      <span className={item.track_inventory ? "quick-order-source-badge inventory" : "quick-order-source-badge vendor"}>
+                        {item.track_inventory ? "Inventory" : "Custom / vendor"}
+                      </span>
+                      <button
+                        type="button"
+                        className="quick-order-remove"
+                        aria-label={`Remove ${item.product_name || `item ${index + 1}`}`}
+                        onClick={() => onRemoveProduct(index)}
+                      >
+                        Remove
                       </button>
                     </div>
-                    <div className="inquiry-inline-fields">
+
+                    <label className="quick-order-product-name">
+                      Item name
+                      <input
+                        value={item.product_name}
+                        readOnly={Boolean(item.product_id)}
+                        onChange={(event) => onUpdateItem(index, "product_name", event.target.value)}
+                        placeholder="e.g. Customised bell"
+                      />
+                    </label>
+
+                    {item.product_sku ? (
+                      <div className="quick-order-source-toggle" aria-label="Choose how this item will be fulfilled">
+                        <button
+                          type="button"
+                          className={item.track_inventory ? "active" : ""}
+                          onClick={() => onUpdateItem(index, "fulfillment_source", "inventory")}
+                        >
+                          From inventory
+                        </button>
+                        <button
+                          type="button"
+                          className={!item.track_inventory ? "active" : ""}
+                          onClick={() => onUpdateItem(index, "fulfillment_source", "vendor_direct")}
+                        >
+                          Vendor direct
+                        </button>
+                      </div>
+                    ) : null}
+
+                    <div className="quick-order-numbers">
                       <label>
-                        Quantity
+                        Qty
                         <input
                           type="number"
                           inputMode="numeric"
-                          pattern="[0-9]*"
-                          max={item.max_quantity}
-                          value={Number(item.quantity_sold || 0) === 0 ? "" : item.quantity_sold}
-                          placeholder="0"
+                          min="1"
+                          step="1"
+                          value={item.quantity_sold}
                           onClick={handleNumericInputClick}
                           onChange={(event) => onUpdateItem(index, "quantity_sold", event.target.value)}
                         />
                       </label>
                       <label>
-                        Selling price
+                        Unit price
                         <div className="rupee-field">
                           <span>₹</span>
                           <input
                             type="number"
                             inputMode="decimal"
-                            value={Number(item.selling_price || 0) === 0 ? "" : item.selling_price}
+                            min="0"
+                            step="0.01"
+                            value={item.selling_price}
                             placeholder="0"
                             onClick={handleNumericInputClick}
                             onChange={(event) => onUpdateItem(index, "selling_price", event.target.value)}
                           />
                         </div>
                       </label>
+                      <div className="quick-order-line-total">
+                        <span>Line total</span>
+                        <strong>{formatCurrency(Number(item.quantity_sold || 0) * Number(item.selling_price || 0))}</strong>
+                      </div>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <p className="support-copy">Add at least one product to record this sale.</p>
-              )}
+
+                    {stockShort ? (
+                      <p className="quick-order-stock-warning" role="alert">
+                        Only {item.max_quantity} currently recorded in stock. Choose Vendor direct or update Inventory after saving.
+                      </p>
+                    ) : null}
+
+                    <details className="quick-order-line-details">
+                      <summary>Cost and vendor <span>optional</span></summary>
+                      <div>
+                        <label>
+                          Unit cost
+                          <div className="rupee-field">
+                            <span>₹</span>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              min="0"
+                              value={item.cost_price}
+                              onChange={(event) => onUpdateItem(index, "cost_price", event.target.value)}
+                            />
+                          </div>
+                        </label>
+                        <label>
+                          Vendor
+                          <input
+                            value={item.vendor_name}
+                            onChange={(event) => onUpdateItem(index, "vendor_name", event.target.value)}
+                            placeholder="Optional vendor name"
+                          />
+                        </label>
+                      </div>
+                    </details>
+                  </article>
+                );
+              })}
             </div>
-          </div>
-          <label className="span-2">
-            Notes
-            <textarea
-              rows="4"
-              value={draft.notes}
-              onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-            />
-          </label>
-          <div className="sale-total-card span-2">
-            <span>Order total</span>
-            <strong>{formatCurrency(total)}</strong>
-          </div>
-          {confirmation ? (
-            <div className="sale-confirm-card span-2">
-              <p className="eyebrow">Confirm Sale</p>
-              <h3>Stock will be reduced</h3>
-              <ul className="sale-confirm-list">
-                {confirmation.inventoryChanges.map(({ item, product, nextQuantity }) => (
-                  <li key={item.product_sku}>
-                    <strong>{item.product_name}</strong>
-                    <span>
-                      {product.quantity} → {nextQuantity}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="sale-confirm-total">
-                Total: <strong>{formatCurrency(confirmation.total)}</strong> ({formatPaymentMethod(confirmation.paymentMethod)})
-              </p>
-              <div className="detail-edit-actions">
-                <button type="button" className="ghost-button" disabled={busy} onClick={onCancelConfirmation}>
-                  Cancel
-                </button>
-                <button type="button" className="primary-button detail-save-button" disabled={busy} onClick={onConfirmSale}>
-                  {busy ? "Saving..." : "Confirm & Save"}
-                </button>
-              </div>
+          </section>
+
+          <details className="quick-order-details">
+            <summary>Payment, delivery and notes <span>optional</span></summary>
+            <div className="quick-order-details-grid">
+              <label>
+                Fulfilment
+                <select
+                  value={draft.fulfillment_status}
+                  onChange={(event) => setDraft((current) => ({ ...current, fulfillment_status: event.target.value }))}
+                >
+                  <option value="confirmed">Confirmed</option>
+                  <option value="procurement">Vendor procurement</option>
+                  <option value="packing">Packing / ready</option>
+                  <option value="shipped">Shipped</option>
+                  <option value="delivered">Delivered</option>
+                </select>
+              </label>
+              <label>
+                Payment status
+                <select
+                  value={draft.payment_status}
+                  onChange={(event) => setDraft((current) => ({ ...current, payment_status: event.target.value }))}
+                >
+                  <option value="not_recorded">Not recorded</option>
+                  <option value="pending">Unpaid</option>
+                  <option value="part_paid">Part-paid</option>
+                  <option value="paid">Paid</option>
+                </select>
+              </label>
+              <label>
+                Payment mode
+                <select
+                  value={draft.payment_method}
+                  onChange={(event) => setDraft((current) => ({ ...current, payment_method: event.target.value }))}
+                >
+                  <option value="not_recorded">Not recorded</option>
+                  <option value="upi">UPI</option>
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="card">Card</option>
+                </select>
+              </label>
+              <label>
+                Amount received
+                <div className="rupee-field">
+                  <span>₹</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    value={draft.amount_received}
+                    onChange={(event) => setDraft((current) => ({ ...current, amount_received: event.target.value }))}
+                  />
+                </div>
+              </label>
+              <label>
+                Order source
+                <select
+                  value={draft.source_channel}
+                  onChange={(event) => setDraft((current) => ({ ...current, source_channel: event.target.value }))}
+                >
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="google">Google</option>
+                  <option value="website">Website</option>
+                  <option value="phone">Phone</option>
+                  <option value="walkin">Walk-in</option>
+                  <option value="referral">Referral</option>
+                </select>
+              </label>
+              <label>
+                Courier cost paid
+                <div className="rupee-field">
+                  <span>₹</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    value={draft.courier_cost}
+                    onChange={(event) => setDraft((current) => ({ ...current, courier_cost: event.target.value }))}
+                  />
+                </div>
+              </label>
+              <label>
+                Delivery charge collected
+                <div className="rupee-field">
+                  <span>₹</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    value={draft.delivery_charge}
+                    onChange={(event) => setDraft((current) => ({ ...current, delivery_charge: event.target.value }))}
+                  />
+                </div>
+              </label>
+              <label className="span-2">
+                Notes
+                <textarea
+                  rows="3"
+                  value={draft.notes}
+                  onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder="Customisation, delivery address, follow-up..."
+                />
+              </label>
             </div>
-          ) : null}
-          <div className="detail-edit-actions">
-            <button
-              type="button"
-              className="primary-button detail-save-button"
-              disabled={busy || !draft.items.length || Boolean(confirmation)}
-              onClick={onSave}
-            >
-              {busy ? "Saving..." : "Complete Sale"}
-            </button>
-            <button type="button" className="detail-cancel-link" onClick={onClose}>
-              Cancel
+          </details>
+
+          <div className="quick-order-save-bar">
+            <div>
+              <span>Order total</span>
+              <strong>{formatCurrency(total)}</strong>
+              <small>Stock unchanged · update Inventory after dispatch</small>
+            </div>
+            <button type="submit" className="primary-button" disabled={busy}>
+              {busy ? "Saving order..." : "Save order"}
             </button>
           </div>
+          </fieldset>
         </form>
       </div>
     </div>
@@ -3213,14 +4613,18 @@ function InquiryRecorderModal({
 
   return (
     <div className="inquiry-modal-overlay" onClick={onCancel}>
-      <div className="inquiry-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="inquiry-modal quick-inquiry-modal" onClick={(event) => event.stopPropagation()}>
         {step === "record" ? (
-          <div className="inquiry-modal-body">
-            <div className="section-head">
+          <div className="inquiry-modal-body quick-inquiry-assist">
+            <div className="quick-order-header">
               <div>
-                <p className="eyebrow">New Inquiry</p>
-                <h3>Capture inquiry details</h3>
+                <p className="eyebrow">Optional assistant</p>
+                <h3>Speak or paste a customer message</h3>
+                <p>We’ll pull the useful details into the quick inquiry form.</p>
               </div>
+              <button type="button" className="quick-order-close" aria-label="Close inquiry recorder" onClick={onCancel}>
+                ×
+              </button>
             </div>
             {supportsSpeechRecognition ? (
               <>
@@ -3234,28 +4638,25 @@ function InquiryRecorderModal({
                 <p className="support-copy inquiry-recorder-copy">
                   {isListening ? "Listening in English (India)..." : "Tap the mic to start recording."}
                 </p>
-                <div className="transcript-box">{transcript || "Live transcript will appear here as you speak."}</div>
+                {transcript ? <div className="transcript-box">{transcript}</div> : null}
               </>
-            ) : (
-              <>
-                <label className="inquiry-textarea-label">
-                  Type your inquiry here
-                  <textarea
-                    rows="9"
-                    value={manualTranscript}
-                    onChange={(event) => setManualTranscript(event.target.value)}
-                    placeholder="Capture the customer inquiry details here..."
-                  />
-                </label>
-              </>
-            )}
+            ) : null}
+            <label className="inquiry-textarea-label">
+              Paste or type the message
+              <textarea
+                rows="6"
+                value={manualTranscript}
+                onChange={(event) => setManualTranscript(event.target.value)}
+                placeholder="e.g. Priya needs 80 dabara sets at ₹1,200 each for an event next month"
+              />
+            </label>
             {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
             <div className="detail-edit-actions">
               <button type="button" className="primary-button detail-save-button" disabled={busy} onClick={onStopAndProcess}>
-                Done
+                Fill inquiry form
               </button>
-              <button type="button" className="detail-cancel-link" onClick={onCancel}>
-                Cancel
+              <button type="button" className="detail-cancel-link" onClick={onBack}>
+                Back to quick form
               </button>
             </div>
           </div>
@@ -3270,120 +4671,77 @@ function InquiryRecorderModal({
 
         {step === "confirm" ? (
           <form
-            className="inquiry-modal-body inquiry-confirm-form"
+            className="inquiry-modal-body inquiry-confirm-form quick-inquiry-form"
             onSubmit={(event) => {
               event.preventDefault();
               onSave();
             }}
           >
-            <div className="section-head">
+            <div className="quick-order-header span-2">
               <div>
-                <p className="eyebrow">Confirm Inquiry</p>
-                <h3>Review before saving</h3>
+                <p className="eyebrow">Quick inquiry</p>
+                <h3>Customer and requirement</h3>
+                <p>Capture only what you know. Unknown products are welcome.</p>
               </div>
+              <button type="button" className="quick-order-close" aria-label="Close inquiry recorder" onClick={onCancel}>
+                ×
+              </button>
             </div>
-            {errorMessage ? <p className="inline-upload-error">{errorMessage}</p> : null}
+            {errorMessage ? <p className="inline-upload-error span-2" role="alert">{errorMessage}</p> : null}
             <label>
               Customer name
               <input
+                autoFocus
+                autoComplete="name"
                 value={draft.customer_name}
                 onChange={(event) => setDraft((current) => ({ ...current, customer_name: event.target.value }))}
+                placeholder="Name or business"
               />
             </label>
             <label>
-              Customer phone
+              Mobile
               <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
                 value={draft.customer_phone}
                 onChange={(event) => setDraft((current) => ({ ...current, customer_phone: event.target.value }))}
+                placeholder="Optional if name is known"
               />
             </label>
-            <label>
-              Source
-              <select
-                value={draft.source}
-                onChange={(event) => setDraft((current) => ({ ...current, source: event.target.value }))}
-              >
-                <option value="phone">Phone</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="walkin">Walk-in</option>
-              </select>
-            </label>
-            <label>
-              Occasion
-              <input
-                value={draft.occasion}
-                onChange={(event) => setDraft((current) => ({ ...current, occasion: event.target.value }))}
-              />
-            </label>
-            <label>
-              Required by date
-              <input
-                value={draft.required_by_date}
-                onChange={(event) => setDraft((current) => ({ ...current, required_by_date: event.target.value }))}
-              />
-            </label>
-            <label>
-              Budget per unit
-              <div className="rupee-field">
-                <span>₹</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={draft.budget_per_unit}
-                  onClick={handleNumericInputClick}
-                  onChange={(event) => setDraft((current) => ({ ...current, budget_per_unit: event.target.value }))}
-                />
-              </div>
-            </label>
-            <label>
-              Total budget
-              <div className="rupee-field">
-                <span>₹</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={draft.total_budget}
-                  onClick={handleNumericInputClick}
-                  onChange={(event) => setDraft((current) => ({ ...current, total_budget: event.target.value }))}
-                />
-              </div>
-            </label>
-            <label className="span-2">
-              Notes
-              <textarea
-                rows="4"
-                value={draft.notes}
-                onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-              />
-            </label>
-            <div className="inquiry-products-editor span-2">
-              <div className="section-head">
+
+            <div className="inquiry-products-editor span-2 quick-inquiry-items">
+              <div className="quick-order-section-head">
                 <div>
-                  <p className="eyebrow">Products</p>
-                  <h3>Items requested</h3>
+                  <p className="eyebrow">Requirement</p>
+                  <h4>What are they looking for?</h4>
                 </div>
                 <button type="button" className="ghost-button" onClick={onAddProductRow}>
-                  Add item
+                  + Add item
                 </button>
               </div>
               <div className="inquiry-product-editor-list">
                 {draft.products.map((item, index) => (
                   <div key={`draft-item-${index}`} className="inquiry-product-editor-card">
                     <label>
-                      Product name
+                      Item or requirement
                       <input
                         value={item.product_name}
                         onChange={(event) => onProductNameChange(index, event.target.value)}
+                        placeholder="e.g. Custom bell, 8-inch brass plate"
                       />
                     </label>
-                    {item.matched_sku ? <span className="matched-sku-badge">{item.matched_sku}</span> : null}
+                    {item.matched_sku ? <span className="matched-sku-badge">Possible match: {item.matched_sku}</span> : null}
                     <div className="inquiry-inline-fields">
                       <label>
                         Quantity
                         <input
                           type="number"
                           inputMode="numeric"
+                          min="1"
+                          step="1"
                           value={item.quantity_requested}
+                          placeholder="1"
                           onClick={handleNumericInputClick}
                           onChange={(event) => onProductFieldChange(index, "quantity_requested", event.target.value)}
                         />
@@ -3395,7 +4753,9 @@ function InquiryRecorderModal({
                           <input
                             type="number"
                             inputMode="decimal"
+                            min="0"
                             value={item.quoted_price}
+                            placeholder="Optional"
                             onClick={handleNumericInputClick}
                             onChange={(event) => onProductFieldChange(index, "quoted_price", event.target.value)}
                           />
@@ -3414,12 +4774,84 @@ function InquiryRecorderModal({
                 ))}
               </div>
             </div>
-            <div className="detail-edit-actions">
-              <button type="submit" className="primary-button detail-save-button" disabled={busy}>
-                {busy ? "Saving..." : "Save Inquiry"}
+
+            <details className="quick-order-details span-2">
+              <summary>Source, date, budget and notes <span>optional</span></summary>
+              <div className="quick-order-details-grid">
+                <label>
+                  Source
+                  <select
+                    value={draft.source}
+                    onChange={(event) => setDraft((current) => ({ ...current, source: event.target.value }))}
+                  >
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="google">Google</option>
+                    <option value="website">Website</option>
+                    <option value="phone">Phone</option>
+                    <option value="walkin">Walk-in</option>
+                    <option value="referral">Referral</option>
+                  </select>
+                </label>
+                <label>
+                  Occasion
+                  <input
+                    value={draft.occasion}
+                    onChange={(event) => setDraft((current) => ({ ...current, occasion: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Required by
+                  <input
+                    type="date"
+                    value={draft.required_by_date}
+                    onChange={(event) => setDraft((current) => ({ ...current, required_by_date: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Budget per unit
+                  <div className="rupee-field">
+                    <span>₹</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      value={draft.budget_per_unit}
+                      onChange={(event) => setDraft((current) => ({ ...current, budget_per_unit: event.target.value }))}
+                    />
+                  </div>
+                </label>
+                <label>
+                  Total budget
+                  <div className="rupee-field">
+                    <span>₹</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      value={draft.total_budget}
+                      onChange={(event) => setDraft((current) => ({ ...current, total_budget: event.target.value }))}
+                    />
+                  </div>
+                </label>
+                <label className="span-2">
+                  Notes
+                  <textarea
+                    rows="3"
+                    value={draft.notes}
+                    onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+                    placeholder="Follow-up, customisation, reference, address..."
+                  />
+                </label>
+              </div>
+            </details>
+
+            <div className="quick-inquiry-save-bar span-2">
+              <button type="button" className="ghost-button" onClick={onBack}>
+                Use voice / paste message
               </button>
-              <button type="button" className="detail-cancel-link" onClick={onBack}>
-                Back
+              <button type="submit" className="primary-button detail-save-button" disabled={busy}>
+                {busy ? "Saving inquiry..." : "Save inquiry"}
               </button>
             </div>
           </form>
@@ -3440,19 +4872,74 @@ function CustomerPreviewBanner({ onBack }) {
   );
 }
 
-function AnnouncementBar() {
-  const items = [...ANNOUNCEMENTS, ...ANNOUNCEMENTS];
-
+function AnnouncementBar({ onShop }) {
   return (
     <section className="announcement-bar" aria-label="Store announcements">
-      <div className="announcement-track">
-        {items.map((message, index) => (
-          <span key={`${message}-${index}`} className="announcement-item">
-            {message}
-          </span>
-        ))}
+      <div className="announcement-inner">
+        <p>
+          {ANNOUNCEMENTS.map((message) => (
+            <span key={message} className="announcement-item">
+              {message}
+            </span>
+          ))}
+        </p>
+        <button type="button" onClick={onShop}>
+          Shop the festive edit
+        </button>
       </div>
     </section>
+  );
+}
+
+function CustomerUtilityBar() {
+  return (
+    <div className="customer-utility-bar" aria-label="Store information">
+      <span>Rooted in Moradabad, India’s brass city</span>
+      <div>
+        <span>Secure online checkout</span>
+        <span>Pan-India delivery</span>
+        <a href="tel:+919811133661">Brass concierge: +91 98111 33661</a>
+      </div>
+    </div>
+  );
+}
+
+function CustomerNavigation({ onSelectCategory, onShop }) {
+  const items = [
+    { collection: getCustomerCollectionById("varalakshmi"), mobileLabel: "Gifts" },
+    { collection: getCustomerCollectionById("pooja-diyas"), mobileLabel: "Diyas" },
+    { collection: getCustomerCollectionById("urlis-serveware"), mobileLabel: "Urlis" },
+    { collection: getCustomerCollectionById("idols-spiritual"), mobileLabel: "Idols" },
+    { collection: getCustomerCollectionById("wall-home"), mobileLabel: "Wall" },
+    { collection: getCustomerCollectionById("home-accents"), mobileLabel: "Décor" }
+  ];
+
+  return (
+    <nav className="customer-primary-nav" aria-label="Shop collections">
+      {items.map((item) => (
+        <a
+          key={item.collection.id}
+          href={item.collection.path}
+          onClick={(event) => {
+            event.preventDefault();
+            onSelectCategory(item.collection.id, "primary_navigation");
+            onShop();
+          }}
+        >
+          <span className="customer-nav-label-desktop">{item.collection.label}</span>
+          <span className="customer-nav-label-mobile">{item.mobileLabel}</span>
+        </a>
+      ))}
+      <a
+        className="customer-primary-nav-business"
+        href={getBulkWhatsAppUrl()}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => trackBulkWhatsAppClick("primary_navigation")}
+      >
+        Business Gifting
+      </a>
+    </nav>
   );
 }
 
@@ -3484,6 +4971,10 @@ function CustomerHeader({
     <header className={scrolled ? "customer-header scrolled" : "customer-header"}>
       <button type="button" className="customer-header-home" aria-label="Go to Decorbeats home" onClick={onHome}>
         <img src={brandLogo} alt="Decorbeats" className="customer-header-logo" />
+        <span className="customer-header-lockup">
+          <strong>DECORBEATS</strong>
+          <small>THE BRASS HOUSE OF INDIA</small>
+        </span>
       </button>
       {tickerAction ? (
         <button
@@ -3502,6 +4993,15 @@ function CustomerHeader({
       <button type="button" className="customer-header-admin-link" onClick={onAdmin}>
         Admin
       </button>
+      <a
+        className="customer-header-concierge"
+        href={getRetailWhatsAppUrl()}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => trackRetailWhatsAppClick("header_concierge")}
+      >
+        Talk to a brass expert
+      </a>
       <button type="button" className="customer-header-cart" aria-label={`Open cart, ${cartCount} items`} onClick={onCartOpen}>
         <CartIcon />
         {cartCount ? <span>{cartCount}</span> : null}
@@ -3513,27 +5013,37 @@ function CustomerHeader({
   );
 }
 
-function CustomerHero({ slides, featuredProduct, onShop }) {
+function CustomerHero({ slides, featuredProduct, onShop, onSelectCategory }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isHovering, setIsHovering] = useState(false);
+  const gestureStart = useRef(null);
   const heroImage = getPrimaryImage(featuredProduct);
-  const preparedSlides = slides.length
-    ? slides
-    : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: heroImage }));
+  const preparedSlides = (
+    slides.length ? slides : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: slide.imageUrl || heroImage }))
+  ).slice(0, 2);
   const activeSlide = preparedSlides[activeIndex] ?? preparedSlides[0] ?? defaultHeroSlides[0];
-  const slideImage = activeSlide.imageUrl || heroImage;
+  const slideImage = activeSlide.imageUrl || heroImage || defaultHeroSlides[0].imageUrl;
+  const mobileSlideImage = activeSlide.mobileImageUrl || slideImage;
   const titleLines = getHeroTitleLines(activeSlide.title);
-  const isPosterSlide = Boolean(activeSlide.imageUrl);
-  const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}${isPosterSlide ? " hero-poster-slide" : ""}`;
+  const compactTitle =
+    activeSlide.collectionId === "varalakshmi" || slideImage.includes("varalakshmi")
+      ? "Blessings in brass."
+      : "India’s home of brass.";
+  const isPosterOnly = Boolean(activeSlide.posterOnly);
+  const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}${isPosterOnly ? " hero-poster-slide hero-poster-only" : ""}`;
 
   useEffect(() => {
-    if (preparedSlides.length <= 1) {
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const mobileViewport = window.matchMedia?.("(max-width: 767px)").matches;
+    if (preparedSlides.length <= 1 || isPaused || isHovering || reduceMotion || mobileViewport) {
       return undefined;
     }
     const intervalId = window.setInterval(() => {
       setActiveIndex((current) => (current + 1) % preparedSlides.length);
-    }, 5200);
+    }, 6800);
     return () => window.clearInterval(intervalId);
-  }, [preparedSlides.length]);
+  }, [isHovering, isPaused, preparedSlides.length]);
 
   useEffect(() => {
     if (activeIndex > preparedSlides.length - 1) {
@@ -3546,22 +5056,58 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
       openBulkWhatsApp("hero-slider");
       return;
     }
+    onSelectCategory?.(activeSlide.collectionId || (slideImage.includes("varalakshmi") ? "varalakshmi" : "all"), "hero");
     onShop();
   }
 
+  function moveSlide(direction) {
+    setActiveIndex((current) => (current + direction + preparedSlides.length) % preparedSlides.length);
+    setIsPaused(true);
+  }
+
+  function handlePointerDown(event) {
+    if (event.pointerType === "mouse" || event.button !== 0) {
+      return;
+    }
+    gestureStart.current = {
+      x: event.clientX,
+      y: event.clientY,
+      pointerId: event.pointerId
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function handlePointerUp(event) {
+    const start = gestureStart.current;
+    if (!start || start.pointerId !== event.pointerId) {
+      return;
+    }
+    const distanceX = event.clientX - start.x;
+    const distanceY = event.clientY - start.y;
+    gestureStart.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (Math.abs(distanceX) >= 45 && Math.abs(distanceX) > Math.abs(distanceY) * 1.2) {
+      moveSlide(distanceX > 0 ? -1 : 1);
+    }
+  }
+
   return (
-    <section className={heroClassName}>
-      <div className="customer-hero-notes" aria-hidden="true">
-        <span>𝄞</span>
-        <span>♪</span>
-        <span>♫</span>
-      </div>
-      <div className="customer-hero-copy">
+    <section
+      className={heroClassName}
+      aria-label="Decorbeats featured collection"
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+      onFocusCapture={() => setIsPaused(true)}
+    >
+      <div className="customer-hero-copy" aria-live="polite">
         <p className="eyebrow">{activeSlide.eyebrow}</p>
         <h1>
-          {titleLines.map((line) => (
-            <span key={line}>{line}</span>
-          ))}
+          <span className="customer-hero-title-full">
+            {titleLines.map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+          </span>
+          <span className="customer-hero-title-compact">{compactTitle}</span>
         </h1>
         <p>{activeSlide.body}</p>
         <div className="customer-hero-actions">
@@ -3570,71 +5116,241 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
           </button>
           <a
             className="customer-hero-link"
-            href={getBulkWhatsAppUrl()}
+            href={getRetailWhatsAppUrl()}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={() => trackBulkWhatsAppClick("hero")}
+            onClick={() => trackRetailWhatsAppClick("hero")}
           >
-            Enquire for bulk orders →
+            Talk to a brass expert
           </a>
         </div>
+        <div className="customer-hero-proof" aria-label="Shopping assurances">
+          <span>Moradabad roots</span>
+          <span>Secure checkout</span>
+          <span>Pan-India delivery</span>
+        </div>
       </div>
-      <div className="customer-hero-media" aria-hidden="true">
-        {slideImage ? <img src={slideImage} alt={activeSlide.title || featuredProduct?.name || "Decorbeats collection"} loading="lazy" /> : null}
+      <div
+        className="customer-hero-media"
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={() => {
+          gestureStart.current = null;
+        }}
+      >
+        {slideImage ? (
+          <picture>
+            <source media="(max-width: 767px)" srcSet={mobileSlideImage} />
+            <img
+              src={getOptimizedImageUrl(slideImage, 1200, 72, isPosterOnly ? "contain" : "cover")}
+              srcSet={getOptimizedImageSrcSet(
+                slideImage,
+                [768, 1200],
+                72,
+                isPosterOnly ? "contain" : "cover"
+              )}
+              sizes="(max-width: 767px) 100vw, 62vw"
+              alt={safeText(activeSlide.title, featuredProduct?.name || "Decorbeats collection").replaceAll("|", " ")}
+              width="1600"
+              height="800"
+              loading="eager"
+              fetchpriority="high"
+              decoding="async"
+            />
+          </picture>
+        ) : null}
       </div>
       {preparedSlides.length > 1 ? (
-        <div className="customer-hero-dots" aria-label="Hero slides">
-          {preparedSlides.map((slide, index) => (
-            <button
-              key={slide.id}
+        <div className="customer-hero-controls">
+          <button type="button" className="customer-hero-arrow" aria-label="Previous campaign" onClick={() => moveSlide(-1)}>
+            ←
+          </button>
+          <div
+            className="customer-hero-position"
+            role="status"
+            aria-live="polite"
+            aria-label={`Campaign ${activeIndex + 1} of ${preparedSlides.length}`}
+          >
+            <span className="customer-hero-position-current" aria-hidden="true">
+              {String(activeIndex + 1).padStart(2, "0")}
+            </span>
+            <span aria-hidden="true">/</span>
+            <span aria-hidden="true">{String(preparedSlides.length).padStart(2, "0")}</span>
+          </div>
+          <button
               type="button"
-              className={index === activeIndex ? "active" : ""}
-              aria-label={`Show slide ${index + 1}`}
-              onClick={() => setActiveIndex(index)}
-            />
-          ))}
+              className="customer-hero-arrow"
+              aria-label="Next campaign"
+              onClick={() => moveSlide(1)}
+            >
+              →
+            </button>
+          <div className="customer-hero-progress" aria-hidden="true">
+            {preparedSlides.map((slide, index) => (
+              <span key={slide.id ?? index} className={index === activeIndex ? "active" : ""} />
+            ))}
+          </div>
         </div>
       ) : null}
-      <div className="customer-scroll-indicator" aria-hidden="true">
-        <span />
-      </div>
     </section>
   );
 }
 
-function CustomerBeatStories() {
-  return (
-    <section className="customer-beat-stories desktop-reveal" aria-label="The Decorbeats rhythm">
-      <div className="customer-beat-intro">
-        <p className="eyebrow">The Decorbeats rhythm</p>
-        <h2>Every gift has a beat.</h2>
-      </div>
-      <div className="customer-beat-list">
-        {customerBeatStories.map((story) => (
-          <article key={story.title} className="customer-beat-card">
-            <span aria-hidden="true">𝄞</span>
-            <strong>{story.title}</strong>
-            <p>{story.text}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function TrustStrip({ productCount }) {
+function CustomerCommercePromise() {
   const items = [
-    "𝄞 Handcrafted in India",
-    "♪ Bulk orders welcome",
-    `♫ ${productCount}+ products`,
-    "𝄞 WhatsApp enquiry in minutes"
+    ["Moradabad expertise", "Selected with roots in India’s brass city"],
+    ["Secure checkout", "Protected online payments through trusted providers"],
+    ["Pan-India delivery", "Carefully packed for brass and handcrafted décor"],
+    ["Human guidance", "Real help from selection through delivery"]
   ];
 
   return (
-    <section className="trust-strip desktop-reveal" aria-label="Decorbeats trust markers">
-      {items.map((item) => (
-        <span key={item}>{item}</span>
+    <section className="customer-commerce-promise" aria-label="Why shop with Decorbeats">
+      {items.map(([title, detail]) => (
+        <article key={title}>
+          <strong>{title}</strong>
+          <span>{detail}</span>
+        </article>
       ))}
+    </section>
+  );
+}
+
+function CustomerCampaignEdit({
+  products,
+  loading,
+  onSelect,
+  onAddToCart,
+  busyProductId,
+  onViewAll
+}) {
+  const curated = VARALAKSHMI_EDIT_NAMES.flatMap((name) => {
+    const match = products.find(
+      (product) => safeText(product.name).toLowerCase() === name.toLowerCase() && isCustomerSellReady(product)
+    );
+    return match ? [match] : [];
+  });
+  const curatedIds = new Set(curated.map((product) => String(product.id)));
+  const fallback = products.filter(
+    (product) =>
+      !curatedIds.has(String(product.id)) &&
+      isCustomerSellReady(product) &&
+      matchesCustomerCollection(product, "varalakshmi")
+  );
+  const edit = [...curated, ...fallback].slice(0, 6);
+  const showSkeleton = loading && !edit.length;
+
+  if (!edit.length && !showSkeleton) {
+    return null;
+  }
+
+  return (
+    <section
+      className="customer-campaign-edit"
+      aria-labelledby="varalakshmi-edit-title"
+      aria-busy={showSkeleton}
+    >
+      <div className="customer-campaign-edit-head">
+        <div>
+          <p className="eyebrow">The Varalakshmi edit</p>
+          <h2 id="varalakshmi-edit-title">
+            <span className="customer-campaign-title-full">Auspicious brass, ready to gift.</span>
+            <span className="customer-campaign-title-compact">Varalakshmi gifts</span>
+          </h2>
+          <p>In-stock diyas and ritual accents selected for homes filled with light and abundance.</p>
+        </div>
+        <button type="button" className="customer-text-link" onClick={onViewAll}>
+          View all <span aria-hidden="true">→</span>
+        </button>
+      </div>
+      <div className="customer-campaign-products">
+        {showSkeleton
+          ? Array.from({ length: 4 }, (_, index) => (
+              <article className="customer-campaign-card customer-campaign-card-skeleton" key={index} aria-hidden="true">
+                <span className="customer-product-skeleton-image" />
+                <span className="customer-campaign-skeleton-copy">
+                  <span className="customer-product-skeleton-line" />
+                  <span className="customer-product-skeleton-line short" />
+                  <span className="customer-product-skeleton-line short" />
+                </span>
+                <span className="customer-campaign-skeleton-add" />
+              </article>
+            ))
+          : edit.map((product) => {
+          const image = getPrimaryImage(product);
+          const busy = String(busyProductId) === String(product.id);
+          return (
+            <article className="customer-campaign-card" key={product.id}>
+              <button
+                type="button"
+                className="customer-campaign-card-main"
+                aria-label={`View ${product.name}`}
+                onClick={() => onSelect(product)}
+              >
+                <span className="customer-campaign-card-image">
+                  <img
+                    src={getOptimizedImageUrl(image, 520, 72)}
+                    srcSet={getOptimizedImageSrcSet(image, [320, 520], 72)}
+                    sizes="(max-width: 767px) 52vw, 22vw"
+                    alt={product.name}
+                    width="520"
+                    height="620"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <em>Festive selection</em>
+                </span>
+                <span className="customer-campaign-card-copy">
+                  <strong>{product.name}</strong>
+                  <small>{getCustomerProductCollectionLabel(product)}</small>
+                  <b>{formatCurrency(product.pricing.mrp)}</b>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="customer-campaign-card-add"
+                onClick={() => onAddToCart(product)}
+                disabled={busy}
+                aria-label={`Add to bag: ${product.name}`}
+              >
+                {busy ? "Adding…" : "Add to bag"}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function BrandAuthorityIntro({ productCount, onShop }) {
+  return (
+    <section className="customer-authority-intro desktop-reveal" aria-labelledby="brass-house-title">
+      <div className="customer-authority-copy">
+        <p className="eyebrow">Decorbeats · The Brass House of India</p>
+        <h2 id="brass-house-title">One destination. Every expression of brass.</h2>
+        <p>
+          Our roots are in Moradabad—Pital Nagri—where generations have cast, engraved and finished brass by hand.
+          We bring that specialist eye to pieces for prayer, beautiful homes, generous gifting and memorable hospitality.
+        </p>
+        <button type="button" className="customer-text-link" onClick={onShop}>
+          Explore the brass collection <span aria-hidden="true">→</span>
+        </button>
+      </div>
+      <div className="customer-authority-facts" aria-label="Decorbeats expertise">
+        <article>
+          <strong>Moradabad</strong>
+          <span>Roots in India’s brass city</span>
+        </article>
+        <article>
+          <strong>{productCount}+</strong>
+          <span>Live pieces across the brass universe</span>
+        </article>
+        <article>
+          <strong>50–400+</strong>
+          <span>Custom gifting runs with human support</span>
+        </article>
+      </div>
     </section>
   );
 }
@@ -3649,10 +5365,11 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
   });
 
   return (
-    <section className="customer-occasion-rail" aria-label="Shop by occasion">
+    <section className="customer-occasion-rail" aria-label="Shop the brass universe">
       <div className="customer-occasion-head">
-        <p className="eyebrow">Shop by need</p>
-        <h2>Find the right gift faster</h2>
+        <p className="eyebrow">Shop the brass universe</p>
+        <h2>Begin with the moment you are creating.</h2>
+        <p>From a daily diya to a room-defining statement, find brass with purpose and presence.</p>
       </div>
       <div className="customer-occasion-list">
         {occasions.map((occasion) => (
@@ -3665,7 +5382,18 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
               onShop();
             }}
           >
-            {occasion.image ? <img src={occasion.image} alt="" loading="lazy" /> : null}
+            {occasion.image ? (
+              <img
+                src={getOptimizedImageUrl(occasion.image, 520, 72)}
+                srcSet={getOptimizedImageSrcSet(occasion.image, [320, 520, 720], 72)}
+                sizes="(max-width: 767px) 76vw, 25vw"
+                alt={`${occasion.label} from Decorbeats`}
+                width="520"
+                height="700"
+                loading="lazy"
+                decoding="async"
+              />
+            ) : null}
             <em>{occasion.beat}</em>
             <span>{occasion.label}</span>
             <small>{occasion.note}</small>
@@ -3676,112 +5404,356 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
   );
 }
 
-function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
-  const featuredCategories = ["Bowl", "Diya", "Wall Decor", "Box"];
-  const tiles = featuredCategories
-    .map((category) => {
-      const match = products.find((product) => product.category === category && getPrimaryImage(product));
-      return {
-        category,
-        image: match ? getPrimaryImage(match) : "",
-        label: category
-      };
-    })
-    .filter((item) => item.image);
-
-  if (!tiles.length) {
-    return null;
-  }
-
+function FeaturedCategoriesRow({ onSelectCategory, onShop }) {
   return (
-    <section className="featured-categories desktop-reveal">
-      {tiles.map((tile) => (
+    <section className="customer-quick-categories" aria-labelledby="quick-categories-title">
+      <div className="customer-quick-categories-head">
+        <h2 id="quick-categories-title">Shop by category</h2>
         <button
-          key={tile.category}
           type="button"
-          className="featured-category-tile"
           onClick={() => {
-            onSelectCategory(tile.category, "featured_category");
+            onSelectCategory("all", "featured_category");
             onShop();
           }}
         >
-          <img src={tile.image} alt={tile.label} loading="lazy" />
-          <span>{tile.label}</span>
+          View all
         </button>
-      ))}
+      </div>
+      <div className="customer-quick-categories-grid">
+        {CUSTOMER_QUICK_COLLECTIONS.map((tile) => (
+          <button
+            key={tile.id}
+            type="button"
+            className="customer-quick-category"
+            onClick={() => {
+              onSelectCategory(tile.id, "featured_category");
+              onShop();
+            }}
+          >
+            <span className="customer-quick-category-image">
+              <img
+                src={tile.image}
+                alt=""
+                width="360"
+                height="360"
+                loading="lazy"
+                decoding="async"
+              />
+            </span>
+            <span>{tile.label}</span>
+          </button>
+        ))}
+      </div>
     </section>
   );
 }
 
-function EditorialSection() {
+function EditorialSection({ onShop }) {
   return (
-    <section className="editorial-section desktop-reveal">
+    <section className="editorial-section desktop-reveal" aria-labelledby="pital-nagri-title">
       <div className="editorial-media">
-        <div className="editorial-placeholder" aria-hidden="true">
-          <img src={brandLogo} alt="" className="editorial-watermark" loading="lazy" />
-        </div>
+        <picture>
+          <source media="(max-width: 767px)" srcSet="/assets/images/decorbeats-atelier-campaign-mobile-v2.jpg" />
+          <img
+            src="/assets/images/decorbeats-atelier-campaign-v2.jpg"
+            alt="Decorbeats brass décor styled in a contemporary Indian interior"
+            width="1600"
+            height="901"
+            loading="lazy"
+            decoding="async"
+          />
+        </picture>
       </div>
       <div className="editorial-copy">
-        <p className="eyebrow">Decorbeats Studio</p>
-        <h2>Gifting, reimagined.</h2>
-        <p>Thoughtfully crafted brass, metal and artisanal decor pieces for celebrations, events and elevated gifting.</p>
-        <p>Designed to feel personal, finished by hand, and ready for meaningful moments across homes and occasions.</p>
-        <p>From intimate gifting to large-format corporate orders, each piece is made to carry warmth and story.</p>
-        <a
-          className="customer-whatsapp-button editorial-whatsapp"
-          href={getBulkWhatsAppUrl()}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => trackBulkWhatsAppClick("editorial")}
-        >
-          <WhatsAppIcon />
-          <span>Enquire on WhatsApp</span>
-        </a>
+        <p className="eyebrow">From Pital Nagri to your home</p>
+        <h2 id="pital-nagri-title">Brass is not a trend here. It is our language.</h2>
+        <p>
+          In Moradabad, brass knowledge is passed through hands—how a piece is cast, where weight matters, how engraving
+          catches light and how a finish will age.
+        </p>
+        <p>
+          Decorbeats brings that specialist eye to modern Indian homes. We select for material, proportion, finish and
+          meaning, so every object feels beautiful today and worth keeping tomorrow.
+        </p>
+        <ul className="editorial-expertise">
+          <li>Pooja and temple brass</li>
+          <li>Home, wall and hospitality décor</li>
+          <li>Festive, wedding and business gifting</li>
+        </ul>
+        <div className="editorial-actions">
+          <button type="button" className="primary-button" onClick={onShop}>
+            Discover the collection
+          </button>
+          <a
+            className="customer-text-link"
+            href={getRetailWhatsAppUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => trackRetailWhatsAppClick("editorial")}
+          >
+            Ask a brass specialist <span aria-hidden="true">→</span>
+          </a>
+        </div>
       </div>
     </section>
   );
 }
 
-function CustomerCategoryBar({ categories, categoryFilter, setCategoryFilter }) {
+function KnowYourBrass() {
+  const guides = [
+    {
+      number: "01",
+      title: "Solid brass or brass finish?",
+      copy: "We name the material on every piece. Solid brass has depth and natural weight; brass-finished pieces offer a lighter decorative expression."
+    },
+    {
+      number: "02",
+      title: "Let the patina become personal.",
+      copy: "Brass naturally deepens with air and touch. Keep the patina for character, or revive the glow gently with a soft dry cloth and brass-safe care."
+    },
+    {
+      number: "03",
+      title: "Choose for use, not only looks.",
+      copy: "For flame, food or pooja use, follow the care note for that specific piece. Our team can help you choose the right material and finish."
+    }
+  ];
+
   return (
-    <section className="customer-category-row" aria-label="Browse categories">
-      {categories.map((category) => (
+    <section className="customer-brass-guide desktop-reveal" aria-labelledby="know-brass-title">
+      <div className="customer-brass-guide-head">
+        <p className="eyebrow">The brass library</p>
+        <h2 id="know-brass-title">Know your brass.</h2>
+        <p>Good buying begins with good material knowledge. A few notes from the specialists.</p>
+      </div>
+      <div className="customer-brass-guide-grid">
+        {guides.map((guide) => (
+          <article key={guide.number}>
+            <span>{guide.number}</span>
+            <h3>{guide.title}</h3>
+            <p>{guide.copy}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CorporateGiftingSection() {
+  return (
+    <section className="customer-gifting-studio desktop-reveal" aria-labelledby="gifting-studio-title">
+      <div>
+        <p className="eyebrow">Decorbeats gifting studio</p>
+        <h2 id="gifting-studio-title">Brass gifting, made effortless.</h2>
+        <p>
+          From 50 to 400+ pieces, we help businesses, wedding families and event teams curate memorable brass gifts with
+          thoughtful packaging, practical timelines and one human point of contact.
+        </p>
+      </div>
+      <div className="customer-gifting-steps" aria-label="Gifting service">
+        <span><strong>01</strong> Share your occasion, quantity and budget</span>
+        <span><strong>02</strong> Receive a curated brass shortlist</span>
+        <span><strong>03</strong> Confirm packaging, branding and delivery</span>
+      </div>
+      <a
+        className="customer-gifting-cta"
+        href={getBulkWhatsAppUrl()}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => trackBulkWhatsAppClick("gifting_studio")}
+      >
+        <WhatsAppIcon />
+        <span>Plan your gifting with us</span>
+      </a>
+    </section>
+  );
+}
+
+function CustomerFaq() {
+  const questions = [
+    [
+      "Is every Decorbeats piece solid brass?",
+      "Our collection includes solid brass as well as selected metal pieces with brass finishes. The material is stated on each product, and our team can help confirm composition before you order."
+    ],
+    [
+      "Will brass change colour over time?",
+      "Yes. Natural brass develops a deeper patina with air and touch—many collectors value this character. A soft dry cloth keeps daily dust away; use only brass-safe care when you want a brighter finish."
+    ],
+    [
+      "Can you help with wedding or corporate gifting?",
+      "Yes. We support curated orders from 50 to 400+ pieces, including product selection, packaging coordination, branding discussions and delivery planning."
+    ],
+    [
+      "Where does Decorbeats deliver?",
+      "We ship across India. Every order is packed with the needs of brass and handcrafted décor in mind, and our team is available if you need help before or after delivery."
+    ]
+  ];
+
+  return (
+    <section className="customer-faq desktop-reveal" aria-labelledby="customer-faq-title">
+      <div>
+        <p className="eyebrow">Before you choose</p>
+        <h2 id="customer-faq-title">Questions, answered by brass people.</h2>
+      </div>
+      <div className="customer-faq-list">
+        {questions.map(([question, answer], index) => (
+          <details key={question}>
+            <summary>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              {question}
+            </summary>
+            <p>{answer}</p>
+          </details>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CustomerMobileDock({ cartCount, onShop, onCartOpen }) {
+  return (
+    <nav className="customer-mobile-dock" aria-label="Quick shopping actions">
+      <a
+        href={getRetailWhatsAppUrl()}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={() => trackRetailWhatsAppClick("mobile_dock")}
+      >
+        <WhatsAppIcon />
+        <span>Expert</span>
+      </a>
+      <button type="button" className="customer-mobile-shop" onClick={onShop}>
+        <span>Shop brass</span>
+        <small>Explore the edit</small>
+      </button>
+      <button type="button" onClick={onCartOpen}>
+        <CartIcon />
+        <span>Bag{cartCount ? ` (${cartCount})` : ""}</span>
+      </button>
+    </nav>
+  );
+}
+
+function CustomerCategoryBar({ collectionFilter, setCollectionFilter }) {
+  return (
+    <section className="customer-category-row" aria-label="Browse brass collections">
+      {CUSTOMER_COLLECTIONS.map((collection) => (
         <button
-          key={category}
+          key={collection.id}
           type="button"
-          className={category === categoryFilter ? "customer-category-chip active" : "customer-category-chip"}
-          onClick={() => setCategoryFilter(category, "category_bar")}
+          className={collection.id === collectionFilter ? "customer-category-chip active" : "customer-category-chip"}
+          aria-pressed={collection.id === collectionFilter}
+          onClick={() => setCollectionFilter(collection.id, "category_bar")}
         >
-          {category}
+          {collection.label}
         </button>
       ))}
     </section>
   );
 }
 
-function CustomerProductCard({ product, onSelect }) {
+function CustomerEmptyCollection({ onClear }) {
+  return (
+    <div className="customer-empty-results" role="status">
+      <p className="eyebrow">Nothing matched this search</p>
+      <h3>Let’s find the right brass piece another way.</h3>
+      <p>Clear the filters to explore the full collection, or ask our team for a personal shortlist.</p>
+      <div>
+        <button type="button" className="primary-button" onClick={onClear}>
+          Clear filters
+        </button>
+        <a
+          className="customer-text-link"
+          href={getRetailWhatsAppUrl()}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => trackRetailWhatsAppClick("empty_collection")}
+        >
+          Ask a brass expert
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function CustomerProductCard({ product, onSelect, onAddToCart, busy }) {
   const primaryImage = getPrimaryImage(product);
   const isNewProduct = isNewArrival(product.createdAt);
+  const outOfStock = Number(product.quantity || 0) <= 0;
   return (
-    <button type="button" className="customer-product-card desktop-reveal" onClick={() => onSelect(product)}>
-      <div className="customer-product-image-wrap">
+    <article className="customer-product-card desktop-reveal">
+      <button
+        type="button"
+        className="customer-product-card-main"
+        aria-label={`View ${product.name}`}
+        onClick={() => onSelect(product)}
+      >
+        <div className="customer-product-image-wrap">
         {isNewProduct ? <span className="customer-new-badge">NEW</span> : null}
+        {outOfStock ? <span className="customer-sold-out-badge">SOLD OUT</span> : null}
         {product.marketingTag ? <span className="customer-marketing-tag">{product.marketingTag}</span> : null}
         {primaryImage ? (
-          <img className="customer-product-image" src={primaryImage} alt={product.name} loading="lazy" />
+          <img
+            className="customer-product-image"
+            src={getOptimizedImageUrl(primaryImage, 640, 72)}
+            srcSet={getOptimizedImageSrcSet(primaryImage, [320, 480, 640], 72)}
+            sizes="(max-width: 767px) 50vw, (max-width: 1199px) 33vw, 25vw"
+            alt={product.name}
+            width="640"
+            height="780"
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <div className="customer-product-image customer-product-fallback">
             <img src={brandLogo} alt="Decorbeats" className="customer-placeholder-logo" loading="lazy" />
           </div>
         )}
-        <span className="customer-card-hover-text">View Details</span>
-      </div>
-      <div className="customer-product-copy">
-        <h3>{product.name}</h3>
-        <p className="customer-product-category">{product.category}</p>
-        {hasDisplayValue(product.pricing.mrp) ? <p className="customer-price">{formatCurrency(product.pricing.mrp)}</p> : null}
-      </div>
-    </button>
+          <span className="customer-card-hover-text">View Details</span>
+        </div>
+        <div className="customer-product-copy">
+          <h3>{product.name}</h3>
+          <p className="customer-product-category">{product.material} · {product.category}</p>
+          <p className="customer-price">
+            {hasDisplayValue(product.pricing.mrp) ? formatCurrency(product.pricing.mrp) : "Price on request"}
+          </p>
+        </div>
+      </button>
+      {hasDisplayValue(product.pricing.mrp) ? (
+        <button
+          type="button"
+          className="customer-quick-add"
+          onClick={() => onAddToCart(product)}
+          disabled={busy || outOfStock}
+          aria-label={`${outOfStock ? "Sold out" : "Add to bag"}: ${product.name}`}
+        >
+          {outOfStock ? "Sold out" : busy ? "Adding…" : "Add to bag"}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="customer-quick-add"
+          onClick={() => onSelect(product)}
+          disabled={outOfStock}
+          aria-label={`${outOfStock ? "Sold out" : "Enquire about"} ${product.name}`}
+        >
+          {outOfStock ? "Sold out" : "Enquire"}
+        </button>
+      )}
+    </article>
+  );
+}
+
+function CustomerProductSkeletonGrid() {
+  return (
+    <div className="customer-product-skeleton-grid" aria-hidden="true">
+      {Array.from({ length: 6 }, (_, index) => (
+        <div className="customer-product-skeleton" key={index}>
+          <div className="customer-product-skeleton-image" />
+          <div className="customer-product-skeleton-line" />
+          <div className="customer-product-skeleton-line short" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -3790,15 +5762,60 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
   const [dragOffset, setDragOffset] = useState(0);
   const closeTimerRef = useRef(null);
   const dragStateRef = useRef({ startY: 0, deltaY: 0, dragging: false });
+  const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
+  const onCloseRef = useRef(onClose);
   const videos = getProductVideos(product);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     setClosing(false);
     setDragOffset(0);
+    if (!product) {
+      return undefined;
+    }
+    previousFocusRef.current = document.activeElement;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => dialogRef.current?.focus({ preventScroll: true }));
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key === "Tab" && dialogRef.current) {
+        const focusable = Array.from(
+          dialogRef.current.querySelectorAll(
+            'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+        if (!focusable.length) {
+          event.preventDefault();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousBodyOverflow;
       if (closeTimerRef.current) {
         window.clearTimeout(closeTimerRef.current);
       }
+      window.removeEventListener("keydown", handleKeyDown);
+      previousFocusRef.current?.focus?.({ preventScroll: true });
     };
   }, [product?.id]);
 
@@ -3810,9 +5827,9 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
     );
   }
 
-  const showDescription = product.notes && product.notes.trim() !== product.name.trim();
-  const occasionLine = showDescription ? product.notes.trim() : "";
+  const occasionLine = getCustomerProductStory(product);
   const isNewProduct = isNewArrival(product.createdAt);
+  const outOfStock = Number(product.quantity || 0) <= 0;
   const dismissSheet = () => {
     if (closing) {
       return;
@@ -3838,8 +5855,13 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
   return (
     <div className={closing ? "customer-sheet-overlay open closing" : "customer-sheet-overlay open"} onClick={dismissSheet}>
       <aside
+        ref={dialogRef}
         className={closing ? "customer-sheet open closing" : "customer-sheet open"}
         style={sheetStyle}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="customer-product-title"
+        tabIndex="-1"
         onClick={(event) => event.stopPropagation()}
       >
         <div
@@ -3882,7 +5904,7 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
           }}
           onTouchCancel={resetDrag}
         >
-          <button type="button" className="customer-sheet-handle" aria-label="Close product details" onClick={dismissSheet} />
+          <span className="customer-sheet-handle" aria-hidden="true" />
         </div>
         <button type="button" className="customer-sheet-close" aria-label="Close product details" onClick={dismissSheet}>
           ×
@@ -3891,18 +5913,40 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
         <div className="customer-sheet-copy">
           <p className="customer-sheet-kicker">Decorbeats collection</p>
           <div className="customer-sheet-title-row">
-            <h2>{product.name}</h2>
+            <h2 id="customer-product-title">{product.name}</h2>
             {isNewProduct ? <span className="customer-sheet-new-badge">New Arrival</span> : null}
             {!isNewProduct && product.marketingTag ? <span className="customer-sheet-new-badge">{product.marketingTag}</span> : null}
           </div>
-          {hasDisplayValue(product.pricing.mrp) ? <p className="customer-sheet-price">{formatCurrency(product.pricing.mrp)}</p> : null}
+          <p className="customer-sheet-price">
+            {hasDisplayValue(product.pricing.mrp) ? formatCurrency(product.pricing.mrp) : "Price on request"}
+          </p>
           {occasionLine ? <p className="customer-sheet-occasion">{occasionLine}</p> : null}
-          <div className="customer-sheet-meta">
-            <span>{product.category}</span>
-            <span>{product.material}</span>
-            {product.size ? <span>{product.size}</span> : null}
-            {product.weight ? <span>{product.weight}</span> : null}
-          </div>
+          <dl className="customer-sheet-meta" aria-label="Verified product details">
+            <div>
+              <dt>Collection</dt>
+              <dd>{getCustomerProductCollectionLabel(product)}</dd>
+            </div>
+            <div>
+              <dt>Material</dt>
+              <dd>{product.material}</dd>
+            </div>
+            <div>
+              <dt>Availability</dt>
+              <dd>{outOfStock ? "Sold out" : product.stockStatus}</dd>
+            </div>
+            {product.size ? (
+              <div>
+                <dt>Dimensions</dt>
+                <dd>{product.size}</dd>
+              </div>
+            ) : null}
+            {product.weight ? (
+              <div>
+                <dt>Weight</dt>
+                <dd>{product.weight}</dd>
+              </div>
+            ) : null}
+          </dl>
           {videos.length ? (
             <div className="customer-sheet-videos">
               <p>Product video</p>
@@ -3929,10 +5973,16 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
                   type="button"
                   className="customer-pay-button"
                   onClick={() => onAddToCart(product)}
-                  disabled={String(cartBusyProductId) === String(product.id)}
+                  disabled={outOfStock || String(cartBusyProductId) === String(product.id)}
                 >
-                  <span>{String(cartBusyProductId) === String(product.id) ? "Adding to cart..." : "Add to cart"}</span>
-                  <small>Secure checkout with Razorpay</small>
+                  <span>
+                    {outOfStock
+                      ? "Currently sold out"
+                      : String(cartBusyProductId) === String(product.id)
+                        ? "Adding to cart..."
+                        : "Add to cart"}
+                  </span>
+                  <small>{outOfStock ? "Ask us about the next availability" : "Secure online checkout"}</small>
                 </button>
                 <div className="customer-purchase-trust" aria-label="Checkout reassurance">
                   <span>Secure payment</span>
@@ -3958,7 +6008,25 @@ function CustomerSheet({ product, onClose, onShare, onWhatsApp, onAddToCart, car
             <button type="button" className="customer-share-link" onClick={() => onShare(product)}>
               Share product
             </button>
-            {paymentMessage ? <p className={`customer-payment-note ${paymentMessage.tone}`}>{paymentMessage.text}</p> : null}
+            {paymentMessage ? (
+              <p className={`customer-payment-note ${paymentMessage.tone}`} aria-live="polite">
+                {paymentMessage.text}
+              </p>
+            ) : null}
+          </div>
+          <div className="customer-product-expert-note">
+            <p className="eyebrow">The specialist’s view</p>
+            <h3>Why this piece belongs.</h3>
+            <p>{getProductExpertNote(product)}</p>
+            <p className="customer-product-disclosure">
+              Material is listed as {product.material}. Ask our team to confirm composition, finish, dimensions or care
+              before ordering whenever those details are important to your intended use.
+            </p>
+          </div>
+          <div className="customer-product-assurance" aria-label="Order reassurance">
+            <span>Material disclosed</span>
+            <span>Secure online checkout</span>
+            <span>Pan-India assistance</span>
           </div>
         </div>
       </aside>
@@ -3974,71 +6042,243 @@ function CustomerCartDrawer({
   busy,
   error,
   success,
+  checkoutStatus,
+  checkoutResult,
   onClose,
   onQuantityChange,
   onRemove,
-  onCheckout
+  onCheckout,
+  onRetryVerification
 }) {
   const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+  const [checkoutStage, setCheckoutStage] = useState("cart");
+  const cartDialogRef = useRef(null);
+  const cartPreviousFocusRef = useRef(null);
+  const cartCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    cartCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) {
+      setCheckoutStage("cart");
+      return undefined;
+    }
+    if (
+      checkoutResult?.orderId &&
+      ["verifying", "paid", "pending", "failed", "cancelled"].includes(checkoutStatus)
+    ) {
+      setCheckoutStage("result");
+    }
+    cartPreviousFocusRef.current = document.activeElement;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusFrame = window.requestAnimationFrame(() => cartDialogRef.current?.focus({ preventScroll: true }));
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !busy) {
+        cartCloseRef.current();
+        return;
+      }
+      if (event.key === "Tab" && cartDialogRef.current) {
+        const focusable = Array.from(
+          cartDialogRef.current.querySelectorAll(
+            'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        );
+        if (!focusable.length) {
+          event.preventDefault();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+      cartPreviousFocusRef.current?.focus?.({ preventScroll: true });
+    };
+  }, [busy, checkoutResult?.orderId, checkoutStatus, open]);
 
   if (!open) {
     return null;
   }
 
   return (
-    <div className="customer-cart-overlay open" onClick={onClose}>
-      <aside className="customer-cart-drawer" onClick={(event) => event.stopPropagation()}>
+    <div className="customer-cart-overlay open" onClick={busy ? undefined : onClose}>
+      <aside
+        ref={cartDialogRef}
+        className="customer-cart-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="customer-cart-title"
+        tabIndex="-1"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="customer-cart-head">
           <div>
             <p className="eyebrow">Decorbeats checkout</p>
-            <h2>Your cart</h2>
-            <span>{itemCount ? `${itemCount} item${itemCount === 1 ? "" : "s"}` : "No items yet"}</span>
+            <h2 id="customer-cart-title">
+              {checkoutStage === "cart" ? "Your cart" : checkoutStage === "delivery" ? "Delivery details" : "Payment status"}
+            </h2>
+            <span>
+              {checkoutStage === "result"
+                ? checkoutResult?.orderReference || "Secure order confirmation"
+                : itemCount
+                ? `${checkoutStage === "cart" ? "Step 1 of 3" : "Step 2 of 3"} · ${itemCount} item${itemCount === 1 ? "" : "s"}`
+                : "No items yet"}
+            </span>
           </div>
-          <button type="button" className="customer-sheet-close" aria-label="Close cart" onClick={onClose}>
+          <button type="button" className="customer-sheet-close" aria-label="Close cart" onClick={onClose} disabled={busy}>
             ×
           </button>
         </div>
 
-        {error ? <p className="customer-payment-note error">{error}</p> : null}
-        {success ? <p className="customer-payment-note success">{success}</p> : null}
+        <ol className="customer-checkout-progress" aria-label="Checkout progress">
+          {["Bag", "Delivery", "Payment"].map((label, index) => {
+            const currentIndex = checkoutStage === "cart" ? 0 : checkoutStage === "delivery" ? 1 : 2;
+            return (
+              <li key={label} className={index <= currentIndex ? "active" : ""} aria-current={index === currentIndex ? "step" : undefined}>
+                <span>{index + 1}</span>
+                {label}
+              </li>
+            );
+          })}
+        </ol>
 
-        {items.length ? (
-          <>
-            <div className="customer-cart-items">
-              {items.map((item) => (
-                <article key={item.product.id} className="customer-cart-item">
-                  <img src={item.product.imageUrl || brandLogo} alt="" />
-                  <div>
-                    <strong>{item.product.name}</strong>
-                    <span>{item.product.sku}</span>
-                    <b>{formatCurrency(item.price)}</b>
-                  </div>
-                  <div className="customer-cart-qty">
-                    <button type="button" onClick={() => onQuantityChange(item.product.id, item.quantity - 1)} disabled={busy}>
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min="1"
-                      value={item.quantity}
-                      onClick={handleNumericInputClick}
-                      onChange={(event) => onQuantityChange(item.product.id, Number(event.target.value) || 1)}
-                      disabled={busy}
-                    />
-                    <button type="button" onClick={() => onQuantityChange(item.product.id, item.quantity + 1)} disabled={busy}>
-                      +
-                    </button>
-                    <button type="button" className="customer-cart-remove" onClick={() => onRemove(item.product.id)} disabled={busy}>
-                      Remove
-                    </button>
-                  </div>
-                </article>
-              ))}
+        {checkoutStage !== "result" && error ? <p className="customer-payment-note error" role="alert">{error}</p> : null}
+        {checkoutStage !== "result" && success ? <p className="customer-payment-note success" role="status">{success}</p> : null}
+
+        {checkoutStage === "result" ? (
+          <section
+            className={`customer-payment-state ${checkoutStatus}`}
+            role={checkoutStatus === "failed" || checkoutStatus === "cancelled" ? "alert" : "status"}
+            aria-live={checkoutStatus === "failed" || checkoutStatus === "cancelled" ? "assertive" : "polite"}
+          >
+            <span className={checkoutStatus === "verifying" ? "customer-checkout-spinner" : "customer-payment-state-icon"} aria-hidden="true">
+              {checkoutStatus === "paid" ? "✓" : checkoutStatus === "pending" ? "◷" : checkoutStatus === "verifying" ? "" : "!"}
+            </span>
+            <p className="eyebrow">Secure online payment</p>
+            <h3>
+              {checkoutStatus === "paid"
+                ? "Your order is confirmed."
+                : checkoutStatus === "pending"
+                  ? "Your payment is processing."
+                  : checkoutStatus === "verifying"
+                    ? "Confirming your payment…"
+                    : "Payment is not confirmed yet."}
+            </h3>
+            <p>
+              {checkoutStatus === "paid"
+                ? success
+                : checkoutStatus === "pending"
+                  ? "Please don’t pay again yet. We’ll keep checking the provider status; your bag remains saved."
+                  : checkoutStatus === "verifying"
+                    ? "This normally takes only a few seconds. Please keep this window open."
+                    : error || "Your bag is still saved. You can check the status again or review delivery details."}
+            </p>
+            {checkoutResult?.orderReference ? <strong>Order reference · {checkoutResult.orderReference}</strong> : null}
+            <div className="customer-payment-state-actions">
+              {checkoutStatus !== "paid" ? (
+                <button type="button" className="primary-button" onClick={onRetryVerification} disabled={busy}>
+                  {busy ? "Checking…" : "Check payment status"}
+                </button>
+              ) : null}
+              {checkoutStatus === "failed" || checkoutStatus === "cancelled" ? (
+                <button type="button" className="ghost-button" onClick={() => setCheckoutStage("delivery")} disabled={busy}>
+                  Review details
+                </button>
+              ) : null}
+              <button type="button" className={checkoutStatus === "paid" ? "primary-button" : "customer-text-link"} onClick={onClose} disabled={busy}>
+                {checkoutStatus === "paid" ? "Continue shopping" : "Continue browsing"}
+              </button>
             </div>
+          </section>
+        ) : items.length ? (
+          <>
+            {checkoutStage === "cart" ? (
+              <div className="customer-cart-items">
+                {items.map((item) => (
+                  <article key={item.product.id} className="customer-cart-item">
+                    <img
+                      src={getOptimizedImageUrl(item.product.imageUrl, 180, 72)}
+                      alt=""
+                      width="90"
+                      height="112"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <div>
+                      <strong>{item.product.name}</strong>
+                      <span>{item.product.sku}</span>
+                      <b>{formatCurrency(item.price)}</b>
+                    </div>
+                    <div className="customer-cart-qty">
+                      <button
+                        type="button"
+                        aria-label={`Decrease quantity for ${item.product.name}`}
+                        onClick={() => onQuantityChange(item.product.id, item.quantity - 1)}
+                        disabled={busy}
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        aria-label={`Quantity for ${item.product.name}`}
+                        inputMode="numeric"
+                        min="1"
+                        value={item.quantity}
+                        onClick={handleNumericInputClick}
+                        onChange={(event) => onQuantityChange(item.product.id, Number(event.target.value) || 1)}
+                        disabled={busy}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Increase quantity for ${item.product.name}`}
+                        onClick={() => onQuantityChange(item.product.id, item.quantity + 1)}
+                        disabled={busy}
+                      >
+                        +
+                      </button>
+                      <button type="button" className="customer-cart-remove" onClick={() => onRemove(item.product.id)} disabled={busy}>
+                        Remove
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
 
-            <form className="customer-checkout-form" onSubmit={onCheckout}>
+            {checkoutStage === "cart" ? (
+              <div className="customer-cart-stage-footer">
+                <div className="customer-cart-total">
+                  <span>Order total</span>
+                  <strong>{formatCurrency(total)}</strong>
+                </div>
+                <button type="button" className="primary-button" onClick={() => setCheckoutStage("delivery")}>
+                  Continue to delivery
+                </button>
+                <small>Secure online payment · UPI, cards and more</small>
+              </div>
+            ) : (
+              <button type="button" className="customer-cart-back" onClick={() => setCheckoutStage("cart")}>
+                ← Back to your bag
+              </button>
+            )}
+
+            {checkoutStage === "delivery" ? (
+              <form className="customer-checkout-form" onSubmit={onCheckout}>
               <div className="customer-cart-total">
                 <span>Order total</span>
                 <strong>{formatCurrency(total)}</strong>
@@ -4047,6 +6287,9 @@ function CustomerCartDrawer({
                 Full name
                 <input
                   type="text"
+                  name="name"
+                  autoComplete="name"
+                  maxLength="120"
                   value={details.customerName}
                   placeholder="Customer name"
                   onChange={(event) => setDetails((current) => ({ ...current, customerName: event.target.value }))}
@@ -4057,6 +6300,12 @@ function CustomerCartDrawer({
                 Phone number
                 <input
                   type="tel"
+                  name="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  maxLength="15"
+                  pattern="[0-9+ -]{10,15}"
+                  title="Enter a valid 10 to 15 digit phone number"
                   value={details.phone}
                   placeholder="10-digit mobile number"
                   onChange={(event) => setDetails((current) => ({ ...current, phone: event.target.value }))}
@@ -4067,6 +6316,9 @@ function CustomerCartDrawer({
                 Email
                 <input
                   type="email"
+                  name="email"
+                  autoComplete="email"
+                  maxLength="160"
                   value={details.email}
                   placeholder="Optional, for payment receipt"
                   onChange={(event) => setDetails((current) => ({ ...current, email: event.target.value }))}
@@ -4076,6 +6328,9 @@ function CustomerCartDrawer({
                 Delivery address
                 <textarea
                   rows="3"
+                  name="street-address"
+                  autoComplete="street-address"
+                  maxLength="240"
                   value={details.addressLine1}
                   placeholder="House / flat, street, landmark"
                   onChange={(event) => setDetails((current) => ({ ...current, addressLine1: event.target.value }))}
@@ -4087,6 +6342,9 @@ function CustomerCartDrawer({
                   City
                   <input
                     type="text"
+                    name="address-level2"
+                    autoComplete="address-level2"
+                    maxLength="100"
                     value={details.city}
                     onChange={(event) => setDetails((current) => ({ ...current, city: event.target.value }))}
                     required
@@ -4096,6 +6354,9 @@ function CustomerCartDrawer({
                   State
                   <input
                     type="text"
+                    name="address-level1"
+                    autoComplete="address-level1"
+                    maxLength="100"
                     value={details.state}
                     onChange={(event) => setDetails((current) => ({ ...current, state: event.target.value }))}
                     required
@@ -4105,7 +6366,11 @@ function CustomerCartDrawer({
                   PIN code
                   <input
                     type="text"
+                    name="postal-code"
+                    autoComplete="postal-code"
                     inputMode="numeric"
+                    pattern="[0-9]{6}"
+                    maxLength="6"
                     value={details.pincode}
                     onChange={(event) => setDetails((current) => ({ ...current, pincode: event.target.value }))}
                     required
@@ -4116,15 +6381,46 @@ function CustomerCartDrawer({
                 Delivery notes
                 <textarea
                   rows="2"
+                  name="delivery-notes"
+                  maxLength="500"
                   value={details.notes}
                   placeholder="Optional"
                   onChange={(event) => setDetails((current) => ({ ...current, notes: event.target.value }))}
                 />
               </label>
-              <button type="submit" className="primary-button customer-checkout-button" disabled={busy}>
-                {busy ? "Opening secure payment..." : `Pay ${formatCurrency(total)}`}
-              </button>
-            </form>
+              <div className="customer-payment-footer">
+                <button
+                  type="submit"
+                  className="primary-button customer-checkout-button"
+                  disabled={busy}
+                  aria-busy={busy}
+                >
+                  {busy
+                    ? checkoutStatus === "creating"
+                      ? "Preparing secure payment…"
+                      : checkoutStatus === "opening"
+                        ? "Opening secure payment…"
+                        : "Confirming payment…"
+                    : `Pay ${formatCurrency(total)} securely`}
+                </button>
+                <small className="customer-payment-provider-note">
+                  Payment details are handled securely by our payment partner. By paying, you agree to our terms and
+                  acknowledge our return and privacy policies.
+                </small>
+                <nav className="customer-checkout-policy-links" aria-label="Checkout policies">
+                  <a href="/terms-and-conditions" target="_blank" rel="noopener noreferrer">
+                    Terms
+                  </a>
+                  <a href="/refund-cancellation-policy" target="_blank" rel="noopener noreferrer">
+                    Refunds & cancellations
+                  </a>
+                  <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">
+                    Privacy
+                  </a>
+                </nav>
+              </div>
+              </form>
+            ) : null}
           </>
         ) : (
           <div className="customer-empty-cart">
@@ -4141,7 +6437,119 @@ function CustomerCartDrawer({
   );
 }
 
-function CustomerFooter({ onAdmin, showAdminLink = true }) {
+function PublicPageSection({ section, pageSlug }) {
+  return (
+    <section className="customer-policy-section" aria-labelledby={`${pageSlug}-${slugify(section.heading)}`}>
+      <h2 id={`${pageSlug}-${slugify(section.heading)}`}>{section.heading}</h2>
+      {(section.paragraphs || []).map((paragraph, index) => (
+        <p key={`${section.heading}-paragraph-${index}`}>{paragraph}</p>
+      ))}
+      {section.list?.length ? (
+        <ul>
+          {section.list.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
+      {(section.paragraphsAfter || []).map((paragraph, index) => (
+        <p key={`${section.heading}-after-${index}`}>{paragraph}</p>
+      ))}
+      {section.links?.length ? (
+        <div className="customer-policy-section-links">
+          {section.links.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              target={link.external ? "_blank" : undefined}
+              rel={link.external ? "noopener noreferrer" : undefined}
+            >
+              {link.label} <span aria-hidden="true">→</span>
+            </a>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function CustomerPolicyPage({ page }) {
+  return (
+    <div className="customer-page customer-shell customer-policy-page">
+      <a className="customer-skip-link" href="#policy-content">
+        Skip to policy content
+      </a>
+      <header className="customer-policy-header">
+        <a className="customer-policy-brand" href="/" aria-label="Decorbeats home">
+          <img src={brandLogo} alt="" width="74" height="54" />
+          <span>
+            <strong>DECORBEATS</strong>
+            <small>THE BRASS HOUSE OF INDIA</small>
+          </span>
+        </a>
+        <nav aria-label="Policy page shortcuts">
+          <a href="/">Shop brass</a>
+          <a href="/contact" aria-current={page.path === "/contact" ? "page" : undefined}>
+            Contact
+          </a>
+        </nav>
+      </header>
+      <main id="policy-content" className="customer-policy-main" tabIndex="-1">
+        <nav className="customer-policy-breadcrumb" aria-label="Breadcrumb">
+          <a href="/">Home</a>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page">{page.title}</span>
+        </nav>
+        <article className="customer-policy-article">
+          <header className="customer-policy-title">
+            <p className="eyebrow">{page.eyebrow}</p>
+            <h1>{page.title}</h1>
+            <p>{page.intro}</p>
+            <p className="customer-policy-updated">
+              Last updated: <time dateTime={page.updatedDate}>{page.updatedLabel}</time>
+            </p>
+          </header>
+          {page.contactDetails?.length ? (
+            <div className="customer-policy-contact-grid">
+              {page.contactDetails.map((detail) => (
+                <section key={detail.label}>
+                  <h2>{detail.label}</h2>
+                  <address>
+                    {detail.lines.map((line) => (
+                      <span key={line}>{line}</span>
+                    ))}
+                    {detail.email ? <a href={`mailto:${detail.email}`}>{detail.email}</a> : null}
+                    {detail.phone ? <a href="tel:+919811133661">{detail.phone}</a> : null}
+                  </address>
+                </section>
+              ))}
+            </div>
+          ) : null}
+          <div className="customer-policy-sections">
+            {page.sections.map((section) => (
+              <PublicPageSection key={section.heading} section={section} pageSlug={page.slug} />
+            ))}
+          </div>
+          {page.slug !== "contact" ? (
+            <aside className="customer-policy-help" aria-label="Policy support">
+              <div>
+                <p className="eyebrow">Need a clear answer?</p>
+                <h2>Talk to our customer care team.</h2>
+                <p>Keep your order number ready so we can help quickly.</p>
+              </div>
+              <div>
+                <a href="mailto:meghagoel@decorbeats.com">Email customer care</a>
+                <a href="tel:+919811133661">Call +91 98111 33661</a>
+              </div>
+            </aside>
+          ) : null}
+        </article>
+      </main>
+      <CustomerFooter showAdminLink={false} activePolicyPath={page.path} />
+    </div>
+  );
+}
+
+function CustomerFooter({ onAdmin, showAdminLink = true, activePolicyPath = "" }) {
   return (
     <footer className="customer-footer">
       <div className="customer-footer-contact">
@@ -4157,7 +6565,7 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
             ♜
           </span>
           <strong>Registered Office</strong>
-          <p>decorbeats(OPC) Pvt Ltd, B140, DeenDayalNagar, BrassCity, Moradabad, UP — 244001</p>
+          <p>Decorbeats (OPC) Pvt. Ltd., B-140, Deen Dayal Nagar, Moradabad, Uttar Pradesh — 244001</p>
         </div>
         <div className="customer-footer-contact-item">
           <span className="customer-footer-contact-icon" aria-hidden="true">
@@ -4172,7 +6580,7 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
       <div className="customer-footer-main">
         <div className="customer-footer-brand">
           <img src={brandLogo} alt="Decorbeats" className="customer-footer-logo" />
-          <p>Artisanal décor, gifted with love.</p>
+          <p>The Brass House of India. Rooted in Moradabad.</p>
         </div>
         <div className="customer-footer-cta">
           <p>For bulk orders of 50+ units</p>
@@ -4200,8 +6608,16 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
         </div>
       </div>
       <div className="customer-footer-divider" aria-hidden="true" />
+      <nav className="customer-footer-policies" aria-label="Customer care and policies">
+        {PUBLIC_PAGE_LIST.map((page) => (
+          <a key={page.path} href={page.path} aria-current={activePolicyPath === page.path ? "page" : undefined}>
+            {page.navLabel}
+          </a>
+        ))}
+      </nav>
+      <div className="customer-footer-divider" aria-hidden="true" />
       <div className="customer-footer-bottom">
-        <span>© 2025 Decorbeats.</span>
+        <span>© {new Date().getFullYear()} Decorbeats.</span>
         <span className="customer-footer-bottom-tagline">BRASS EXPERTS FROM PITAL NAGRI</span>
         <span>Moradabad, India</span>
       </div>
@@ -4379,14 +6795,24 @@ function CustomerImageCarousel({ product }) {
         <div className="customer-carousel-track" style={{ transform: `translateX(-${activeIndex * 100}%)` }}>
           {images.map((url, index) => (
             <div key={`${url}-${index}`} className="customer-carousel-slide">
-              <img className="customer-sheet-image" src={url} alt={`${product.name} ${index + 1}`} loading="lazy" />
+              <img
+                className="customer-sheet-image"
+                src={getOptimizedImageUrl(url, 1000, 74)}
+                srcSet={getOptimizedImageSrcSet(url, [480, 720, 1000], 74)}
+                sizes="(max-width: 767px) 100vw, 50vw"
+                alt={`${product.name} ${index + 1}`}
+                width="1000"
+                height="1000"
+                loading={index === activeIndex ? "eager" : "lazy"}
+                decoding="async"
+              />
             </div>
           ))}
         </div>
       </div>
       {hasCarousel ? (
         <>
-          <div className="customer-carousel-count">
+          <div className="customer-carousel-count" aria-live="polite">
             {activeIndex + 1}/{images.length}
           </div>
           <div className="customer-carousel-thumbs">
@@ -4395,9 +6821,18 @@ function CustomerImageCarousel({ product }) {
                 key={`${url}-thumb-${index}`}
                 type="button"
                 className={index === activeIndex ? "customer-carousel-thumb active" : "customer-carousel-thumb"}
+                aria-label={`Show ${product.name} image ${index + 1} of ${images.length}`}
+                aria-pressed={index === activeIndex}
                 onClick={() => setActiveIndex(index)}
               >
-                <img src={url} alt={`${product.name} thumbnail ${index + 1}`} loading="lazy" />
+                <img
+                  src={getOptimizedImageUrl(url, 180, 64)}
+                  alt={`${product.name} thumbnail ${index + 1}`}
+                  width="180"
+                  height="180"
+                  loading="lazy"
+                  decoding="async"
+                />
               </button>
             ))}
           </div>
@@ -5004,6 +7439,8 @@ function DetailPanel({
             <input
               type="number"
               inputMode="numeric"
+              min="0"
+              step="1"
               value={draft.quantity}
               onClick={handleNumericInputClick}
               onChange={(event) => setDraft((current) => ({ ...current, quantity: event.target.value }))}
@@ -5024,6 +7461,561 @@ function DetailPanel({
         </form>
       ) : null}
     </aside>
+  );
+}
+
+function getInventoryStockMeta(quantity) {
+  if (quantity <= 0) {
+    return { label: "Out of stock", tone: "out" };
+  }
+  if (quantity <= LOW_STOCK_THRESHOLD) {
+    return { label: "Low stock", tone: "low" };
+  }
+  return { label: "In stock", tone: "in" };
+}
+
+function getInventorySyncLabel(lastSyncAt) {
+  if (!lastSyncAt) {
+    return "Sync pending";
+  }
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - new Date(lastSyncAt).getTime()) / 60000));
+  if (elapsedMinutes < 1) {
+    return "Synced just now";
+  }
+  if (elapsedMinutes < 60) {
+    return `Synced ${elapsedMinutes}m ago`;
+  }
+  return `Synced ${new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" }).format(
+    new Date(lastSyncAt)
+  )}`;
+}
+
+const InventoryRow = memo(
+  function InventoryRow({
+    product,
+    canManage,
+    onQuantitySave,
+    onEdit,
+    onShare,
+    onArchiveToggle,
+    onPinToggle,
+    archiveBusy
+  }) {
+    const [draftQuantity, setDraftQuantity] = useState(String(product.quantity));
+    const [saveState, setSaveState] = useState("idle");
+    const [saveError, setSaveError] = useState("");
+    const [menuOpen, setMenuOpen] = useState(false);
+    const savedTimerRef = useRef(null);
+    const savePromiseRef = useRef(null);
+    const cancelBlurRef = useRef(false);
+    const menuRef = useRef(null);
+    const menuButtonRef = useRef(null);
+    const stockMeta = getInventoryStockMeta(product.quantity);
+
+    useEffect(() => {
+      if (saveState !== "saving" && saveState !== "error") {
+        setDraftQuantity(String(product.quantity));
+      }
+    }, [product.quantity, saveState]);
+
+    useEffect(() => {
+      return () => {
+        if (savedTimerRef.current) {
+          window.clearTimeout(savedTimerRef.current);
+        }
+      };
+    }, []);
+
+    useEffect(() => {
+      if (!menuOpen) {
+        return undefined;
+      }
+      menuRef.current?.querySelector('[role="menuitem"]')?.focus();
+      function closeMenu(event) {
+        if (event.type === "keydown") {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setMenuOpen(false);
+            menuButtonRef.current?.focus();
+            return;
+          }
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            const items = [...(menuRef.current?.querySelectorAll('[role="menuitem"]') ?? [])];
+            const currentIndex = items.indexOf(document.activeElement);
+            const direction = event.key === "ArrowDown" ? 1 : -1;
+            items[(currentIndex + direction + items.length) % items.length]?.focus();
+          }
+          return;
+        }
+        if (event.type === "pointerdown" && menuRef.current?.contains(event.target)) {
+          return;
+        }
+        setMenuOpen(false);
+      }
+      document.addEventListener("pointerdown", closeMenu);
+      document.addEventListener("keydown", closeMenu);
+      return () => {
+        document.removeEventListener("pointerdown", closeMenu);
+        document.removeEventListener("keydown", closeMenu);
+      };
+    }, [menuOpen]);
+
+    async function commitQuantity(nextValue = draftQuantity) {
+      if (savePromiseRef.current) {
+        return savePromiseRef.current;
+      }
+      const nextQuantity = Number(nextValue);
+      if (nextValue === "" || !Number.isInteger(nextQuantity) || nextQuantity < 0) {
+        setSaveState("error");
+        setSaveError("Enter a whole number of 0 or more.");
+        return null;
+      }
+
+      setDraftQuantity(String(nextQuantity));
+      setSaveError("");
+      if (nextQuantity === Number(product.quantity)) {
+        setSaveState("idle");
+        return product;
+      }
+
+      if (savedTimerRef.current) {
+        window.clearTimeout(savedTimerRef.current);
+        savedTimerRef.current = null;
+      }
+      setSaveState("saving");
+      const pendingSave = (async () => {
+        try {
+          const savedProduct = await onQuantitySave(product, nextQuantity);
+          setDraftQuantity(String(savedProduct?.quantity ?? nextQuantity));
+          setSaveState("saved");
+          savedTimerRef.current = window.setTimeout(() => setSaveState("idle"), 1800);
+          return savedProduct;
+        } catch (error) {
+          setSaveState("error");
+          setSaveError(error?.message || "Could not save stock. Try again.");
+          return null;
+        }
+      })();
+      savePromiseRef.current = pendingSave;
+      try {
+        return await pendingSave;
+      } finally {
+        savePromiseRef.current = null;
+      }
+    }
+
+    async function openFullEditor() {
+      const nextQuantity = Number(draftQuantity);
+      const hasValidChange = Number.isInteger(nextQuantity) && nextQuantity >= 0 && nextQuantity !== Number(product.quantity);
+      const savedProduct = savePromiseRef.current
+        ? await savePromiseRef.current
+        : hasValidChange
+          ? await commitQuantity(draftQuantity)
+          : product;
+      if (savedProduct) {
+        onEdit(savedProduct);
+      }
+    }
+
+    function handleQuantityKeyDown(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.currentTarget.blur();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelBlurRef.current = true;
+        setDraftQuantity(String(product.quantity));
+        setSaveError("");
+        setSaveState("idle");
+        event.currentTarget.blur();
+      }
+    }
+
+    return (
+      <div className={`admin-inventory-row ${product.archivedAt ? "is-archived" : ""}`} role="row">
+        <div className="admin-inventory-product" role="cell">
+          <button type="button" className="admin-inventory-thumb-button" onClick={openFullEditor} aria-label={`Edit ${product.name}`}>
+            <ProductThumb product={product} />
+          </button>
+          <div>
+            <button type="button" className="admin-inventory-name" onClick={openFullEditor}>
+              {product.name}
+            </button>
+            <div className="admin-inventory-product-meta">
+              <span>{product.sku || "No SKU"}</span>
+              {product.material ? <span>{product.material}</span> : null}
+            </div>
+          </div>
+        </div>
+        <div className="admin-inventory-category" role="cell">
+          <span className="admin-inventory-cell-label">Category</span>
+          <span>{product.category || "—"}</span>
+        </div>
+        <div className="admin-inventory-price" role="cell">
+          <span className="admin-inventory-cell-label">MRP</span>
+          <strong>{hasDisplayValue(product.pricing?.mrp) ? formatCurrency(product.pricing.mrp) : "—"}</strong>
+        </div>
+        <div className="admin-inventory-stock-cell" role="cell">
+          <span className="admin-inventory-cell-label">Stock</span>
+          <div className="admin-stock-editor">
+            <button
+              type="button"
+              aria-label={`Decrease stock for ${product.name}`}
+              disabled={!canManage || saveState === "saving" || Number(draftQuantity || product.quantity) <= 0}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => commitQuantity(Math.max(0, Number(draftQuantity || product.quantity) - 1))}
+            >
+              −
+            </button>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              inputMode="numeric"
+              aria-label={`Stock quantity for ${product.name}`}
+              value={draftQuantity}
+              disabled={!canManage || saveState === "saving"}
+              onChange={(event) => {
+                setDraftQuantity(event.target.value);
+                setSaveState("idle");
+                setSaveError("");
+              }}
+              onBlur={() => {
+                if (cancelBlurRef.current) {
+                  cancelBlurRef.current = false;
+                  return;
+                }
+                void commitQuantity();
+              }}
+              onKeyDown={handleQuantityKeyDown}
+            />
+            <button
+              type="button"
+              aria-label={`Increase stock for ${product.name}`}
+              disabled={!canManage || saveState === "saving"}
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={() => commitQuantity(Number(draftQuantity || product.quantity) + 1)}
+            >
+              +
+            </button>
+          </div>
+          <div className={`admin-stock-feedback ${saveState}`} aria-live="polite">
+            {saveState === "saving" ? "Saving…" : null}
+            {saveState === "saved" ? "Saved" : null}
+            {saveState === "error" ? (
+              <>
+                <span>{saveError}</span>
+                <button type="button" onClick={() => commitQuantity()}>
+                  Retry
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+        <div className="admin-inventory-status-cell" role="cell">
+          <span className="admin-inventory-cell-label">Status</span>
+          <span className={`admin-stock-status ${stockMeta.tone}`}>
+            <i aria-hidden="true" />
+            {product.archivedAt ? "Archived" : stockMeta.label}
+          </span>
+        </div>
+        <div className="admin-inventory-actions" role="cell">
+          <button type="button" className="admin-inventory-edit" onClick={openFullEditor}>
+            Edit
+          </button>
+          <div className="admin-inventory-menu-wrap" ref={menuRef}>
+            <button
+              type="button"
+              className="admin-inventory-menu-button"
+              ref={menuButtonRef}
+              aria-label={`More actions for ${product.name}`}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((current) => !current)}
+            >
+              ⋯
+            </button>
+            {menuOpen ? (
+              <div className="admin-inventory-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onShare(product);
+                  }}
+                >
+                  Share product
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={archiveBusy}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onPinToggle(product, !product.pinned);
+                  }}
+                >
+                  {product.pinned ? "Unpin from shop" : "Pin to shop"}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={archiveBusy}
+                  onClick={() => {
+                    if (!product.archivedAt && !window.confirm(`Archive ${product.name}? It will be hidden from the live shop.`)) {
+                      return;
+                    }
+                    setMenuOpen(false);
+                    onArchiveToggle(product, !product.archivedAt);
+                  }}
+                >
+                  {product.archivedAt ? "Restore product" : "Archive product"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  },
+  (previous, next) =>
+    previous.product === next.product && previous.canManage === next.canManage && previous.archiveBusy === next.archiveBusy
+);
+
+function InventoryWorkspace({
+  products,
+  canManage,
+  search,
+  setSearch,
+  categoryFilter,
+  setCategoryFilter,
+  initialStockFilter = "all",
+  lastSyncAt,
+  statusMessage,
+  refreshBusy,
+  onRefresh,
+  onAddProduct,
+  onCreateCatalogue,
+  onQuantitySave,
+  onEdit,
+  onShare,
+  onArchiveToggle,
+  onPinToggle,
+  archiveBusy
+}) {
+  const [stockFilter, setStockFilter] = useState(initialStockFilter);
+  const [visibility, setVisibility] = useState("active");
+  const [sortOrder, setSortOrder] = useState(initialStockFilter === "attention" ? "stock-asc" : "name-asc");
+
+  const activeProducts = useMemo(() => products.filter((product) => !product.archivedAt), [products]);
+  const archivedProducts = useMemo(() => products.filter((product) => product.archivedAt), [products]);
+  const visibleBase = visibility === "active" ? activeProducts : visibility === "archived" ? archivedProducts : products;
+  const categories = useMemo(
+    () => ["All", ...new Set(visibleBase.map((product) => product.category).filter(Boolean).sort((left, right) => left.localeCompare(right)))],
+    [visibleBase]
+  );
+  const effectiveCategory = categories.includes(categoryFilter) ? categoryFilter : "All";
+  const counts = useMemo(
+    () => ({
+      all: visibleBase.length,
+      attention: visibleBase.filter((product) => product.quantity <= LOW_STOCK_THRESHOLD).length,
+      out: visibleBase.filter((product) => product.quantity <= 0).length,
+      healthy: visibleBase.filter((product) => product.quantity > LOW_STOCK_THRESHOLD).length
+    }),
+    [visibleBase]
+  );
+  const visibleProducts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const nextProducts = visibleBase.filter((product) => {
+      const haystack = [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase();
+      const matchesSearch = !query || haystack.includes(query);
+      const matchesCategory = effectiveCategory === "All" || product.category === effectiveCategory;
+      const matchesStock =
+        stockFilter === "all" ||
+        (stockFilter === "attention" && product.quantity <= LOW_STOCK_THRESHOLD) ||
+        (stockFilter === "out" && product.quantity <= 0) ||
+        (stockFilter === "healthy" && product.quantity > LOW_STOCK_THRESHOLD);
+      return matchesSearch && matchesCategory && matchesStock;
+    });
+
+    return [...nextProducts].sort((left, right) => {
+      if (sortOrder === "stock-asc") {
+        return left.quantity - right.quantity || left.name.localeCompare(right.name);
+      }
+      if (sortOrder === "stock-desc") {
+        return right.quantity - left.quantity || left.name.localeCompare(right.name);
+      }
+      if (sortOrder === "price-desc") {
+        return Number(right.pricing?.mrp || 0) - Number(left.pricing?.mrp || 0) || left.name.localeCompare(right.name);
+      }
+      return left.name.localeCompare(right.name);
+    });
+  }, [effectiveCategory, search, sortOrder, stockFilter, visibleBase]);
+
+  const totalUnits = activeProducts.reduce((sum, product) => sum + Number(product.quantity || 0), 0);
+  const filterItems = [
+    { id: "all", label: "All", count: counts.all },
+    { id: "attention", label: "Needs attention", count: counts.attention },
+    { id: "out", label: "Out of stock", count: counts.out },
+    { id: "healthy", label: "In stock", count: counts.healthy }
+  ];
+
+  return (
+    <main className="admin-inventory-workspace">
+      <header className="admin-inventory-header">
+        <div className="admin-inventory-title-wrap">
+          <img src={brandLogo} alt="" className="admin-inventory-logo" />
+          <div>
+            <p>Decorbeats Admin</p>
+            <h1>Inventory</h1>
+            <span>
+              {activeProducts.length} active products · {totalUnits.toLocaleString("en-IN")} units
+            </span>
+          </div>
+        </div>
+        <div className="admin-inventory-header-actions">
+          <div className="admin-inventory-sync" role="status">
+            <i aria-hidden="true" />
+            {getInventorySyncLabel(lastSyncAt)}
+          </div>
+          <button type="button" className="admin-inventory-secondary-action" onClick={onCreateCatalogue}>
+            Create catalogue
+          </button>
+          <button type="button" className="admin-inventory-primary-action" onClick={onAddProduct}>
+            <span aria-hidden="true">+</span> Add product
+          </button>
+        </div>
+      </header>
+
+      <div className="admin-inventory-message" role="status" aria-live="polite">
+        {statusMessage}
+      </div>
+
+      <section className="admin-inventory-command-bar" aria-label="Inventory filters">
+        <div className="admin-inventory-search-wrap">
+          <SearchIcon />
+          <input
+            type="search"
+            aria-label="Search inventory"
+            placeholder="Search name or SKU"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          {search ? (
+            <button type="button" aria-label="Clear inventory search" onClick={() => setSearch("")}>
+              ×
+            </button>
+          ) : null}
+        </div>
+        <label className="admin-inventory-select-wrap">
+          <span>Category</span>
+          <select value={effectiveCategory} onChange={(event) => setCategoryFilter(event.target.value)}>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="admin-inventory-select-wrap">
+          <span>Sort</span>
+          <select value={sortOrder} onChange={(event) => setSortOrder(event.target.value)}>
+            <option value="name-asc">Name A–Z</option>
+            <option value="stock-asc">Stock: low first</option>
+            <option value="stock-desc">Stock: high first</option>
+            <option value="price-desc">Price: high first</option>
+          </select>
+        </label>
+        <button type="button" className="admin-inventory-refresh" disabled={refreshBusy} onClick={onRefresh}>
+          <span aria-hidden="true">↻</span> {refreshBusy ? "Refreshing…" : "Refresh"}
+        </button>
+      </section>
+
+      <section className="admin-inventory-filter-row">
+        <div className="admin-inventory-stat-filters" aria-label="Filter by stock status">
+          {filterItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={stockFilter === item.id ? `active ${item.id}` : item.id}
+              aria-pressed={stockFilter === item.id}
+              onClick={() => setStockFilter(item.id)}
+            >
+              <span>{item.label}</span>
+              <strong>{item.count}</strong>
+            </button>
+          ))}
+        </div>
+        <div className="admin-inventory-visibility" aria-label="Product visibility">
+          {[{ id: "active", label: "Active" }, { id: "archived", label: `Archived ${archivedProducts.length}` }, { id: "all", label: "All records" }].map(
+            (item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={visibility === item.id ? "active" : ""}
+                aria-pressed={visibility === item.id}
+                onClick={() => setVisibility(item.id)}
+              >
+                {item.label}
+              </button>
+            )
+          )}
+        </div>
+      </section>
+
+      <section className="admin-inventory-list-card">
+        <div className="admin-inventory-list-summary">
+          <div>
+            <strong>{visibleProducts.length}</strong> products shown
+          </div>
+          <span>Type a quantity, then press Enter or tap away to save.</span>
+        </div>
+        <div className="admin-inventory-table" role="table" aria-label="Product inventory" aria-rowcount={visibleProducts.length + 1}>
+          <div className="admin-inventory-table-head" role="row">
+            <span role="columnheader">Product</span>
+            <span role="columnheader">Category</span>
+            <span role="columnheader">MRP</span>
+            <span role="columnheader">Stock</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader">Actions</span>
+          </div>
+          <div role="rowgroup">
+            {visibleProducts.length ? (
+              visibleProducts.map((product) => (
+                <InventoryRow
+                  key={product.id}
+                  product={product}
+                  canManage={canManage}
+                  onQuantitySave={onQuantitySave}
+                  onEdit={onEdit}
+                  onShare={onShare}
+                  onArchiveToggle={onArchiveToggle}
+                  onPinToggle={onPinToggle}
+                  archiveBusy={archiveBusy}
+                />
+              ))
+            ) : (
+              <div className="admin-inventory-empty">
+                <p>No products match these filters.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch("");
+                    setCategoryFilter("All");
+                    setStockFilter("all");
+                  }}
+                >
+                  Clear filters
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
 
@@ -5107,10 +8099,10 @@ function CatalogSection({
 
 function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
   const items = [
-    { id: "products", label: "Products", icon: <GridIcon /> },
-    { id: "sales", label: "Sales", icon: <ReceiptIcon /> },
+    { id: "products", label: "Inventory", icon: <GridIcon />, badge: lowStockCount },
+    { id: "sales", label: "Orders", icon: <ReceiptIcon /> },
+    { id: "inquiries", label: "Inquiries", icon: <MicIcon /> },
     { id: "purchases", label: "Purchases", icon: <BoxIcon /> },
-    { id: "low-stock", label: "Low Stock", icon: <WarningIcon />, badge: lowStockCount },
     { id: "settings", label: "Settings", icon: <GearIcon /> }
   ];
 
@@ -5135,7 +8127,8 @@ function BottomNav({ activeTab, setActiveTab, lowStockCount }) {
 }
 
 export default function App() {
-  const [products, setProducts] = useState(seedProducts.map(toProduct));
+  const [products, setProducts] = useState([]);
+  const [storefrontLoading, setStorefrontLoading] = useState(isSupabaseConfigured);
   const [inquiries, setInquiries] = useState([]);
   const [sales, setSales] = useState([]);
   const [purchases, setPurchases] = useState([]);
@@ -5147,6 +8140,8 @@ export default function App() {
   const [expandedPurchaseId, setExpandedPurchaseId] = useState(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
+  const [customerCollection, setCustomerCollection] = useState("all");
+  const [visibleCustomerProductCount, setVisibleCustomerProductCount] = useState(12);
   const [inquiryStatusFilter, setInquiryStatusFilter] = useState("all");
   const [statusMessage, setStatusMessage] = useState(
     isSupabaseConfigured
@@ -5160,6 +8155,7 @@ export default function App() {
   const [compressionMessage, setCompressionMessage] = useState("");
   const [uploadStageMessage, setUploadStageMessage] = useState("");
   const [importBusy, setImportBusy] = useState(false);
+  const [inventoryRefreshBusy, setInventoryRefreshBusy] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [inquiryBusy, setInquiryBusy] = useState(false);
@@ -5170,7 +8166,6 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [session, setSession] = useState(null);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
-  const [showArchived, setShowArchived] = useState(false);
   const [publicScreen, setPublicScreen] = useState(getInitialPublicScreen);
   const [routeIntent, setRouteIntent] = useState(() =>
     typeof window === "undefined" ? { screen: "customer", type: "home", slug: "" } : parseLegacyPath(window.location.pathname)
@@ -5196,7 +8191,6 @@ export default function App() {
   const [salePaymentStatusFilter, setSalePaymentStatusFilter] = useState("all");
   const [saleProductSearch, setSaleProductSearch] = useState("");
   const [salePickerOpen, setSalePickerOpen] = useState(false);
-  const [saleConfirmation, setSaleConfirmation] = useState(null);
   const [saleModalError, setSaleModalError] = useState("");
   const [markingSalePaidId, setMarkingSalePaidId] = useState("");
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
@@ -5206,14 +8200,15 @@ export default function App() {
   const [purchaseProductSearch, setPurchaseProductSearch] = useState("");
   const [purchasePickerOpen, setPurchasePickerOpen] = useState(false);
   const [purchaseModalError, setPurchaseModalError] = useState("");
-  const [paymentBusyProductId, setPaymentBusyProductId] = useState("");
   const [paymentMessage, setPaymentMessage] = useState(null);
-  const [cartItems, setCartItems] = useState([]);
+  const [cartItems, setCartItems] = useState(getStoredCartItems);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutDetails, setCheckoutDetails] = useState(createEmptyCheckoutDetails);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [checkoutSuccess, setCheckoutSuccess] = useState("");
+  const [checkoutStatus, setCheckoutStatus] = useState("idle");
+  const [checkoutResult, setCheckoutResult] = useState(null);
   const [cartBusyProductId, setCartBusyProductId] = useState("");
   const [heroSlideForm, setHeroSlideForm] = useState(createEmptyHeroSlideForm);
   const [heroSlideBusy, setHeroSlideBusy] = useState(false);
@@ -5231,11 +8226,31 @@ export default function App() {
   const customerSearchRef = useRef(null);
   const recognitionRef = useRef(null);
   const compressionTimerRef = useRef(null);
+  const checkoutAttemptRef = useRef("");
+  const checkoutSubmissionRef = useRef(false);
+  const checkoutReturnHandledRef = useRef(false);
   const pendingRouteIntentRef = useRef(
     typeof window === "undefined" ? null : parseLegacyPath(window.location.pathname)
   );
   const speechSupported =
     typeof window !== "undefined" && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  useEffect(() => {
+    if (isSupabaseConfigured) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    import("./data/products").then(({ products: localProducts }) => {
+      if (!cancelled) {
+        setProducts(localProducts.map(toProduct));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -5244,144 +8259,203 @@ export default function App() {
 
     let cancelled = false;
 
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
-        if (!cancelled) {
-          setSession(data.session ?? null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setAuthReady(true);
-        }
-      });
+    async function loadStorefront() {
+      let productData;
+      let heroData;
 
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession ?? null);
-      setAuthReady(true);
-    });
+      try {
+        const response = await fetch("/api/catalog", {
+          headers: { Accept: "application/json" }
+        });
+        if (!response.ok) {
+          throw new Error("Catalogue cache is unavailable");
+        }
+        const payload = await response.json();
+        productData = payload.products;
+        heroData = payload.heroSlides;
+      } catch {
+        const client = await getSupabaseClient();
+        if (!client) {
+          throw new Error("Supabase is unavailable");
+        }
+        const [productResult, heroResult] = await Promise.all([
+          client.from("products").select("*").order("created_at", { ascending: false }),
+          client
+            .from("hero_slides")
+            .select("*")
+            .eq("is_active", true)
+            .order("sort_order", { ascending: true })
+        ]);
 
-    async function loadProducts() {
-      const { data, error } = await supabase.from("products").select("*").order("created_at", { ascending: false });
+        if (productResult.error) {
+          throw productResult.error;
+        }
+        productData = productResult.data;
+        heroData = heroResult.error ? [] : heroResult.data;
+      }
+
       if (cancelled) {
         return;
       }
-      if (error) {
+
+      const nextProducts = (productData ?? []).map(toProduct);
+      setProducts(nextProducts);
+      setSelectedId(null);
+      setLastSyncAt(new Date().toISOString());
+      setHeroSlides(
+        (heroData ?? [])
+          .map(toHeroSlide)
+          .filter((slide) => slide.active)
+          .sort((left, right) => left.sortOrder - right.sortOrder)
+      );
+      setStatusMessage(
+        nextProducts.length
+          ? `Loaded ${nextProducts.length} products from Supabase.`
+          : "Supabase is connected. Add products manually or import your CSV."
+      );
+      setStorefrontLoading(false);
+    }
+
+    loadStorefront().catch((error) => {
+      if (!cancelled) {
+        console.error("Could not load storefront:", error);
         setStatusMessage("Supabase is configured, but product data could not be loaded.");
-        return;
+        setStorefrontLoading(false);
       }
-      if (data?.length) {
-        const nextProducts = data.map(toProduct);
-        setProducts(nextProducts);
-        setSelectedId(null);
-        setLastSyncAt(new Date().toISOString());
-        setStatusMessage(`Loaded ${nextProducts.length} products from Supabase.`);
-      } else {
-        setProducts([]);
-        setSelectedId(null);
-        setLastSyncAt(new Date().toISOString());
-        setStatusMessage("Supabase is connected. Add products manually or import your CSV.");
-      }
-    }
-
-    async function loadInquiries() {
-      const { data, error } = await supabase
-        .from("inquiries")
-        .select("*, inquiry_items(*)")
-        .order("created_at", { ascending: false });
-
-      if (cancelled || error) {
-        return;
-      }
-
-      setInquiries((data ?? []).map(toInquiry));
-    }
-
-    async function loadSales() {
-      const { data, error } = await supabase
-        .from("sales")
-        .select("*, sale_items(*)")
-        .order("created_at", { ascending: false });
-
-      if (cancelled || error) {
-        return;
-      }
-
-      setSales((data ?? []).map(toSale));
-    }
-
-    async function loadPurchases() {
-      const { data, error } = await supabase
-        .from("purchases")
-        .select("*, purchase_items(*)")
-        .order("created_at", { ascending: false });
-
-      if (cancelled || error) {
-        return;
-      }
-
-      setPurchases((data ?? []).map(toPurchase));
-    }
-
-    async function loadHeroSlides() {
-      const { data, error } = await supabase
-        .from("hero_slides")
-        .select("*")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-
-      if (cancelled) {
-        return;
-      }
-
-      if (error) {
-        console.info("Hero slides are not configured yet:", error.message);
-        return;
-      }
-
-      setHeroSlides((data ?? []).map(toHeroSlide).filter((slide) => slide.active));
-    }
-
-    async function loadShareCatalogues() {
-      const { data, error } = await supabase
-        .from("share_catalogues")
-        .select("*, share_catalogue_items(*)")
-        .order("created_at", { ascending: false });
-
-      if (cancelled) {
-        return;
-      }
-
-      if (error) {
-        console.info("Share catalogues are not configured yet:", error.message);
-        return;
-      }
-
-      setShareCatalogues((data ?? []).map(toShareCatalogue));
-    }
-
-    loadProducts();
-    loadInquiries();
-    loadSales();
-    loadPurchases();
-    loadHeroSlides();
-    loadShareCatalogues();
+    });
 
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
     };
   }, []);
 
+  useEffect(() => {
+    if (!isSupabaseConfigured || publicScreen !== "admin-auth") {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let authSubscription = null;
+    setAuthReady(false);
+
+    async function restoreAdminSession() {
+      try {
+        const client = await getSupabaseClient();
+        if (!client || cancelled) {
+          return;
+        }
+
+        const { data } = await client.auth.getSession();
+        if (!cancelled) {
+          setSession(data.session ?? null);
+          setAuthReady(true);
+        }
+
+        const {
+          data: { subscription }
+        } = client.auth.onAuthStateChange((_event, nextSession) => {
+          if (!cancelled) {
+            setSession(nextSession ?? null);
+            setAuthReady(true);
+          }
+        });
+        authSubscription = subscription;
+      } catch (error) {
+        console.error("Could not initialize secure admin access:", error);
+        if (!cancelled) {
+          setAuthReady(true);
+        }
+      }
+    }
+
+    void restoreAdminSession();
+
+    return () => {
+      cancelled = true;
+      authSubscription?.unsubscribe();
+    };
+  }, [publicScreen]);
+
   const userEmail = session?.user?.email ?? "";
-  const canManage = Boolean(userEmail) || !isSupabaseConfigured;
-  const adminActive = Boolean(userEmail) || !isSupabaseConfigured;
+  const adminActive = !isSupabaseConfigured || isConfiguredAdminEmail(userEmail);
+  const canManage = adminActive;
 
   useEffect(() => {
-    if (adminActive && routeIntent.type !== "catalogue") {
+    if (!isSupabaseConfigured || !userEmail || isConfiguredAdminEmail(userEmail)) {
+      return;
+    }
+    setStatusMessage("This account does not have Decorbeats admin access.");
+    void getSupabaseClient().then((client) => client?.auth.signOut()).catch((error) => {
+      console.error("Could not close an unauthorized admin session:", error);
+    });
+  }, [userEmail]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !session?.user?.id || !adminActive) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    async function loadAdminData() {
+      const checkoutOrdersPromise = session?.access_token
+        ? fetch("/api/admin-checkout-orders", {
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${session.access_token}`
+            }
+          })
+            .then(async (response) => {
+              const payload = await response.json().catch(() => null);
+              return response.ok ? payload : { orders: [], error: payload?.error || "Could not load website orders" };
+            })
+            .catch(() => ({ orders: [], error: "Could not load website orders" }))
+        : Promise.resolve({ orders: [] });
+      const [productResult, inquiryResult, salesResult, purchaseResult, catalogueResult, checkoutOrdersResult] = await Promise.all([
+        supabase.from("products").select("*").order("created_at", { ascending: false }),
+        supabase.from("inquiries").select("*, inquiry_items(*)").order("created_at", { ascending: false }),
+        supabase.from("sales").select("*, sale_items(*)").order("created_at", { ascending: false }),
+        supabase.from("purchases").select("*, purchase_items(*)").order("created_at", { ascending: false }),
+        supabase
+          .from("share_catalogues")
+          .select("*, share_catalogue_items(*)")
+          .order("created_at", { ascending: false }),
+        checkoutOrdersPromise
+      ]);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (!productResult.error) {
+        setProducts((productResult.data ?? []).map(toProduct));
+      }
+      if (!inquiryResult.error) {
+        setInquiries((inquiryResult.data ?? []).map(toInquiry));
+      }
+      if (!salesResult.error) {
+        const manuallyRecordedSales = (salesResult.data ?? []).map(toSale);
+        const websiteOrders = Array.isArray(checkoutOrdersResult?.orders)
+          ? checkoutOrdersResult.orders.map(toCheckoutSale)
+          : [];
+        setSales([...manuallyRecordedSales, ...websiteOrders]);
+      }
+      if (!purchaseResult.error) {
+        setPurchases((purchaseResult.data ?? []).map(toPurchase));
+      }
+      if (!catalogueResult.error) {
+        setShareCatalogues((catalogueResult.data ?? []).map(toShareCatalogue));
+      }
+    }
+
+    loadAdminData();
+    return () => {
+      cancelled = true;
+    };
+  }, [adminActive, session?.user?.id]);
+
+  useEffect(() => {
+    if (adminActive && routeIntent.type !== "catalogue" && routeIntent.type !== "policy") {
       setPublicScreen("customer");
       setActiveTab("products");
     }
@@ -5402,6 +8476,11 @@ export default function App() {
     window.addEventListener("popstate", syncPublicScreenFromPath);
     return () => window.removeEventListener("popstate", syncPublicScreenFromPath);
   }, []);
+
+  useEffect(() => {
+    const publicPage = routeIntent.type === "policy" ? getPublicPageBySlug(routeIntent.slug) : null;
+    updatePublicDocumentMetadata(publicPage);
+  }, [routeIntent.slug, routeIntent.type]);
 
   useEffect(() => {
     setUploadError("");
@@ -5445,7 +8524,8 @@ export default function App() {
   }, [adminActive]);
 
   useEffect(() => {
-    if (adminActive || !customerHeaderElevated) {
+    const tickerIsVisible = typeof window !== "undefined" && !window.matchMedia("(max-width: 1100px)").matches;
+    if (adminActive || !customerHeaderElevated || !tickerIsVisible) {
       setHeaderTickerVisible(true);
       return undefined;
     }
@@ -5480,8 +8560,27 @@ export default function App() {
     return [...products]
       .filter((product) => !product.archivedAt)
       .sort((left, right) => {
+        const sellReadyDelta = Number(isCustomerSellReady(right)) - Number(isCustomerSellReady(left));
+        if (sellReadyDelta !== 0) {
+          return sellReadyDelta;
+        }
+        const leftFeaturedRank = getCustomerFeaturedRank(left);
+        const rightFeaturedRank = getCustomerFeaturedRank(right);
+        if (leftFeaturedRank !== rightFeaturedRank) {
+          return leftFeaturedRank - rightFeaturedRank;
+        }
         if (left.pinned !== right.pinned) {
           return Number(right.pinned) - Number(left.pinned);
+        }
+        const brassDelta =
+          Number(safeText(right.material).toLowerCase() === "brass") -
+          Number(safeText(left.material).toLowerCase() === "brass");
+        if (brassDelta !== 0) {
+          return brassDelta;
+        }
+        const marketingDelta = Number(Boolean(right.marketingTag)) - Number(Boolean(left.marketingTag));
+        if (marketingDelta !== 0) {
+          return marketingDelta;
         }
         const rightCreatedAt = new Date(right.createdAt || 0).getTime();
         const leftCreatedAt = new Date(left.createdAt || 0).getTime();
@@ -5492,8 +8591,11 @@ export default function App() {
       });
   }, [products]);
   const customerFacing = !adminActive || previewCustomerView;
-  const adminCatalog = useMemo(() => products.filter((product) => showArchived || !product.archivedAt), [products, showArchived]);
-  const lowStockCatalog = useMemo(() => adminCatalog.filter((product) => product.quantity <= 10), [adminCatalog]);
+  const adminCatalog = useMemo(() => products.filter((product) => !product.archivedAt), [products]);
+  const lowStockCatalog = useMemo(
+    () => adminCatalog.filter((product) => product.quantity <= LOW_STOCK_THRESHOLD),
+    [adminCatalog]
+  );
 
   const currentCatalog = useMemo(() => {
     if (customerFacing) {
@@ -5521,7 +8623,9 @@ export default function App() {
     const visibleProducts = currentCatalog.filter((product) => {
       const haystack = [product.name, product.sku, product.category, product.material].filter(Boolean).join(" ").toLowerCase();
       const matchesSearch = haystack.includes(search.toLowerCase());
-      const matchesCategory = categoryFilter === "All" || product.category === categoryFilter;
+      const matchesCategory = customerFacing
+        ? matchesCustomerCollection(product, customerCollection)
+        : categoryFilter === "All" || product.category === categoryFilter;
       return matchesSearch && matchesCategory;
     });
 
@@ -5536,7 +8640,16 @@ export default function App() {
       }
       return left.name.localeCompare(right.name);
     });
-  }, [categoryFilter, currentCatalog, customerFacing, search]);
+  }, [categoryFilter, currentCatalog, customerCollection, customerFacing, search]);
+
+  useEffect(() => {
+    setVisibleCustomerProductCount(12);
+  }, [categoryFilter, customerCollection, search]);
+
+  const visibleCustomerProducts = useMemo(
+    () => filteredProducts.slice(0, visibleCustomerProductCount),
+    [filteredProducts, visibleCustomerProductCount]
+  );
 
   const cartLines = useMemo(() => {
     return cartItems
@@ -5546,7 +8659,10 @@ export default function App() {
         if (!product || product.archivedAt || !price) {
           return null;
         }
-        const availableQuantity = Math.max(1, Number(product.quantity || 1));
+        const availableQuantity = Math.max(0, Number(product.quantity || 0));
+        if (availableQuantity <= 0) {
+          return null;
+        }
         const quantity = Math.max(1, Math.min(Number(item.quantity) || 1, availableQuantity));
         return {
           product,
@@ -5563,6 +8679,64 @@ export default function App() {
     [cartItems]
   );
 
+  useEffect(() => {
+    if (!products.length) {
+      return;
+    }
+    setCartItems((current) =>
+      current.flatMap((item) => {
+        const product = products.find((entry) => String(entry.id) === String(item.productId));
+        const availableQuantity = Math.max(0, Number(product?.quantity || 0));
+        if (!product || product.archivedAt || availableQuantity <= 0 || !parsePrice(product.pricing?.mrp)) {
+          return [];
+        }
+        return [{ ...item, quantity: Math.min(item.quantity, availableQuantity) }];
+      })
+    );
+  }, [products]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
+    } catch {
+      // Shopping remains available when storage is blocked or full.
+    }
+  }, [cartItems]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || storefrontLoading || checkoutReturnHandledRef.current) {
+      return;
+    }
+    const returnUrl = new URL(window.location.href);
+    const provider = returnUrl.searchParams.get("payment_provider");
+    const orderId = returnUrl.searchParams.get("cashfree_order_id");
+    if (provider !== "cashfree" || !orderId) {
+      return;
+    }
+
+    checkoutReturnHandledRef.current = true;
+    checkoutSubmissionRef.current = true;
+    setCartOpen(true);
+    setCheckoutBusy(true);
+    setCheckoutStatus("verifying");
+    setCheckoutResult({ provider: "cashfree", orderId });
+    void reconcileCustomerCashfreeOrder(orderId, cartLines)
+      .then(() => {
+        returnUrl.searchParams.delete("payment_provider");
+        returnUrl.searchParams.delete("cashfree_order_id");
+        window.history.replaceState({}, "", `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`);
+      })
+      .catch((error) => {
+        console.error("Cashfree return verification failed:", error);
+        setCheckoutStatus("failed");
+        setCheckoutError(error.message || "We could not confirm this payment yet. Your cart is still saved.");
+      })
+      .finally(() => {
+        checkoutSubmissionRef.current = false;
+        setCheckoutBusy(false);
+      });
+  }, [cartLines, storefrontLoading]);
+
   const filteredInquiries = useMemo(() => {
     const statusFiltered =
       inquiryStatusFilter === "all" ? inquiries : inquiries.filter((inquiry) => inquiry.status === inquiryStatusFilter);
@@ -5570,38 +8744,14 @@ export default function App() {
   }, [inquiries, inquiryStatusFilter]);
   const filteredSales = useMemo(() => {
     const filtered = salePaymentStatusFilter === "all" ? sales : sales.filter((sale) => sale.paymentStatus === salePaymentStatusFilter);
-    return [...filtered].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
+    return [...filtered].sort(
+      (left, right) => new Date(right.orderDate || right.createdAt) - new Date(left.orderDate || left.createdAt)
+    );
   }, [sales, salePaymentStatusFilter]);
   const filteredPurchases = useMemo(() => {
     const filtered = purchaseStatusFilter === "all" ? purchases : purchases.filter((purchase) => purchase.status === purchaseStatusFilter);
     return [...filtered].sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt));
   }, [purchaseStatusFilter, purchases]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || window.innerWidth < 768) {
-      return undefined;
-    }
-
-    const nodes = Array.from(document.querySelectorAll(".desktop-reveal"));
-    if (!nodes.length) {
-      return undefined;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.16 }
-    );
-
-    nodes.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
-  }, [adminActive, previewCustomerView, filteredProducts.length, categoryFilter]);
 
   const selectedProduct =
     filteredProducts.find((product) => product.id === selectedId) ||
@@ -5624,18 +8774,20 @@ export default function App() {
     }
 
     if (pendingRoute.type === "home") {
+      setCustomerCollection("all");
       pendingRouteIntentRef.current = null;
       return;
     }
 
     if (pendingRoute.type === "category") {
-      const matchedCategory = categories.find((category) => slugify(category) === pendingRoute.slug) ?? null;
+      const matchedCollection = resolveCustomerCollectionId(pendingRoute.slug);
       setSelectedId(null);
-      if (matchedCategory) {
-        setCategoryFilter(matchedCategory);
+      setCategoryFilter("All");
+      if (matchedCollection) {
+        setCustomerCollection(matchedCollection);
         setSearch("");
       } else {
-        setCategoryFilter("All");
+        setCustomerCollection("all");
         setSearch(humanizeSlug(pendingRoute.slug));
       }
       pendingRouteIntentRef.current = null;
@@ -5651,16 +8803,18 @@ export default function App() {
 
       if (matchedProduct) {
         setCategoryFilter("All");
+        setCustomerCollection("all");
         setSearch("");
         setSelectedId(matchedProduct.id);
       } else {
         setSelectedId(null);
         setCategoryFilter("All");
+        setCustomerCollection("all");
         setSearch(humanizeSlug(pendingRoute.slug));
       }
       pendingRouteIntentRef.current = null;
     }
-  }, [categories, customerCatalog, isSupabaseConfigured, lastSyncAt]);
+  }, [customerCatalog, isSupabaseConfigured, lastSyncAt, routeIntent.slug, routeIntent.type]);
 
   useEffect(() => {
     if (routeIntent.type !== "catalogue") {
@@ -5687,7 +8841,14 @@ export default function App() {
         return;
       }
 
-      const { data, error } = await supabase
+      const client = await getSupabaseClient();
+      if (!client) {
+        setPublicCatalogueStatus("error");
+        setPublicCatalogueError("This catalogue is temporarily unavailable.");
+        return;
+      }
+
+      const { data, error } = await client
         .from("share_catalogues")
         .select("*, share_catalogue_items(*)")
         .eq("slug", routeIntent.slug)
@@ -5728,18 +8889,20 @@ export default function App() {
     return {
       totalProducts: products.filter((product) => !product.archivedAt).length,
       totalUnits: products.filter((product) => !product.archivedAt).reduce((sum, product) => sum + Number(product.quantity || 0), 0),
-      lowStock: products.filter((product) => !product.archivedAt && product.stockStatus === "Low stock").length,
+      lowStock: products.filter(
+        (product) => !product.archivedAt && product.quantity <= LOW_STOCK_THRESHOLD
+      ).length,
       withImages: products.filter((product) => !product.archivedAt && getProductImages(product).length).length
     };
   }, [products]);
   const todaysSalesSummary = useMemo(() => {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const todaysSales = sales.filter((sale) => new Date(sale.createdAt) >= startOfDay);
-    const paidSales = todaysSales.filter((sale) => sale.paymentStatus !== "pending");
-    const pendingSales = todaysSales.filter((sale) => sale.paymentStatus === "pending");
-    const collected = paidSales.reduce((sum, sale) => sum + Number(sale.totalAmount || 0), 0);
-    const pendingTotal = pendingSales.reduce((sum, sale) => sum + Number(sale.totalAmount || 0), 0);
+    const today = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+    const todaysSales = sales.filter((sale) => safeText(sale.orderDate || sale.createdAt).slice(0, 10) === today);
+    const collected = todaysSales.reduce((sum, sale) => sum + Number(sale.amountReceived || 0), 0);
+    const pendingTotal = todaysSales.reduce(
+      (sum, sale) => sum + Math.max(0, Number(sale.totalAmount || 0) - Number(sale.amountReceived || 0)),
+      0
+    );
     const productCounts = new Map();
     todaysSales.forEach((sale) => {
       sale.items.forEach((item) => {
@@ -5754,7 +8917,7 @@ export default function App() {
     return [
       { label: "Collected today", value: formatCurrency(collected), emphasis: collected > 0, tone: "success" },
       { label: "Pending today", value: formatCurrency(pendingTotal), tone: "warn" },
-      { label: "Sales", value: todaysSales.length },
+      { label: "Orders", value: todaysSales.length },
       { label: "Most sold", value: mostSold }
     ];
   }, [sales]);
@@ -5806,6 +8969,7 @@ export default function App() {
   }
 
   function handleProductSelect(product) {
+    const willClose = selectedId === product.id;
     if (!adminActive || previewCustomerView) {
       trackCustomerEvent("Product Viewed", {
         sku: product.sku,
@@ -5813,21 +8977,42 @@ export default function App() {
         category: product.category,
         hasPrice: hasDisplayValue(product.pricing?.mrp)
       });
+      trackCommerceEvent("view_item", {
+        value: parsePrice(product.pricing?.mrp) || 0,
+        items: [toCommerceItem(product)]
+      });
+      if (typeof window !== "undefined") {
+        const nextPath = willClose
+          ? getCustomerCollectionById(customerCollection).path
+          : `/product/${product.slug}`;
+        pushCustomerPath(nextPath);
+      }
     }
-    setSelectedId((current) => (current === product.id ? null : product.id));
+    setSelectedId(willClose ? null : product.id);
     if (adminActive) {
       populateForm(product);
     }
   }
 
+  function handleCustomerProductClose() {
+    setSelectedId(null);
+    if (customerFacing && typeof window !== "undefined") {
+      const nextPath = getCustomerCollectionById(customerCollection).path;
+      if (window.location.pathname !== nextPath) {
+        pushCustomerPath(nextPath);
+      }
+    }
+  }
+
   function handleEditProduct(product) {
-    handleProductSelect(product);
+    setSelectedId(product.id);
+    populateForm(product);
     setActiveTab("add");
   }
 
   function handleNewInquiry() {
     setInquiryModalOpen(true);
-    setInquiryModalStep("record");
+    setInquiryModalStep("confirm");
     setInquiryTranscript("");
     setManualInquiryTranscript("");
     setInquiryDraft(createEmptyInquiryDraft());
@@ -5863,7 +9048,7 @@ export default function App() {
   function addInquiryProductRow() {
     setInquiryDraft((current) => ({
       ...current,
-      products: [...current.products, { product_name: "", matched_sku: "", quantity_requested: "", quoted_price: "" }]
+      products: [...current.products, { product_name: "", matched_sku: "", quantity_requested: 1, quoted_price: "" }]
     }));
   }
 
@@ -5894,7 +9079,6 @@ export default function App() {
     setSaleDraft(createEmptySaleDraft());
     setSaleProductSearch("");
     setSalePickerOpen(false);
-    setSaleConfirmation(null);
     setSaleModalError("");
   }
 
@@ -5903,43 +9087,50 @@ export default function App() {
     setSaleDraft(createEmptySaleDraft());
     setSaleProductSearch("");
     setSalePickerOpen(false);
-    setSaleConfirmation(null);
     setSaleModalError("");
   }
 
   function handleAddSaleProduct(product) {
-    setSaleConfirmation(null);
     setSaleDraft((current) => {
-      const existingIndex = current.items.findIndex((item) => item.product_sku === product.sku);
-      if (existingIndex >= 0) {
-        const nextItems = [...current.items];
-        const nextQuantity = Math.min(Number(nextItems[existingIndex].quantity_sold || 0) + 1, Number(product.quantity || 0));
-        nextItems[existingIndex] = { ...nextItems[existingIndex], quantity_sold: nextQuantity };
-        return { ...current, items: nextItems };
+      const nextItem = createSaleItemDraft({
+        product_id: product.id,
+        product_sku: product.sku,
+        product_name: product.name,
+        quantity_sold: 1,
+        selling_price: product.pricing.mrp ?? "",
+        cost_price: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
+        max_quantity: Number(product.quantity || 0),
+        track_inventory: Number(product.quantity || 0) > 0,
+        fulfillment_source: Number(product.quantity || 0) > 0 ? "inventory" : "vendor_direct"
+      });
+      const blankIndex = current.items.findIndex((item) => !safeText(item.product_name));
+      if (blankIndex === -1) {
+        return { ...current, items: [...current.items, nextItem] };
       }
+      const nextItems = [...current.items];
+      nextItems[blankIndex] = nextItem;
+      return { ...current, items: nextItems };
+    });
+    setSalePickerOpen(false);
+    setSaleProductSearch("");
+  }
 
-      return {
-        ...current,
-        items: [
-          ...current.items,
-          {
-            product_id: product.id,
-            product_sku: product.sku,
-            product_name: product.name,
-            quantity_sold: 0,
-            selling_price: product.pricing.mrp ?? "",
-            cost_price: product.pricing.costPrice ?? product.pricing.unitCost ?? "",
-            max_quantity: Number(product.quantity || 0)
-          }
-        ]
-      };
+  function handleAddCustomSaleItem() {
+    setSaleDraft((current) => {
+      const nextItem = createSaleItemDraft({ product_name: safeText(saleProductSearch) });
+      const blankIndex = current.items.findIndex((item) => !safeText(item.product_name));
+      if (blankIndex === -1) {
+        return { ...current, items: [...current.items, nextItem] };
+      }
+      const nextItems = [...current.items];
+      nextItems[blankIndex] = nextItem;
+      return { ...current, items: nextItems };
     });
     setSalePickerOpen(false);
     setSaleProductSearch("");
   }
 
   function handleUpdateSaleItem(index, field, value) {
-    setSaleConfirmation(null);
     setSaleDraft((current) => {
       const nextItems = [...current.items];
       const currentItem = nextItems[index];
@@ -5948,11 +9139,18 @@ export default function App() {
       }
       if (field === "quantity_sold") {
         if (value === "") {
-          nextItems[index] = { ...currentItem, quantity_sold: 0 };
+          nextItems[index] = { ...currentItem, quantity_sold: "" };
         } else {
-          const nextQuantity = Math.max(1, Math.min(Number(value || 0), Number(currentItem.max_quantity || 1)));
+          const nextQuantity = Math.max(1, Math.min(Math.trunc(Number(value || 0)), 999999));
           nextItems[index] = { ...currentItem, quantity_sold: nextQuantity };
         }
+      } else if (field === "fulfillment_source") {
+        const useInventory = value === "inventory" && Boolean(currentItem.product_sku);
+        nextItems[index] = {
+          ...currentItem,
+          fulfillment_source: useInventory ? "inventory" : "vendor_direct",
+          track_inventory: useInventory
+        };
       } else {
         nextItems[index] = { ...currentItem, [field]: value };
       }
@@ -5961,49 +9159,19 @@ export default function App() {
   }
 
   function handleRemoveSaleProduct(index) {
-    setSaleConfirmation(null);
-    setSaleDraft((current) => ({
-      ...current,
-      items: current.items.filter((_, itemIndex) => itemIndex !== index)
-    }));
+    setSaleDraft((current) => {
+      const nextItems = current.items.filter((_, itemIndex) => itemIndex !== index);
+      return { ...current, items: nextItems.length ? nextItems : [createSaleItemDraft()] };
+    });
   }
 
   function buildSaleConfirmation() {
-    if (!saleDraft.items.length) {
-      setSaleModalError("Add at least one product before saving.");
+    const confirmation = getSaleDraftConfirmation(saleDraft);
+    if (confirmation.error) {
+      setSaleModalError(confirmation.error);
       return null;
     }
-
-    const inventoryChanges = saleDraft.items.map((item) => {
-      const product = products.find((entry) => entry.sku === item.product_sku);
-      return {
-        item,
-        product,
-        nextQuantity: Math.max(0, Number(product?.quantity || 0) - Number(item.quantity_sold || 0))
-      };
-    });
-
-    const invalidStock = inventoryChanges.find(
-      ({ product, item }) =>
-        !product ||
-        Number(item.quantity_sold || 0) <= 0 ||
-        Number(item.quantity_sold || 0) > Number(product.quantity || 0)
-    );
-    if (invalidStock) {
-      setSaleModalError(`Stock is not available for ${invalidStock.item.product_name || invalidStock.item.product_sku}.`);
-      return null;
-    }
-
-    const total = saleDraft.items.reduce(
-      (sum, item) => sum + Number(item.quantity_sold || 0) * Number(item.selling_price || 0),
-      0
-    );
-
-    return {
-      inventoryChanges,
-      total,
-      paymentMethod: saleDraft.payment_method || "upi"
-    };
+    return confirmation;
   }
 
   function handleSaveSale() {
@@ -6012,17 +9180,26 @@ export default function App() {
     if (!confirmation) {
       return;
     }
-    setSaleConfirmation(confirmation);
+    void handleConfirmSale(confirmation);
   }
 
-  async function handleConfirmSale() {
+  async function handleConfirmSale(confirmationOverride = null, draftOverride = null, options = {}) {
     try {
-      const confirmation = saleConfirmation || buildSaleConfirmation();
-      if (!confirmation) {
+      const sourceDraft = draftOverride || saleDraft;
+      const confirmation = confirmationOverride || getSaleDraftConfirmation(sourceDraft);
+      if (!confirmation || confirmation.error) {
+        if (options.throwOnError) {
+          throw new Error(confirmation?.error || "Could not validate this order.");
+        }
+        setSaleModalError(confirmation?.error || "Could not validate this order.");
         return;
       }
 
-      const { inventoryChanges, total } = confirmation;
+      const { orderItems, total } = confirmation;
+      const submittedDraft = {
+        ...sourceDraft,
+        items: orderItems.map((item) => ({ ...item }))
+      };
 
       setSalesBusy(true);
       setSaleModalError("");
@@ -6030,55 +9207,57 @@ export default function App() {
         throw new Error("Your admin session has expired. Please sign in again before recording the sale.");
       }
       const salePayload = {
-        customer_name: safeText(saleDraft.customer_name) || null,
-        payment_method: saleDraft.payment_method || "upi",
-        payment_status: saleDraft.payment_status || "paid",
-        notes: safeText(saleDraft.notes) || null,
+        customer_name: safeText(submittedDraft.customer_name) || null,
+        payment_method: submittedDraft.payment_method || "not_recorded",
+        payment_status: submittedDraft.payment_status || "not_recorded",
+        notes: buildSaleNotes(submittedDraft),
         total_amount: total
       };
 
+      const saleItemsPayload = submittedDraft.items.map((item) => ({
+        product_id: item.product_id || null,
+        product_sku: null,
+        product_name: safeText(item.product_name),
+        quantity_sold: Number(item.quantity_sold || 0),
+        selling_price: Number(item.selling_price || 0),
+        cost_price: item.cost_price === "" ? null : Number(item.cost_price),
+        track_inventory: false,
+        fulfillment_source: item.track_inventory ? "inventory" : "vendor_direct",
+        vendor_name: safeText(item.vendor_name) || null
+      }));
+
       let savedSale;
       if (isSupabaseConfigured) {
-        const saleItemsPayload = saleDraft.items.map((item) => ({
-          product_sku: item.product_sku,
-          product_name: item.product_name,
-          quantity_sold: Number(item.quantity_sold || 0),
-          selling_price: Number(item.selling_price || 0),
-          cost_price: item.cost_price === "" ? null : Number(item.cost_price)
-        }));
-
-        const { data: rpcData, error: rpcError } = await supabase.rpc("record_sale_with_items", {
-          sale_payload: salePayload,
-          sale_items_payload: saleItemsPayload
+        const accessToken = session?.access_token;
+        if (!accessToken) {
+          throw new Error("Your admin session has expired. Please sign in again.");
+        }
+        const response = await fetch("/api/admin-record-sale", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            client_order_id: submittedDraft.client_order_id,
+            sale_payload: salePayload,
+            sale_items_payload: saleItemsPayload
+          })
         });
-
-        if (rpcError) {
-          throw rpcError;
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not save this order.");
         }
-
-        savedSale = saleFromRpcData(rpcData);
+        savedSale = payload?.sale ? toSale(payload.sale) : null;
         if (!savedSale) {
-          throw new Error("Sale was saved, but Supabase returned an unreadable response. Please refresh Sales before trying again.");
+          throw new Error("The order was saved, but the response could not be read. Refresh Orders before trying again.");
         }
-
-        setProducts((current) =>
-          current.map((product) => {
-            const change = inventoryChanges.find(({ product: changedProduct }) => changedProduct.id === product.id);
-            return change ? { ...product, quantity: change.nextQuantity } : product;
-          })
-        );
       } else {
-        setProducts((current) =>
-          current.map((product) => {
-            const change = inventoryChanges.find(({ product: currentProduct }) => currentProduct.id === product.id);
-            return change ? toProduct({ ...product, quantity: change.nextQuantity }) : product;
-          })
-        );
         savedSale = toSale({
           id: crypto.randomUUID(),
           created_at: new Date().toISOString(),
           ...salePayload,
-          sale_items: saleDraft.items.map((item) => ({
+          sale_items: saleItemsPayload.map((item) => ({
             id: crypto.randomUUID(),
             product_sku: item.product_sku,
             product_name: item.product_name,
@@ -6089,21 +9268,26 @@ export default function App() {
         });
       }
 
-      setSales((current) => [savedSale, ...current]);
+      setSales((current) => [savedSale, ...current.filter((entry) => entry.id !== savedSale.id)]);
       setExpandedSaleId(savedSale.id);
-      setStatusMessage("Sale recorded ✓");
-      setSaleConfirmation(null);
-      resetSaleModal();
-      setSalesBusy(false);
+      setStatusMessage("Order saved · stock unchanged ✓");
+      if (!draftOverride) {
+        resetSaleModal();
+      }
+      return savedSale;
     } catch (error) {
-      console.error("Sale error:", error);
+      console.error("Order save error:", error);
+      if (options.throwOnError) {
+        throw error;
+      }
       setSaleModalError(formatSaleSaveError(error));
+    } finally {
       setSalesBusy(false);
     }
   }
 
   async function handleMarkSalePaid(sale) {
-    if (!sale?.id || sale.paymentStatus !== "pending") {
+    if (!sale?.id || !["pending", "part_paid"].includes(sale.paymentStatus)) {
       return;
     }
 
@@ -6141,10 +9325,11 @@ export default function App() {
     }
 
     const restoreLines = sale.items
+      .filter((item) => item.trackInventory)
       .map((item) => `• ${item.productName || item.productSku}: +${Number(item.quantitySold || 0)} stock`)
       .join("\n");
     const confirmed = window.confirm(
-      `Delete this sale?\n\nThis will restore inventory:\n${restoreLines || "• No stock items recorded"}\n\nThis cannot be undone.`
+      `Delete this order?\n\n${restoreLines ? `This will restore inventory:\n${restoreLines}` : "No inventory was deducted for this order."}\n\nThis cannot be undone.`
     );
     if (!confirmed) {
       return;
@@ -6171,7 +9356,7 @@ export default function App() {
       );
       setSales((current) => current.filter((entry) => entry.id !== sale.id));
       setExpandedSaleId((current) => (current === sale.id ? null : current));
-      setStatusMessage("Sale deleted and stock restored ✓");
+      setStatusMessage(restoreLines ? "Order deleted and stock restored ✓" : "Order deleted ✓");
     } catch (error) {
       console.error("Delete sale failed:", error);
       const missingRpcMessage = "The sale delete function is not installed in Supabase yet. Please run the latest sales SQL migration, then try again.";
@@ -6862,19 +10047,24 @@ export default function App() {
   }
 
   async function extractInquiryWithOpenAI(transcriptText) {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const client = await getSupabaseClient();
+    if (!client) {
+      throw new Error("Admin services are not configured.");
+    }
+    const { data: sessionData } = await client.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) {
+      throw new Error("Your admin session expired. Please sign in again.");
+    }
+
+    const response = await fetch("/api/extract-inquiry", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${OPENAI_API_KEY}`
+        Authorization: `Bearer ${accessToken}`
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: INQUIRY_SYSTEM_PROMPT },
-          { role: "user", content: transcriptText }
-        ]
+        transcript: transcriptText
       })
     });
 
@@ -6884,15 +10074,14 @@ export default function App() {
     }
 
     const payload = await response.json();
-    const content = payload?.choices?.[0]?.message?.content;
-    if (!content) {
+    if (!payload?.inquiry) {
       throw new Error("OpenAI returned an empty response.");
     }
-    return JSON.parse(content);
+    return payload.inquiry;
   }
 
   async function processInquiryTranscript() {
-    const rawTranscript = speechSupported ? inquiryTranscript.trim() : manualInquiryTranscript.trim();
+    const rawTranscript = inquiryTranscript.trim() || manualInquiryTranscript.trim();
     if (!rawTranscript) {
       setInquiryModalError("Add a transcript before continuing.");
       return;
@@ -6907,9 +10096,6 @@ export default function App() {
     setInquiryModalError("");
 
     try {
-      if (!OPENAI_API_KEY) {
-        throw new Error("Missing OpenAI API key.");
-      }
       const extracted = await extractInquiryWithOpenAI(rawTranscript);
       setInquiryDraft(normalizeInquiryDraft(extracted, products));
       setInquiryModalStep("confirm");
@@ -6921,79 +10107,179 @@ export default function App() {
     }
   }
 
-  async function saveInquiry() {
-    const transcriptText = speechSupported ? inquiryTranscript.trim() : manualInquiryTranscript.trim();
-    setInquiryBusy(true);
-    setInquiryModalError("");
-    try {
-      const inquiryPayload = {
-        customer_name: safeText(inquiryDraft.customer_name) || null,
-        customer_phone: safeText(inquiryDraft.customer_phone) || null,
-        source: safeText(inquiryDraft.source, "phone"),
-        occasion: safeText(inquiryDraft.occasion) || null,
-        required_by_date: safeText(inquiryDraft.required_by_date) || null,
-        budget_per_unit: inquiryDraft.budget_per_unit === "" ? null : Number(inquiryDraft.budget_per_unit),
-        total_budget: inquiryDraft.total_budget === "" ? null : Number(inquiryDraft.total_budget),
-        notes: safeText(inquiryDraft.notes) || null,
-        raw_transcript: transcriptText || null,
-        status: "new"
-      };
+  async function persistInquiryDraft(submittedDraft, transcriptText = "") {
+    const inquiryItems = submittedDraft.products.filter((item) => safeText(item.product_name));
+    if (!safeText(submittedDraft.customer_name) && !safeText(submittedDraft.customer_phone)) {
+      throw new Error("Add the customer name or mobile number.");
+    }
+    if (!inquiryItems.length && !safeText(submittedDraft.notes)) {
+      throw new Error("Add at least one item or a short requirement note.");
+    }
+    if (
+      inquiryItems.some(
+        (item) =>
+          item.quantity_requested !== "" &&
+          (!Number.isInteger(Number(item.quantity_requested)) || Number(item.quantity_requested) <= 0)
+      )
+    ) {
+      throw new Error("Item quantities must be whole numbers greater than zero.");
+    }
 
+    const inquiryPayload = {
+      entry_date: safeText(submittedDraft.entry_date) || new Date().toISOString().slice(0, 10),
+      customer_name: safeText(submittedDraft.customer_name) || null,
+      customer_phone: safeText(submittedDraft.customer_phone) || null,
+      source: safeText(submittedDraft.source, "whatsapp"),
+      occasion: safeText(submittedDraft.occasion) || null,
+      required_by_date: safeText(submittedDraft.required_by_date) || null,
+      budget_per_unit: submittedDraft.budget_per_unit === "" ? null : Number(submittedDraft.budget_per_unit),
+      total_budget: submittedDraft.total_budget === "" ? null : Number(submittedDraft.total_budget),
+      notes: safeText(submittedDraft.notes) || null,
+      raw_transcript: safeText(transcriptText) || null,
+      status: inquiryStatusOrder.includes(submittedDraft.status) ? submittedDraft.status : "new"
+    };
+    const itemsPayload = inquiryItems.map((item) => ({
+      product_sku: safeText(item.matched_sku) || null,
+      product_name: safeText(item.product_name),
+      quantity_requested: item.quantity_requested === "" ? null : Number(item.quantity_requested),
+      quoted_price: item.quoted_price === "" || item.quoted_price == null ? null : Number(item.quoted_price)
+    }));
+
+    setInquiryBusy(true);
+    try {
       let savedInquiry;
       if (isSupabaseConfigured) {
-        const { data, error } = await supabase.from("inquiries").insert(inquiryPayload).select().single();
-        if (error) {
-          throw error;
+        const accessToken = session?.access_token;
+        if (!accessToken) {
+          throw new Error("Your admin session has expired. Please sign in again before recording the inquiry.");
         }
-
-        const itemsPayload = inquiryDraft.products
-          .filter((item) => safeText(item.product_name))
-          .map((item) => ({
-            inquiry_id: data.id,
-            product_sku: safeText(item.matched_sku) || null,
-            product_name: safeText(item.product_name),
-            quantity_requested: item.quantity_requested === "" ? null : Number(item.quantity_requested),
-            quoted_price: item.quoted_price === "" ? null : Number(item.quoted_price)
-          }));
-
-        let items = [];
-        if (itemsPayload.length) {
-          const { data: insertedItems, error: itemsError } = await supabase.from("inquiry_items").insert(itemsPayload).select();
-          if (itemsError) {
-            throw itemsError;
-          }
-          items = insertedItems ?? [];
+        const response = await fetch("/api/admin-record-inquiry", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({
+            client_inquiry_id: safeText(submittedDraft.client_inquiry_id),
+            inquiry_payload: inquiryPayload,
+            inquiry_items_payload: itemsPayload
+          })
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not save this inquiry.");
         }
-
-        savedInquiry = toInquiry({ ...data, inquiry_items: items });
+        savedInquiry = payload?.inquiry ? toInquiry(payload.inquiry) : null;
+        if (!savedInquiry) {
+          throw new Error("The inquiry was saved, but the response could not be read. Refresh before trying again.");
+        }
       } else {
+        const localInquiryId =
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `inquiry-${Date.now()}`;
         savedInquiry = toInquiry({
-          id: crypto.randomUUID(),
+          id: localInquiryId,
           created_at: new Date().toISOString(),
           ...inquiryPayload,
-          inquiry_items: inquiryDraft.products
-            .filter((item) => safeText(item.product_name))
-            .map((item) => ({
-              id: crypto.randomUUID(),
-              product_sku: safeText(item.matched_sku) || null,
-              product_name: safeText(item.product_name),
-              quantity_requested: item.quantity_requested === "" ? null : Number(item.quantity_requested),
-              quoted_price: item.quoted_price === "" ? null : Number(item.quoted_price)
-            }))
+          inquiry_items: itemsPayload.map((item, index) => ({ id: `${localInquiryId}-${index}`, ...item }))
         });
       }
 
-      setInquiries((current) => [savedInquiry, ...current]);
+      setInquiries((current) => [savedInquiry, ...current.filter((item) => item.id !== savedInquiry.id)]);
       setExpandedInquiryId(savedInquiry.id);
       setStatusMessage("Inquiry saved ✓");
+      return savedInquiry;
+    } finally {
+      setInquiryBusy(false);
+    }
+  }
+
+  async function saveInquiry() {
+    const transcriptText = inquiryTranscript.trim() || manualInquiryTranscript.trim();
+    setInquiryModalError("");
+    try {
+      await persistInquiryDraft(inquiryDraft, transcriptText);
       resetInquiryModal();
     } catch (error) {
       console.log("Inquiry save failed:", error);
       setInquiryModalError(error?.message || "Could not save this inquiry.");
       setInquiryModalStep("confirm");
-    } finally {
-      setInquiryBusy(false);
     }
+  }
+
+  async function handleQuickSheetSave(entry) {
+    if (entry.record_type === "inquiry") {
+      const quickInquiryDraft = {
+        ...createEmptyInquiryDraft(),
+        client_inquiry_id: entry.client_record_id,
+        entry_date: entry.entry_date,
+        customer_name: entry.customer_name,
+        status: inquiryStatusOrder.includes(entry.status) ? entry.status : "new",
+        products: entry.items.map((item) => {
+          const normalizedName = safeText(item.product_name).toLowerCase();
+          const matched = products.find(
+            (product) =>
+              safeText(product.name).toLowerCase() === normalizedName ||
+              safeText(product.sku).toLowerCase() === normalizedName
+          );
+          return {
+            product_name: safeText(item.product_name),
+            matched_sku: matched?.sku ?? "",
+            quantity_requested: Number(item.quantity),
+            quoted_price: item.unit_price == null ? "" : Number(item.unit_price)
+          };
+        })
+      };
+      return persistInquiryDraft(quickInquiryDraft);
+    }
+
+    const total = entry.items.reduce(
+      (sum, item) => sum + Number(item.quantity || 0) * Number(item.unit_price || 0),
+      0
+    );
+    const amountReceived = entry.amount_received === "" ? null : Number(entry.amount_received);
+    const paymentStatus =
+      amountReceived == null
+        ? "not_recorded"
+        : amountReceived <= 0
+          ? "pending"
+          : amountReceived < total
+            ? "part_paid"
+            : "paid";
+    const quickOrderDraft = {
+      ...createEmptySaleDraft(),
+      client_order_id: entry.client_record_id,
+      order_date: entry.entry_date,
+      customer_name: entry.customer_name,
+      payment_status: paymentStatus,
+      fulfillment_status: quickSheetOrderStatuses.includes(entry.status) ? entry.status : "confirmed",
+      amount_received: amountReceived == null ? "" : amountReceived,
+      courier_cost: entry.courier_cost === "" ? "" : Number(entry.courier_cost),
+      items: entry.items.map((item) => {
+        const normalizedName = safeText(item.product_name).toLowerCase();
+        const matched = products.find(
+          (product) =>
+            safeText(product.name).toLowerCase() === normalizedName ||
+            safeText(product.sku).toLowerCase() === normalizedName
+        );
+        return createSaleItemDraft({
+          product_id: matched?.id ? String(matched.id) : "",
+          product_sku: matched?.sku ?? "",
+          product_name: safeText(item.product_name),
+          quantity_sold: Number(item.quantity),
+          selling_price: Number(item.unit_price),
+          cost_price: item.unit_cost === "" ? "" : Number(item.unit_cost),
+          track_inventory: false,
+          fulfillment_source: "vendor_direct"
+        });
+      })
+    };
+    const confirmation = getSaleDraftConfirmation(quickOrderDraft);
+    if (confirmation.error) {
+      throw new Error(confirmation.error);
+    }
+    return handleConfirmSale(confirmation, quickOrderDraft, { throwOnError: true });
   }
 
   function handleScrollToCollection() {
@@ -7018,9 +10304,17 @@ export default function App() {
     });
   }
 
-  function handleCustomerCategorySelect(category, source = "category_bar") {
-    trackCustomerEvent("Category Selected", { category, source });
-    setCategoryFilter(category);
+  function handleCustomerCategorySelect(value, source = "category_bar") {
+    const collection = getCustomerCollectionById(value);
+    trackCustomerEvent("Collection Selected", { collection: collection.label, collectionId: collection.id, source });
+    setCategoryFilter("All");
+    setCustomerCollection(collection.id);
+    if (customerFacing && typeof window !== "undefined") {
+      const nextPath = collection.path;
+      if (window.location.pathname !== nextPath) {
+        pushCustomerPath(nextPath);
+      }
+    }
   }
 
   function handleCustomerWhatsAppClick(product) {
@@ -7092,6 +10386,90 @@ export default function App() {
     }
   }
 
+  async function handleInventoryQuantityUpdate(product, nextQuantity) {
+    if (!canManage) {
+      throw new Error("Sign in again to update stock.");
+    }
+    if (!Number.isInteger(nextQuantity) || nextQuantity < 0) {
+      throw new Error("Stock must be a whole number of 0 or more.");
+    }
+
+    if (isSupabaseConfigured) {
+      const client = await getSupabaseClient();
+      if (!client) {
+        throw new Error("Inventory connection is unavailable.");
+      }
+      const { data, error } = await client
+        .from("products")
+        .update({ quantity: nextQuantity })
+        .eq("id", product.id)
+        .eq("quantity", Number(product.quantity || 0))
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        const { data: latestData, error: latestError } = await client
+          .from("products")
+          .select("*")
+          .eq("id", product.id)
+          .single();
+        if (!latestError && latestData) {
+          const latestProduct = toProduct(latestData);
+          setProducts((current) => current.map((item) => (item.id === latestProduct.id ? latestProduct : item)));
+          setLastSyncAt(new Date().toISOString());
+          throw new Error(`Stock changed elsewhere. Latest quantity is ${latestProduct.quantity}. Review and retry.`);
+        }
+        throw new Error("This product changed elsewhere. Refresh inventory and retry.");
+      }
+
+      const normalized = toProduct(data);
+      setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+      setLastSyncAt(new Date().toISOString());
+      setStatusMessage(`${normalized.name} stock updated to ${normalized.quantity}.`);
+      return normalized;
+    }
+
+    const normalized = toProduct({ ...product, quantity: nextQuantity });
+    setProducts((current) => current.map((item) => (item.id === normalized.id ? normalized : item)));
+    setLastSyncAt(new Date().toISOString());
+    setStatusMessage(`${normalized.name} stock updated locally.`);
+    return normalized;
+  }
+
+  async function handleInventoryRefresh() {
+    if (inventoryRefreshBusy) {
+      return;
+    }
+    setInventoryRefreshBusy(true);
+    try {
+      if (!isSupabaseConfigured) {
+        setLastSyncAt(new Date().toISOString());
+        setStatusMessage("Local inventory is up to date.");
+        return;
+      }
+      const client = await getSupabaseClient();
+      if (!client) {
+        throw new Error("Inventory connection is unavailable.");
+      }
+      const { data, error } = await client.from("products").select("*").order("created_at", { ascending: false });
+      if (error) {
+        throw error;
+      }
+      const normalized = (data ?? []).map(toProduct);
+      setProducts(normalized);
+      setLastSyncAt(new Date().toISOString());
+      setStatusMessage(`Inventory refreshed · ${normalized.length} records loaded.`);
+    } catch (error) {
+      setStatusMessage(error?.message || "Could not refresh inventory.");
+    } finally {
+      setInventoryRefreshBusy(false);
+    }
+  }
+
   async function handleShareProduct(product) {
     if (!adminActive || previewCustomerView) {
       trackCustomerEvent("Product Shared", {
@@ -7100,17 +10478,22 @@ export default function App() {
         category: product.category
       });
     }
+    const productUrl =
+      typeof window === "undefined"
+        ? `${PRIMARY_SITE_ORIGIN}/product/${product.slug}`
+        : `${window.location.origin}/product/${product.slug}`;
     const message = [
       product.name,
-      `SKU: ${product.sku}`,
-      `Stock: ${product.quantity}`,
-      product.imageUrl ? `Image: ${product.imageUrl}` : null
+      [product.material, product.category].filter(Boolean).join(" · "),
+      hasDisplayValue(product.pricing?.mrp) ? formatCurrency(product.pricing.mrp) : "Ask Decorbeats for pricing",
+      productUrl
     ]
       .filter(Boolean)
       .join("\n");
     const shareData = {
       title: product.name,
-      text: message
+      text: message,
+      url: productUrl
     };
 
     try {
@@ -7127,141 +10510,14 @@ export default function App() {
     }
   }
 
-  async function handlePayOnline(product) {
-    const price = parsePrice(product?.pricing?.mrp);
-    if (!product || !price) {
-      setPaymentMessage({ tone: "error", text: "Online payment is available only after an MRP is set for this product." });
-      return;
-    }
-
-    setPaymentBusyProductId(product.id);
-    setPaymentMessage({ tone: "info", text: "Opening secure Razorpay checkout..." });
-
-    try {
-      await loadRazorpayCheckout();
-
-      const orderResponse = await fetch("/api/create-order", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          productId: product.id,
-          quantity: 1
-        })
-      });
-      const order = await orderResponse.json();
-      if (!orderResponse.ok) {
-        throw new Error(order?.error || "Could not start payment");
-      }
-
-      await new Promise((resolve, reject) => {
-        let settled = false;
-        const rejectOnce = (error) => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          reject(error);
-        };
-        const resolveOnce = (value) => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          resolve(value);
-        };
-        const checkout = new window.Razorpay({
-          key: order.keyId,
-          amount: order.amount,
-          currency: order.currency,
-          name: "Decorbeats",
-          description: `${product.name} (${product.sku})`,
-          image: `${window.location.origin}${brandLogo}`,
-          order_id: order.order_id,
-          notes: {
-            sku: product.sku,
-            product_name: product.name
-          },
-          theme: {
-            color: "#8B4A2A"
-          },
-          handler: async (paymentResponse) => {
-            try {
-              const verifyResponse = await fetch("/api/verify-payment", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify(paymentResponse)
-              });
-              const verifyResult = await verifyResponse.json();
-              if (!verifyResponse.ok || !verifyResult.verified) {
-                throw new Error(verifyResult?.error || "Payment could not be verified");
-              }
-              resolveOnce(verifyResult);
-            } catch (error) {
-              rejectOnce(error);
-            }
-          },
-          modal: {
-            ondismiss: () => {
-              const error = new Error("Payment cancelled");
-              error.cancelled = true;
-              rejectOnce(error);
-            }
-          }
-        });
-
-        checkout.on("payment.failed", (failureResponse) => {
-          const paymentError = failureResponse?.error ?? {};
-          const messageParts = [
-            paymentError.description,
-            paymentError.reason ? `Reason: ${paymentError.reason}` : null,
-            paymentError.code ? `Code: ${paymentError.code}` : null,
-            paymentError.step ? `Step: ${paymentError.step}` : null
-          ].filter(Boolean);
-          const error = new Error(messageParts.join(" · ") || "Payment failed in Razorpay Checkout");
-          error.razorpay = paymentError;
-          trackCustomerEvent("Razorpay Payment Failed", {
-            sku: product.sku,
-            product: product.name,
-            code: paymentError.code,
-            reason: paymentError.reason,
-            step: paymentError.step
-          });
-          rejectOnce(error);
-        });
-
-        checkout.open();
-      });
-
-      trackCustomerEvent("Razorpay Payment Verified", {
-        sku: product.sku,
-        product: product.name,
-        amount: price
-      });
-      trackGoogleAdsContactConversion(price);
-      setPaymentMessage({
-        tone: "success",
-        text: "Payment successful. Please WhatsApp us your order details so we can confirm delivery."
-      });
-    } catch (error) {
-      if (error?.cancelled) {
-        setPaymentMessage({ tone: "info", text: "Payment was cancelled. You can try again whenever ready." });
-      } else {
-        console.error("Razorpay payment failed:", error);
-        setPaymentMessage({ tone: "error", text: error.message || "Could not complete payment. Please try WhatsApp enquiry." });
-      }
-    } finally {
-      setPaymentBusyProductId("");
-    }
-  }
-
   function handleAddToCart(product) {
     const price = parsePrice(product?.pricing?.mrp);
     if (!product || !price) {
       setPaymentMessage({ tone: "error", text: "Add an MRP before this product can be checked out online." });
+      return;
+    }
+    if (Number(product.quantity || 0) <= 0) {
+      setPaymentMessage({ tone: "error", text: `${product.name} is currently sold out. Ask us on WhatsApp about availability.` });
       return;
     }
 
@@ -7269,11 +10525,14 @@ export default function App() {
     setCartBusyProductId(lineId);
     setCheckoutError("");
     setCheckoutSuccess("");
+    setCheckoutStatus("idle");
+    setCheckoutResult(null);
+    checkoutAttemptRef.current = "";
     setPaymentMessage({ tone: "success", text: `${product.name} added to cart.` });
 
     setCartItems((current) => {
       const existing = current.find((item) => String(item.productId) === lineId);
-      const maxQuantity = Math.max(1, Number(product.quantity || 1));
+      const maxQuantity = Math.max(0, Number(product.quantity || 0));
       if (existing) {
         return current.map((item) =>
           String(item.productId) === lineId
@@ -7289,27 +10548,127 @@ export default function App() {
       product: product.name,
       amount: price
     });
+    trackCommerceEvent("add_to_cart", {
+      value: price,
+      items: [toCommerceItem(product)]
+    });
 
-    setSelectedId(null);
+    if (selectedId != null) {
+      handleCustomerProductClose();
+    }
     setCartOpen(true);
     window.setTimeout(() => setCartBusyProductId(""), 350);
   }
 
+  function handleCartOpen() {
+    setCartOpen(true);
+  }
+
   function handleCartQuantityChange(productId, nextQuantity) {
     const product = products.find((entry) => String(entry.id) === String(productId));
-    const maxQuantity = Math.max(1, Number(product?.quantity || 1));
+    const maxQuantity = Math.max(0, Number(product?.quantity || 0));
+    if (maxQuantity <= 0) {
+      handleCartRemove(productId);
+      return;
+    }
     const quantity = Math.max(1, Math.min(Number(nextQuantity) || 1, maxQuantity));
     setCartItems((current) =>
       current.map((item) => (String(item.productId) === String(productId) ? { ...item, quantity } : item))
     );
+    checkoutAttemptRef.current = "";
+    setCheckoutStatus("idle");
+    setCheckoutResult(null);
   }
 
   function handleCartRemove(productId) {
     setCartItems((current) => current.filter((item) => String(item.productId) !== String(productId)));
+    checkoutAttemptRef.current = "";
+    setCheckoutStatus("idle");
+    setCheckoutResult(null);
+  }
+
+  function handleCheckoutDetailsChange(updater) {
+    setCheckoutDetails(updater);
+    checkoutAttemptRef.current = "";
+    setCheckoutStatus("idle");
+    setCheckoutResult(null);
+  }
+
+  function completeCustomerCheckout(verification, purchasedLines, totalAmount) {
+    const orderReference = verification.orderReference || verification.orderId || "Confirmed";
+    trackCustomerEvent("Customer Checkout Paid", {
+      amount: totalAmount,
+      itemCount: purchasedLines.length,
+      orderReference,
+      provider: verification.provider || "online"
+    });
+    trackCommerceEvent("purchase", {
+      transactionId: orderReference,
+      value: totalAmount,
+      items: purchasedLines.map((line) => toCommerceItem(line.product, line.quantity))
+    });
+    setCheckoutStatus("paid");
+    setCheckoutResult({
+      ...verification,
+      orderReference,
+      amount: totalAmount
+    });
+    setCheckoutSuccess(`Payment confirmed. Order reference: ${orderReference}. We’ll confirm delivery shortly.`);
+    setCheckoutError("");
+    setCartItems([]);
+    setCheckoutDetails(createEmptyCheckoutDetails());
+    checkoutAttemptRef.current = "";
+  }
+
+  async function reconcileCustomerCashfreeOrder(orderId, purchasedLines = cartLines) {
+    setCheckoutStatus("verifying");
+    setCheckoutResult((current) => ({ ...current, provider: "cashfree", orderId }));
+    setCheckoutError("");
+    const verifyResponse = await fetch("/api/verify-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "cashfree", cashfree_order_id: orderId })
+    });
+    const verification = await verifyResponse.json().catch(() => null);
+    if (verifyResponse.status === 202) {
+      setCheckoutStatus("pending");
+      setCheckoutResult({ ...verification, provider: "cashfree", orderId });
+      setCheckoutSuccess("");
+      setCheckoutError("");
+      return { status: "pending", verification };
+    }
+    if (!verifyResponse.ok || !verification?.verified || !verification?.recorded) {
+      throw new Error(verification?.error || "Payment could not be confirmed yet.");
+    }
+    const totalAmount = Number(verification.amount || purchasedLines.reduce((sum, line) => sum + line.lineTotal, 0));
+    completeCustomerCheckout({ ...verification, provider: "cashfree" }, purchasedLines, totalAmount);
+    return { status: "paid", verification };
+  }
+
+  async function handleRetryCheckoutVerification() {
+    const orderId = safeText(checkoutResult?.orderId);
+    if (!orderId || checkoutSubmissionRef.current) {
+      return;
+    }
+    checkoutSubmissionRef.current = true;
+    setCheckoutBusy(true);
+    try {
+      await reconcileCustomerCashfreeOrder(orderId);
+    } catch (error) {
+      console.error("Payment status refresh failed:", error);
+      setCheckoutStatus("failed");
+      setCheckoutError(error.message || "Could not refresh payment status. Please try again.");
+    } finally {
+      checkoutSubmissionRef.current = false;
+      setCheckoutBusy(false);
+    }
   }
 
   async function handleCheckoutSubmit(event) {
     event.preventDefault();
+    if (checkoutSubmissionRef.current) {
+      return;
+    }
     if (!cartLines.length) {
       setCheckoutError("Add at least one product before checkout.");
       return;
@@ -7328,83 +10687,106 @@ export default function App() {
       return;
     }
 
+    const submittedLines = cartLines.map((line) => ({ ...line }));
+    const submittedDetails = { ...checkoutDetails };
+    const checkoutAttemptId = checkoutAttemptRef.current || createCheckoutAttemptId();
+    checkoutAttemptRef.current = checkoutAttemptId;
+    checkoutSubmissionRef.current = true;
     setCheckoutBusy(true);
+    setCheckoutStatus("creating");
+    setCheckoutResult(null);
     setCheckoutError("");
     setCheckoutSuccess("");
+    trackCommerceEvent("begin_checkout", {
+      value: submittedLines.reduce((sum, line) => sum + line.lineTotal, 0),
+      items: submittedLines.map((line) => toCommerceItem(line.product, line.quantity))
+    });
 
     try {
-      await loadRazorpayCheckout();
-
       const orderResponse = await fetch("/api/create-order", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: cartLines.map((line) => ({
+          checkoutAttemptId,
+          items: submittedLines.map((line) => ({
             productId: line.product.id,
             quantity: line.quantity
           })),
-          customer: checkoutDetails
+          customer: submittedDetails
         })
       });
-      const order = await orderResponse.json();
+      const order = await orderResponse.json().catch(() => null);
       if (!orderResponse.ok) {
         throw new Error(order?.error || "Could not start payment.");
       }
 
+      if (order.provider === "cashfree") {
+        setCheckoutStatus("opening");
+        setCheckoutResult({ provider: "cashfree", orderId: order.orderId, orderReference: order.orderReference });
+        await loadCashfreeCheckout();
+        const cashfree = window.Cashfree({ mode: order.environment === "production" ? "production" : "sandbox" });
+        const redirectTarget = window.matchMedia("(max-width: 767px)").matches ? "_self" : "_modal";
+        const checkoutOutcome = await cashfree.checkout({
+          paymentSessionId: order.paymentSessionId,
+          redirectTarget
+        });
+        const reconciliation = await reconcileCustomerCashfreeOrder(order.orderId, submittedLines);
+        if (checkoutOutcome?.error && reconciliation.status !== "paid") {
+          const cancelledError = new Error("Payment was closed before confirmation. Your cart is still saved.");
+          cancelledError.cancelled = true;
+          throw cancelledError;
+        }
+        return;
+      }
+
+      await loadRazorpayCheckout();
       const paymentResponse = await new Promise((resolve, reject) => {
         let settled = false;
         const rejectOnce = (error) => {
-          if (settled) {
-            return;
+          if (!settled) {
+            settled = true;
+            reject(error);
           }
-          settled = true;
-          reject(error);
         };
         const resolveOnce = (value) => {
-          if (settled) {
-            return;
+          if (!settled) {
+            settled = true;
+            resolve(value);
           }
-          settled = true;
-          resolve(value);
         };
-
         const checkout = new window.Razorpay({
           key: order.keyId,
           amount: order.amount,
           currency: order.currency,
           name: "Decorbeats",
-          description: `${cartLines.length} item${cartLines.length === 1 ? "" : "s"} from Decorbeats`,
+          description: `${submittedLines.length} item${submittedLines.length === 1 ? "" : "s"} from Decorbeats`,
           image: `${window.location.origin}${brandLogo}`,
           order_id: order.order_id,
           prefill: {
-            name: checkoutDetails.customerName,
-            email: checkoutDetails.email,
-            contact: checkoutDetails.phone
+            name: submittedDetails.customerName,
+            email: submittedDetails.email,
+            contact: submittedDetails.phone
           },
-          notes: {
-            customer_name: checkoutDetails.customerName,
-            customer_phone: checkoutDetails.phone,
-            item_count: String(cartLines.length)
-          },
-          theme: {
-            color: "#8B4A2A"
-          },
+          theme: { color: "#8B4A2A" },
           handler: async (razorpayResponse) => {
             try {
               const verifyResponse = await fetch("/api/verify-payment", {
                 method: "POST",
-                headers: {
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify(razorpayResponse)
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  ...razorpayResponse,
+                  customer: submittedDetails,
+                  items: (order.items?.length ? order.items : submittedLines).map((item) => ({
+                    productId: item.id ?? item.product?.id,
+                    quantity: item.quantity
+                  }))
+                })
               });
-              const verifyResult = await verifyResponse.json();
-              if (!verifyResponse.ok || !verifyResult.verified) {
-                throw new Error(verifyResult?.error || "Payment could not be verified.");
+              const verifyResult = await verifyResponse.json().catch(() => null);
+              if (!verifyResponse.ok || !verifyResult?.verified || !verifyResult?.recorded) {
+                throw new Error(verifyResult?.error || "Payment could not be recorded.");
               }
-              resolveOnce(razorpayResponse);
+              resolveOnce(verifyResult);
             } catch (error) {
               rejectOnce(error);
             }
@@ -7417,82 +10799,30 @@ export default function App() {
             }
           }
         });
-
         checkout.on("payment.failed", (failureResponse) => {
           const paymentError = failureResponse?.error ?? {};
-          rejectOnce(new Error(paymentError.description || "Payment failed in Razorpay Checkout."));
+          rejectOnce(new Error(paymentError.description || "Payment failed in secure checkout."));
         });
-
+        setCheckoutStatus("opening");
         checkout.open();
       });
 
-      const totalAmount = Number(order.amount || 0) / 100;
-      if (isSupabaseConfigured) {
-        const orderPayload = {
-          customer_name: safeText(checkoutDetails.customerName),
-          customer_phone: safeText(checkoutDetails.phone),
-          customer_email: safeText(checkoutDetails.email) || null,
-          address_line1: safeText(checkoutDetails.addressLine1),
-          address_line2: safeText(checkoutDetails.addressLine2) || null,
-          city: safeText(checkoutDetails.city),
-          state: safeText(checkoutDetails.state),
-          pincode: safeText(checkoutDetails.pincode),
-          delivery_notes: safeText(checkoutDetails.notes) || null,
-          total_amount: totalAmount,
-          currency: order.currency || "INR",
-          payment_status: "paid",
-          order_status: "new",
-          razorpay_order_id: paymentResponse.razorpay_order_id,
-          razorpay_payment_id: paymentResponse.razorpay_payment_id
-        };
-
-        const { data: savedOrder, error: orderError } = await supabase
-          .from("customer_orders")
-          .insert(orderPayload)
-          .select()
-          .single();
-
-        if (orderError) {
-          throw new Error(
-            orderError.message?.includes("customer_orders")
-              ? "Payment succeeded, but the customer order table is missing. Please run the checkout SQL migration."
-              : orderError.message
-          );
-        }
-
-        const itemPayload = cartLines.map((line) => ({
-          order_id: savedOrder.id,
-          product_id: String(line.product.id),
-          product_sku: line.product.sku,
-          product_name: line.product.name,
-          quantity: line.quantity,
-          unit_price: line.price,
-          line_total: line.lineTotal,
-          image_url: line.product.imageUrl || null
-        }));
-
-        const { error: itemsError } = await supabase.from("customer_order_items").insert(itemPayload);
-        if (itemsError) {
-          throw new Error(itemsError.message);
-        }
-      }
-
-      trackCustomerEvent("Customer Checkout Paid", {
-        amount: totalAmount,
-        itemCount: cartLines.length
-      });
-      trackGoogleAdsContactConversion(totalAmount);
-      setCheckoutSuccess("Payment successful. Your order details have been saved.");
-      setCartItems([]);
-      setCheckoutDetails(createEmptyCheckoutDetails());
+      completeCustomerCheckout(
+        { ...paymentResponse, provider: "razorpay" },
+        submittedLines,
+        Number(order.amount || 0) / 100
+      );
     } catch (error) {
       if (error?.cancelled) {
+        setCheckoutStatus("cancelled");
         setCheckoutError("Payment was cancelled. Your cart is still saved.");
       } else {
         console.error("Checkout failed:", error);
+        setCheckoutStatus("failed");
         setCheckoutError(error.message || "Could not complete checkout. Please try again.");
       }
     } finally {
+      checkoutSubmissionRef.current = false;
       setCheckoutBusy(false);
     }
   }
@@ -7707,7 +11037,11 @@ export default function App() {
 
     setAuthBusy(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const client = await getSupabaseClient();
+      if (!client) {
+        throw new Error("Secure sign-in is temporarily unavailable.");
+      }
+      const { error } = await client.auth.signInWithPassword({
         email: authEmail,
         password: authPassword
       });
@@ -7727,7 +11061,8 @@ export default function App() {
     if (!isSupabaseConfigured) {
       return;
     }
-    await supabase.auth.signOut();
+    const client = await getSupabaseClient();
+    await client?.auth.signOut();
     setForm(emptyForm);
     setPublicScreen("customer");
     setSelectedId(null);
@@ -8004,7 +11339,9 @@ export default function App() {
       setStatusMessage(pinned ? `${product.name} pinned to the top of customer view.` : `${product.name} unpinned.`);
     } catch (error) {
       console.log("Pin toggle failed:", error);
-      setUploadError(error?.message || "Pin status could not be updated right now.");
+      const message = error?.message || "Pin status could not be updated right now.";
+      setUploadError(message);
+      setStatusMessage(message);
     } finally {
       setArchiveBusy(false);
     }
@@ -8038,14 +11375,9 @@ export default function App() {
 
   useEffect(() => {
     setCategoryFilter("All");
+    setCustomerCollection("all");
     setSearch("");
   }, [activeTab, publicScreen]);
-
-  useEffect(() => {
-    if (activeTab === "inquiries") {
-      setActiveTab("products");
-    }
-  }, [activeTab]);
 
   const statsItems = [
     { label: "Products", value: stats.totalProducts },
@@ -8062,15 +11394,16 @@ export default function App() {
     : "Not synced yet";
 
   const featuredCustomerProduct = customerCatalog.find((product) => getProductImages(product).length) || customerCatalog[0] || null;
+  const activeCustomerCollection = getCustomerCollectionById(customerCollection);
   const generatedSku = form.id ? selectedProduct?.sku || "" : getNextSku(products, form.material, form.category);
   const activeTicker = TICKER_MESSAGES[headerTickerIndex];
   const adminTitle =
     activeTab === "products"
-      ? "Products"
+      ? "Inventory"
       : activeTab === "inquiries"
         ? "Inquiries"
         : activeTab === "sales"
-          ? "Sales"
+          ? "Orders"
           : activeTab === "purchases"
             ? "Purchases"
             : activeTab === "catalogues"
@@ -8082,11 +11415,11 @@ export default function App() {
                 : "Settings";
   const adminSubtitle =
     activeTab === "products"
-      ? "Browse and edit the full catalog."
+      ? "Update stock quickly and keep the catalogue accurate."
       : activeTab === "inquiries"
         ? "Track customer requests, quotes, and conversions."
         : activeTab === "sales"
-          ? "Record completed orders, watch today’s numbers, and keep stock accurate."
+          ? "Record inventory, custom, and vendor-direct orders in seconds."
           : activeTab === "purchases"
             ? "Track vendor orders, payments, and expected delivery dates."
             : activeTab === "catalogues"
@@ -8099,6 +11432,9 @@ export default function App() {
 
   function handleTickerAction(action) {
     if (action === "collection") {
+      if (activeTicker.text.includes("VARALAKSHMI")) {
+        handleCustomerCategorySelect("varalakshmi", "campaign_ticker");
+      }
       handleScrollToCollection();
       return;
     }
@@ -8109,6 +11445,7 @@ export default function App() {
 
   function handleAdminEntry() {
     trackCustomerEvent("Admin Link Clicked");
+    void getSupabaseClient();
     setPublicScreen("admin-auth");
     if (typeof window !== "undefined") {
       window.history.pushState({}, "", "/admin");
@@ -8118,17 +11455,18 @@ export default function App() {
   function handleCustomerHome() {
     setPublicScreen("customer");
     setCategoryFilter("All");
+    setCustomerCollection("all");
     setSearch("");
     setSelectedId(null);
     setRouteIntent({ screen: "customer", type: "home", slug: "" });
     pendingRouteIntentRef.current = { screen: "customer", type: "home", slug: "" };
     if (typeof window !== "undefined") {
-      window.history.pushState({}, "", "/");
+      pushCustomerPath("/");
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  if (!authReady) {
+  if (!authReady && publicScreen === "admin-auth") {
     return (
       <div className="app-shell">
         <div className="screen-shell">
@@ -8138,7 +11476,10 @@ export default function App() {
     );
   }
 
-  const rootElement = publicScreen === "catalogue" ? (
+  const activePublicPage = routeIntent.type === "policy" ? getPublicPageBySlug(routeIntent.slug) : null;
+  const rootElement = publicScreen === "policy" && activePublicPage ? (
+    <CustomerPolicyPage page={activePublicPage} />
+  ) : publicScreen === "catalogue" ? (
     <ShareCataloguePage
       catalogue={publicCatalogue}
       products={products}
@@ -8173,8 +11514,14 @@ export default function App() {
       </div>
     </div>
   ) : !adminActive || previewCustomerView ? (
-    <div className="customer-page">
-      <AnnouncementBar />
+    <div className="customer-page customer-shell">
+      <AnnouncementBar
+        onShop={() => {
+          handleCustomerCategorySelect("varalakshmi", "announcement");
+          handleScrollToCollection();
+        }}
+      />
+      <CustomerUtilityBar />
       <CustomerHeader
         scrolled={customerHeaderElevated}
         tickerMessage={activeTicker.text}
@@ -8185,26 +11532,63 @@ export default function App() {
         onAdmin={handleAdminEntry}
         onHome={handleCustomerHome}
         cartCount={cartCount}
-        onCartOpen={() => setCartOpen(true)}
+        onCartOpen={handleCartOpen}
+      />
+      <CustomerNavigation
+        onSelectCategory={handleCustomerCategorySelect}
+        onShop={handleScrollToCollection}
       />
       <main className="customer-main">
         {adminActive && previewCustomerView ? <CustomerPreviewBanner onBack={() => {
           setPreviewCustomerView(false);
           setActiveTab("products");
         }} /> : null}
-        <CustomerHero slides={heroSlides} featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
-        <CustomerOccasionRail products={customerCatalog} onSelectCategory={handleCustomerCategorySelect} onShop={handleScrollToCollection} />
-        <CustomerBeatStories />
-        <TrustStrip productCount={stats.totalProducts} />
-        <section className="customer-catalog-shell" ref={productGridRef}>
+        <CustomerHero
+          slides={heroSlides}
+          featuredProduct={featuredCustomerProduct}
+          onShop={handleScrollToCollection}
+          onSelectCategory={handleCustomerCategorySelect}
+        />
+        <FeaturedCategoriesRow
+          onSelectCategory={handleCustomerCategorySelect}
+          onShop={handleScrollToCollection}
+        />
+        <CustomerCommercePromise />
+        {customerCollection === "all" || customerCollection === "varalakshmi" ? (
+          <CustomerCampaignEdit
+            products={customerCatalog}
+            loading={storefrontLoading}
+            onSelect={handleProductSelect}
+            onAddToCart={handleAddToCart}
+            busyProductId={cartBusyProductId}
+            onViewAll={() => {
+              handleCustomerCategorySelect("varalakshmi", "campaign_edit");
+              handleScrollToCollection();
+            }}
+          />
+        ) : null}
+        <section className="customer-catalog-shell" ref={productGridRef} aria-labelledby="brass-edit-title">
           <div className="customer-collections-head desktop-reveal">
             <div>
-              <p className="eyebrow">Collections</p>
-              <h2>Browse the Collection</h2>
+              <p className="eyebrow">
+                {activeCustomerCollection.id === "all" ? "Curated by brass specialists" : "Your selected brass collection"}
+              </p>
+              <h2 id="brass-edit-title">
+                {activeCustomerCollection.id === "all" ? "The Decorbeats Brass Edit" : activeCustomerCollection.label}
+              </h2>
+              <p>
+                {activeCustomerCollection.id === "all"
+                  ? "Pieces with presence—for rituals, rooms, tables and gifts worth remembering."
+                  : "A focused edit of available pieces, with material and pricing shown clearly."}
+              </p>
             </div>
+            <span>{filteredProducts.length} pieces</span>
           </div>
           <div className="customer-filter-bar">
-            <CustomerCategoryBar categories={categories} categoryFilter={categoryFilter} setCategoryFilter={handleCustomerCategorySelect} />
+            <CustomerCategoryBar
+              collectionFilter={customerCollection}
+              setCollectionFilter={handleCustomerCategorySelect}
+            />
             <div className="customer-search-row">
               <input
                 ref={customerSearchRef}
@@ -8217,23 +11601,55 @@ export default function App() {
               />
             </div>
           </div>
-          <FeaturedCategoriesRow
-            products={customerCatalog}
-            onSelectCategory={handleCustomerCategorySelect}
-            onShop={handleScrollToCollection}
-          />
-          <EditorialSection />
           <section className="customer-product-grid">
-            {filteredProducts.map((product) => (
-              <CustomerProductCard key={product.id} product={product} onSelect={handleProductSelect} />
+            {visibleCustomerProducts.map((product) => (
+              <CustomerProductCard
+                key={product.id}
+                product={product}
+                onSelect={handleProductSelect}
+                onAddToCart={handleAddToCart}
+                busy={String(cartBusyProductId) === String(product.id)}
+              />
             ))}
           </section>
+          {storefrontLoading ? <CustomerProductSkeletonGrid /> : null}
+          {!storefrontLoading && !visibleCustomerProducts.length ? (
+            <CustomerEmptyCollection
+              onClear={() => {
+                setSearch("");
+                handleCustomerCategorySelect("all", "empty_state");
+              }}
+            />
+          ) : null}
+          {visibleCustomerProductCount < filteredProducts.length ? (
+            <div className="customer-load-more-wrap">
+              <button
+                type="button"
+                className="customer-load-more"
+                onClick={() => setVisibleCustomerProductCount((current) => current + 12)}
+              >
+                Discover more pieces
+              </button>
+              <span>
+                Showing {visibleCustomerProducts.length} of {filteredProducts.length}
+              </span>
+            </div>
+          ) : null}
         </section>
-        <CustomerFooter onAdmin={handleAdminEntry} showAdminLink={!adminActive} />
+        <BrandAuthorityIntro productCount={stats.totalProducts} onShop={handleScrollToCollection} />
+        <CustomerOccasionRail products={customerCatalog} onSelectCategory={handleCustomerCategorySelect} onShop={handleScrollToCollection} />
+        <EditorialSection onShop={handleScrollToCollection} />
+        <CorporateGiftingSection />
+        <KnowYourBrass />
+        <CustomerFaq />
+        <CustomerFooter onAdmin={handleAdminEntry} showAdminLink={false} />
       </main>
+      {!selectedProduct && !cartOpen ? (
+        <CustomerMobileDock cartCount={cartCount} onShop={handleScrollToCollection} onCartOpen={handleCartOpen} />
+      ) : null}
       <CustomerSheet
         product={selectedProduct}
-        onClose={() => setSelectedId(null)}
+        onClose={handleCustomerProductClose}
         onShare={handleShareProduct}
         onWhatsApp={handleCustomerWhatsAppClick}
         onAddToCart={handleAddToCart}
@@ -8244,67 +11660,54 @@ export default function App() {
         open={cartOpen}
         items={cartLines}
         details={checkoutDetails}
-        setDetails={setCheckoutDetails}
+        setDetails={handleCheckoutDetailsChange}
         busy={checkoutBusy}
         error={checkoutError}
         success={checkoutSuccess}
+        checkoutStatus={checkoutStatus}
+        checkoutResult={checkoutResult}
         onClose={() => setCartOpen(false)}
         onQuantityChange={handleCartQuantityChange}
         onRemove={handleCartRemove}
         onCheckout={handleCheckoutSubmit}
+        onRetryVerification={handleRetryCheckoutVerification}
       />
     </div>
   ) : (
     <div className="app-shell app-shell-admin">
       <div className="screen-shell admin-shell">
-        <ScreenHeader
-          eyebrow="Decorbeats Admin"
-          title={adminTitle}
-          subtitle={adminSubtitle}
-          action={<div className="user-badge">{userEmail ? `Signed in: ${userEmail}` : "Local admin mode"}</div>}
-        />
+        {activeTab !== "products" && activeTab !== "low-stock" ? (
+          <ScreenHeader
+            eyebrow="Decorbeats Admin"
+            title={adminTitle}
+            subtitle={adminSubtitle}
+            action={<div className="user-badge">{userEmail ? `Signed in: ${userEmail}` : "Local admin mode"}</div>}
+          />
+        ) : null}
 
         {activeTab === "products" ? (
-          <>
-            <div className="admin-action-row">
-              <button type="button" className="primary-button quick-add-button" onClick={() => setActiveTab("add")}>
-                Add Product
-              </button>
-              <button type="button" className="ghost-button quick-add-button" onClick={() => setActiveTab("catalogues")}>
-                Create Catalogue
-              </button>
-            </div>
-            <StatusStrip statusMessage={statusMessage} />
-            <StatStrip items={statsItems} />
-            <CatalogSection
-              products={filteredProducts}
-              customerMode={false}
-              selectedId={selectedId}
-              canManage={canManage}
-              onSelect={handleProductSelect}
-              onEdit={handleEditProduct}
-              onShare={handleShareProduct}
-              onArchiveToggle={handleArchiveToggle}
-              onPinToggle={handlePinToggle}
-              onInlineEdit={handleDetailEdit}
-              onInlineAddImages={handleAddDetailImages}
-              onInlineDeleteImage={handleDeleteDetailImage}
-              onInlineSetCoverImage={handleSetCoverImage}
-              onInlineAddVideos={handleAddDetailVideos}
-              onInlineDeleteVideo={handleDeleteDetailVideo}
-              imageBusy={uploadBusy}
-              uploadError={uploadError}
-              compressionMessage={compressionMessage}
-              uploadStageMessage={uploadStageMessage}
-              saveBusy={saveBusy}
-              search={search}
-              setSearch={setSearch}
-              categoryFilter={categoryFilter}
-              setCategoryFilter={setCategoryFilter}
-              categories={categories}
-              archivedVisible={showArchived}
-            />
-          </>
+          <InventoryWorkspace
+            key="products-inventory"
+            products={products}
+            canManage={canManage}
+            search={search}
+            setSearch={setSearch}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            initialStockFilter="all"
+            lastSyncAt={lastSyncAt}
+            statusMessage={statusMessage}
+            refreshBusy={inventoryRefreshBusy}
+            onRefresh={handleInventoryRefresh}
+            onAddProduct={() => setActiveTab("add")}
+            onCreateCatalogue={() => setActiveTab("catalogues")}
+            onQuantitySave={handleInventoryQuantityUpdate}
+            onEdit={handleEditProduct}
+            onShare={handleShareProduct}
+            onArchiveToggle={handleArchiveToggle}
+            onPinToggle={handlePinToggle}
+            archiveBusy={archiveBusy}
+          />
         ) : null}
 
         {activeTab === "inquiries" ? (
@@ -8312,12 +11715,17 @@ export default function App() {
             <StatusStrip statusMessage={statusMessage} />
             <InquiriesScreen
               inquiries={filteredInquiries}
+              allInquiries={inquiries}
+              sales={sales}
+              products={products.filter((product) => !product.archivedAt)}
               statusFilter={inquiryStatusFilter}
               setStatusFilter={setInquiryStatusFilter}
               expandedInquiryId={expandedInquiryId}
               onToggleInquiry={(id) => setExpandedInquiryId((current) => (current === id ? null : id))}
               onStatusUpdate={handleInquiryStatusUpdate}
               onNewInquiry={handleNewInquiry}
+              onQuickSave={handleQuickSheetSave}
+              orderBusy={salesBusy}
               busy={inquiryBusy}
             />
           </>
@@ -8412,43 +11820,28 @@ export default function App() {
         ) : null}
 
         {activeTab === "low-stock" ? (
-          <>
-            <StatusStrip
-              statusMessage={statusMessage}
-              items={[
-                { label: "Low stock items", value: lowStockCatalog.filter((product) => !product.archivedAt || showArchived).length },
-                { label: "Archived shown", value: showArchived ? "Yes" : "No" }
-              ]}
-            />
-            <CatalogSection
-              products={filteredProducts}
-              customerMode={false}
-              selectedId={selectedId}
-              canManage={canManage}
-              onSelect={handleProductSelect}
-              onEdit={handleEditProduct}
-              onShare={handleShareProduct}
-              onArchiveToggle={handleArchiveToggle}
-              onPinToggle={handlePinToggle}
-              onInlineEdit={handleDetailEdit}
-              onInlineAddImages={handleAddDetailImages}
-              onInlineDeleteImage={handleDeleteDetailImage}
-              onInlineSetCoverImage={handleSetCoverImage}
-              onInlineAddVideos={handleAddDetailVideos}
-              onInlineDeleteVideo={handleDeleteDetailVideo}
-              imageBusy={uploadBusy}
-              uploadError={uploadError}
-              compressionMessage={compressionMessage}
-              uploadStageMessage={uploadStageMessage}
-              saveBusy={saveBusy}
-              search={search}
-              setSearch={setSearch}
-              categoryFilter={categoryFilter}
-              setCategoryFilter={setCategoryFilter}
-              categories={categories}
-              archivedVisible={showArchived}
-            />
-          </>
+          <InventoryWorkspace
+            key="attention-inventory"
+            products={products}
+            canManage={canManage}
+            search={search}
+            setSearch={setSearch}
+            categoryFilter={categoryFilter}
+            setCategoryFilter={setCategoryFilter}
+            initialStockFilter="attention"
+            lastSyncAt={lastSyncAt}
+            statusMessage={statusMessage}
+            refreshBusy={inventoryRefreshBusy}
+            onRefresh={handleInventoryRefresh}
+            onAddProduct={() => setActiveTab("add")}
+            onCreateCatalogue={() => setActiveTab("catalogues")}
+            onQuantitySave={handleInventoryQuantityUpdate}
+            onEdit={handleEditProduct}
+            onShare={handleShareProduct}
+            onArchiveToggle={handleArchiveToggle}
+            onPinToggle={handlePinToggle}
+            archiveBusy={archiveBusy}
+          />
         ) : null}
 
         {activeTab === "settings" ? (
@@ -8544,7 +11937,7 @@ export default function App() {
         onStartListening={startInquiryListening}
         onStopAndProcess={processInquiryTranscript}
         onCancel={resetInquiryModal}
-        onBack={() => setInquiryModalStep("record")}
+        onBack={() => setInquiryModalStep((current) => (current === "record" ? "confirm" : "record"))}
         onSave={saveInquiry}
         onProductNameChange={syncInquiryProductMatch}
         onProductFieldChange={updateInquiryProductField}
@@ -8562,11 +11955,9 @@ export default function App() {
         setPickerOpen={setSalePickerOpen}
         busy={salesBusy}
         errorMessage={saleModalError}
-        confirmation={saleConfirmation}
-        onCancelConfirmation={() => setSaleConfirmation(null)}
-        onConfirmSale={handleConfirmSale}
         onClose={resetSaleModal}
         onAddProduct={handleAddSaleProduct}
+        onAddCustomItem={handleAddCustomSaleItem}
         onRemoveProduct={handleRemoveSaleProduct}
         onUpdateItem={handleUpdateSaleItem}
         onSave={handleSaveSale}

@@ -5,25 +5,101 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Decorbeats, reimagined as a premium decor and gifting experience."
+      content="Shop handcrafted brass décor, diyas, urlis, serveware and gifts curated by Decorbeats, brass specialists rooted in Moradabad. Retail, festive and business gifting across India."
     />
-    <title>Decorbeats | Artisanal Decor Reimagined</title>
+    <meta name="theme-color" content="#7c2927" />
+    <link rel="canonical" href="https://www.decorbeats.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_IN" />
+    <meta property="og:url" content="https://www.decorbeats.com/" />
+    <meta property="og:site_name" content="Decorbeats" />
+    <meta property="og:title" content="Decorbeats — The Brass House of India" />
+    <meta
+      property="og:description"
+      content="Brass décor, pooja essentials, serveware and gifts—curated by specialists rooted in Moradabad, India’s brass city."
+    />
+    <meta property="og:image" content="https://www.decorbeats.com/og-v2.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Decorbeats — The Brass House of India" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Decorbeats — The Brass House of India" />
+    <meta
+      name="twitter:description"
+      content="Brass décor, pooja essentials, serveware and gifts, rooted in Moradabad and delivered across India."
+    />
+    <meta name="twitter:image" content="https://www.decorbeats.com/og-v2.jpg" />
+    <title>Decorbeats | Brass Décor, Diyas & Gifts from Moradabad</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="shortcut icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://nktvlahwvdcyuj4w.public.blob.vercel-storage.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      as="image"
+      href="/assets/images/decorbeats-varalakshmi-gifting-mobile-v3.jpg"
+      type="image/jpeg"
+      fetchpriority="high"
+      media="(max-width: 767px)"
     />
-    <!-- Google tag (gtag.js) for Google Ads conversion tracking -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18084439764"></script>
+    <link
+      rel="preload"
+      as="image"
+      href="/assets/images/decorbeats-varalakshmi-gifting-v3.jpg"
+      type="image/jpeg"
+      fetchpriority="high"
+      media="(min-width: 768px)"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Decorbeats",
+        "url": "https://www.decorbeats.com/",
+        "logo": "https://www.decorbeats.com/assets/brand/decorbeats-logo.svg",
+        "description": "The Brass House of India—brass décor, pooja essentials, serveware and gifting curated by specialists rooted in Moradabad.",
+        "telephone": "+91-98111-33661",
+        "email": "meghagoel@decorbeats.com",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "B-140, Deen Dayal Nagar",
+          "addressLocality": "Moradabad",
+          "addressRegion": "Uttar Pradesh",
+          "postalCode": "244001",
+          "addressCountry": "IN"
+        },
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "telephone": "+91-98111-33661",
+          "contactType": "customer service",
+          "areaServed": "IN",
+          "availableLanguage": ["English", "Hindi"]
+        }
+      }
+    </script>
+    <!-- Load Google Ads after the first render so it never competes with storefront content. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
       gtag('config', 'AW-18084439764');
+      function loadGoogleAds() {
+        if (document.querySelector('script[data-decorbeats-google-ads]')) return;
+        var script = document.createElement('script');
+        script.async = true;
+        script.src = 'https://www.googletagmanager.com/gtag/js?id=AW-18084439764';
+        script.dataset.decorbeatsGoogleAds = 'true';
+        document.head.appendChild(script);
+      }
+      var paidClick = /(?:^|[?&])(gclid|gbraid|wbraid)=/i.test(window.location.search);
+      if (paidClick) {
+        loadGoogleAds();
+      } else if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(loadGoogleAds, { timeout: 4000 });
+      } else {
+        window.setTimeout(loadGoogleAds, 3000);
+      }
     </script>
   </head>
   <body>
