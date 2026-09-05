@@ -4,6 +4,7 @@ import { SHOTS, STEPS, captureStepOrder, nextCaptureStep, countTotal, newDraft, 
 import { uploadPhoto, uploadVideo } from './media';
 import './capture.css';
 import ReviewGallery from './ReviewGallery';
+import CameraCapture from './CameraCapture';
 
 const categories = ['Bell','Bowl','Box','Decor','Diya','Idol','Jars','Misc','Planter','Plate','Tree','Urli','Wall Decor'];
 const materials = ['Brass','Metal','Ceramic','Wood','Glass','Clay','Mixed','Other'];
@@ -25,6 +26,7 @@ export default function CaptureApp() {
   const [pair,setPair] = useState(false), [qr,setQr] = useState(''), [guide,setGuide] = useState(false), [confirm,setConfirm] = useState(false);
   const [assetPreview,setAssetPreview] = useState(null);
   const [liveComparison,setLiveComparison] = useState(null);
+  const [cameraOpen,setCameraOpen] = useState(false);
   const fileRef=useRef(null), cameraRef=useRef(null), videoRef=useRef(null), cleanedRef=useRef(null), mounted=useRef(true), inFlight=useRef(false);
   const phoneCamera = /iPhone|iPad|Android/i.test(navigator.userAgent);
 
@@ -91,7 +93,7 @@ export default function CaptureApp() {
   function exit(){setDraft(null);setDirty(false);setStep(0);setConfirm(false);history.replaceState(null,'','/admin/capture');}
   async function capture(file,video=false){
     if(!file)return;
-    await run(async()=>{
+    return await run(async()=>{
       let saved=draft;
       if(dirty||!draft.revision)saved=await persist();
       const asset=video?await uploadVideo(saved.id,file,setMessage):await uploadPhoto(saved.id,shot,file,setMessage);
@@ -100,6 +102,7 @@ export default function CaptureApp() {
       await persist(next);
       if(!video){const remaining=SHOTS.find(s=>!next.data.photos[s.id]);if(remaining)setShot(remaining.id);}
       setMessage(video?'360° video saved':'Photo saved · original preserved');
+      return true;
     });
   }
   async function addCleanedPreview(file) {
@@ -154,9 +157,9 @@ export default function CaptureApp() {
           <section className="cs-panel cs-shoot"><p className="cs-eyebrow">{SHOTS.findIndex(s=>s.id===shot)+1} · {selectedShot.name}</p><h2>{!draft.product_id&&!d.photos?.hero?'Photograph the product first':selectedShot.tip}</h2>{!draft.product_id&&!d.photos?.hero&&<p>No name needed yet. Start with one clear photo; add the details afterwards.</p>}<div className="cs-viewfinder">{d.photos?.[shot]?<img src={d.photos[shot].url} alt={selectedShot.name}/>:<div><span className="cs-camera-icon">◎</span><p>White backdrop · rear 1× camera</p><small>Keep the full product inside the frame</small></div>}</div>{d.photos?.[shot]?.warning&&<p className="cs-warning">{d.photos[shot].warning}</p>}
           <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" onChange={e=>{capture(e.target.files?.[0]);e.target.value='';}} hidden/>
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={e=>{capture(e.target.files?.[0]);e.target.value='';}}/>
-          {phoneCamera&&<button className="cs-primary cs-wide" type="button" onClick={()=>cameraRef.current?.click()}>Take photo</button>}
+          <button className="cs-primary cs-wide" type="button" onClick={()=>setCameraOpen(true)}>Take photo · live camera</button>
           <button className={`${phoneCamera?'':'cs-primary'} cs-wide`} type="button" onClick={()=>fileRef.current?.click()}>{d.photos?.[shot]?'Replace / import photo':'Import photo'} ↑</button>
-          <p className="cs-caption">{phoneCamera?'Take photo opens your phone camera. Import selects a saved picture.':'On Mac, import a photo file. USB does not automatically capture or import photos; use Image Capture or upload from your iPhone.'}</p>
+          <p className="cs-caption">Take photo opens a live browser camera with a shutter. Choose your iPhone if Chrome exposes it. Import is a separate option for saved files.</p>
           <p className="cs-caption">1600 × 1600 website image · full product retained · original saved</p>
           {d.photos?.[shot]&&<><button type="button" onClick={()=>setAssetPreview(d.photos[shot])}>Inspect full photo</button><input ref={cleanedRef} type="file" accept="image/*" hidden onChange={e=>{addCleanedPreview(e.target.files?.[0]);e.target.value='';}}/><button type="button" onClick={()=>cleanedRef.current?.click()}>Add cleaned sample for review</button><p>Samples stay separate from your originals and are not published automatically.</p></>}
           </section>
@@ -176,6 +179,7 @@ export default function CaptureApp() {
         <footer className="cs-footer"><div><span className={`cs-save-dot ${dirty?'pending':''}`}/>{busy?'Saving…':published?'Published to website':dirty?'Changes waiting to save':'Saved to Decorbeats'}{dirty&&!published&&<button disabled={busy} onClick={()=>save(false)}>Save draft</button>}</div><div className="cs-footer-buttons">{published?<button className="cs-primary" onClick={exit}>Next product →</button>:<><button disabled={busy} onClick={()=>save(true)}>Save & next product</button>{step<3?<button className="cs-primary" disabled={busy} onClick={()=>run(async()=>{const next=nextCaptureStep(draft,step);await persist(draft,next);setStep(next);})}>{!draft.product_id&&step===1?'Save & add details →':'Save & continue →'}</button>:<button className="cs-primary" disabled={busy||issues.length>0} onClick={()=>setConfirm(true)}>Review & publish →</button>}</>}</div></footer>
         {confirm&&<div className="cs-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="cs-publish-title" className="cs-modal"><h2 id="cs-publish-title">Publish {d.name}?</h2><p>This sets website stock to <strong>{countTotal(d)} sellable units</strong>, changes the price to <strong>{money(d.mrp)}</strong>, and publishes the reviewed photos and details.</p><button disabled={busy} onClick={()=>setConfirm(false)}>Back to review</button><button disabled={busy} className="cs-primary" onClick={publish}>{busy?'Publishing…':'Confirm inventory & publish'}</button></section></div>}
       </>}
+      {cameraOpen&&draft&&<CameraCapture key={draft.id} productName={d.name} shotName={selectedShot.name} onUse={file=>capture(file)} onClose={()=>setCameraOpen(false)}/>}
       {assetPreview&&<div className="cs-modal-backdrop"><section role="dialog" aria-modal="true" aria-label="Inspect photo" className="cs-modal cs-photo-modal"><button onClick={()=>setAssetPreview(null)}>Close ×</button><img src={assetPreview.url} alt="Full processed photograph"/><p>{assetPreview.filename} · original {assetPreview.width} × {assetPreview.height}</p></section></div>}
       {liveComparison&&draft&&<div className="cs-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="cs-compare-title" className="cs-modal"><h2 id="cs-compare-title">Review the latest inventory</h2><p>System stock was {draft.baseline.quantity}; it is now <strong>{liveComparison.quantity}</strong>. Current website price: <strong>{money(liveComparison.mrp)}</strong>.</p><p>Your saved count is {countTotal(draft.data)}. Check the physical stock again if anything was sold or moved. Photos and measurements stay saved.</p><details><summary>See all current product details</summary><dl>{Object.entries(snapshot(liveComparison)).filter(([key])=>!['image_url','image_urls','video_urls'].includes(key)).map(([key,val])=><React.Fragment key={key}><dt>{key.replaceAll('_',' ')}</dt><dd>{String(val??'—')}</dd></React.Fragment>)}</dl></details><button onClick={()=>setLiveComparison(null)}>Cancel</button><button className="cs-primary" disabled={busy} onClick={()=>run(async()=>{const {data,error}=await supabase.rpc('refresh_capture_baseline_v1',{p_id:draft.id,p_revision:draft.revision,p_current:snapshot(liveComparison)});if(error)throw error;setDraft(data);setDirty(false);setStep(2);setLiveComparison(null);setMessage('Latest inventory reviewed. Recheck counts and reconfirm pricing.');})}>Reviewed · return to count</button></section></div>}
     </main>
