@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { SHOTS, STEPS, countTotal, newDraft, readiness, snapshot } from './model';
 import { uploadPhoto, uploadVideo } from './media';
 import './capture.css';
+import ReviewGallery from './ReviewGallery';
 
 const categories = ['Bell','Bowl','Box','Decor','Diya','Idol','Jars','Misc','Planter','Plate','Tree','Urli','Wall Decor'];
 const materials = ['Brass','Metal','Ceramic','Wood','Glass','Clay','Mixed','Other'];
@@ -24,7 +25,7 @@ export default function CaptureApp() {
   const [pair,setPair] = useState(false), [qr,setQr] = useState(''), [guide,setGuide] = useState(false), [confirm,setConfirm] = useState(false);
   const [assetPreview,setAssetPreview] = useState(null);
   const [liveComparison,setLiveComparison] = useState(null);
-  const fileRef=useRef(null), videoRef=useRef(null), mounted=useRef(true), inFlight=useRef(false);
+  const fileRef=useRef(null), videoRef=useRef(null), cleanedRef=useRef(null), mounted=useRef(true), inFlight=useRef(false);
 
   useEffect(()=>{
     document.title='Capture Studio | Decorbeats';
@@ -100,6 +101,16 @@ export default function CaptureApp() {
       setMessage(video?'360° video saved':'Photo saved · original preserved');
     });
   }
+  async function addCleanedPreview(file) {
+    if (!file || !draft.data.photos?.[shot]) return;
+    await run(async () => {
+      const saved = dirty ? await persist() : draft;
+      const sample = await uploadPhoto(saved.id, `${shot}-sample`, file, setMessage);
+      await persist({...saved, data: {...saved.data, photos: {...saved.data.photos,
+        [shot]: {...saved.data.photos[shot], cleanedPreview: sample}}}});
+      setMessage('Cleaned sample saved for comparison only. Original website selection unchanged.');
+    });
+  }
   const visibleProducts=useMemo(()=>products.filter(p=>[p.name,p.sku,p.category].some(x=>String(x||'').toLowerCase().includes(search.toLowerCase()))),[products,search]);
   const pending=drafts.filter(d=>d.status==='draft');
   const d=draft?.data, issues=draft?readiness(draft):[];
@@ -143,7 +154,7 @@ export default function CaptureApp() {
           <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" onChange={e=>{capture(e.target.files?.[0]);e.target.value='';}} hidden/>
           <button className="cs-primary cs-wide" type="button" onClick={()=>fileRef.current?.click()}>{d.photos?.[shot]?'Replace photo':'Take or import photo'} ↑</button>
           <p className="cs-caption">1600 × 1600 website image · full product retained · original saved</p>
-          {d.photos?.[shot]&&<button type="button" onClick={()=>setAssetPreview(d.photos[shot])}>Inspect full photo</button>}
+          {d.photos?.[shot]&&<><button type="button" onClick={()=>setAssetPreview(d.photos[shot])}>Inspect full photo</button><input ref={cleanedRef} type="file" accept="image/*" hidden onChange={e=>{addCleanedPreview(e.target.files?.[0]);e.target.value='';}}/><button type="button" onClick={()=>cleanedRef.current?.click()}>Add cleaned sample for review</button><p>Samples stay separate from your originals and are not published automatically.</p></>}
           </section>
           <section className="cs-panel cs-video"><div><p className="cs-eyebrow">Turntable · optional</p><h2>Give it one full turn.</h2><p>Hold the camera still. Centre the product. Record one rotation at 1080p / 30 fps, ideally 10–20 seconds.</p><small>Use Most Compatible / H.264 on iPhone. Up to 45 MB.</small></div>{d.video&&<video src={d.video.url} controls playsInline preload="metadata"/>}<input ref={videoRef} type="file" accept="video/mp4,video/quicktime,video/webm,.mov" hidden onChange={e=>{capture(e.target.files?.[0],true);e.target.value='';}}/><button type="button" onClick={()=>videoRef.current?.click()}>{d.video?'Replace 360° video':'Add 360° video'} ↑</button></section>
         </div>}
@@ -155,7 +166,7 @@ export default function CaptureApp() {
         {step===3&&<><section className="cs-panel"><h2>Pricing with Megha</h2><p>Existing prices are prefilled. Confirm them before publishing.</p><div className="cs-fields"><Field label="Website selling price (₹)" type="number" min="0" step="0.01" value={d.mrp} onChange={v=>change('mrp',v)}/><Field label="Unit cost (₹) · private" type="number" min="0" step="0.01" value={d.cost_price} onChange={v=>change('cost_price',v)}/><Field label="B2B price (₹) · optional" type="number" min="0" step="0.01" value={d.b2b_price} onChange={v=>change('b2b_price',v)}/><Field label="One sellable unit contains" value={d.unit} onChange={v=>change('unit',v)}/></div><label className="cs-check"><input type="checkbox" checked={d.pricingApproved} onChange={e=>change('pricingApproved',e.target.checked)}/>Megha / the pricing owner has confirmed these prices.</label><label className="cs-field"><span>Product description · shown on website</span><textarea value={d.notes} onChange={e=>change('notes',e.target.value)} rows="4" placeholder="Describe the material, finish and what is included. Keep internal notes out of this field."/></label><details><summary>Amazon reference · optional</summary><div className="cs-fields"><Field label="ASIN" value={d.asin} onChange={v=>change('asin',v.toUpperCase())} maxLength="10"/><Field label="Amazon Seller SKU" value={d.sellerSku} onChange={v=>change('sellerSku',v)}/></div><p>Saved with this capture record for matching later. This does not list or receive stock on Amazon.</p></details>
           {draft.product_id&&<details><summary>Inventory changed while photographing?</summary><p>Review the latest inventory and reconfirm your count and pricing before publishing.</p><button type="button" disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('products').select('*').eq('id',draft.product_id).single();if(error)throw error;setLiveComparison(data);})}>Compare current inventory</button>{dirty&&<p>Save the draft first.</p>}</details>}
           </section>
-          <section className="cs-panel"><h2>Review the website update</h2><div className="cs-review"><div>{d.photos?.hero&&<img src={d.photos.hero.url} alt="New website cover"/>}<strong>{d.name}</strong><p>{money(d.mrp)} · {d.unit}</p></div><dl><dt>Current → counted stock</dt><dd>{draft.baseline?.quantity??0} → {countTotal(d)} sellable</dd><dt>Damaged / incomplete</dt><dd>{countTotal(d,'damaged')} excluded</dd><dt>Product size</dt><dd>{d.length||'—'} × {d.width||'—'} × {d.height||'—'} cm</dd><dt>Product / packed weight</dt><dd>{d.weight_g||'—'} g / {d.packed_weight_g||'—'} g</dd><dt>New photos / video</dt><dd>{Object.keys(d.photos||{}).length} / {d.video?'360° included':'Existing video retained'}</dd></dl></div><label className="cs-check"><input type="checkbox" checked={d.keepExistingPhotos} onChange={e=>change('keepExistingPhotos',e.target.checked)}/>Keep existing gallery photos after the new photographs.</label>{!published&&issues.length>0&&<div className="cs-todo"><h3>Still to complete</h3><ul>{issues.map(x=><li key={x}>{x}</li>)}</ul><p>You can save now and finish later, or leave pricing for Megha.</p></div>}</section>
+          <section className="cs-panel"><h2>Review the website update</h2><div className="cs-review"><div><ReviewGallery key={draft.id} photos={d.photos} onInspect={setAssetPreview}/><strong>{d.name}</strong><p>{money(d.mrp)} · {d.unit}</p></div><dl><dt>Current → counted stock</dt><dd>{draft.baseline?.quantity??0} → {(d.locations?.length && d.locations.every(l=>l.sellable!=='' && l.sellable!=null)) ? `${countTotal(d)} sellable` : 'Not counted yet'}</dd><dt>Damaged / incomplete</dt><dd>{countTotal(d,'damaged')} excluded</dd><dt>Product size</dt><dd>{d.length||'—'} × {d.width||'—'} × {d.height||'—'} cm</dd><dt>Product / packed weight</dt><dd>{d.weight_g||'—'} g / {d.packed_weight_g||'—'} g</dd><dt>New photos / video</dt><dd>{Object.keys(d.photos||{}).length} / {d.video?'360° included':'Existing video retained'}</dd></dl></div><label className="cs-check"><input type="checkbox" checked={d.keepExistingPhotos} onChange={e=>change('keepExistingPhotos',e.target.checked)}/>Keep existing gallery photos after the new photographs.</label>{!published&&issues.length>0&&<div className="cs-todo"><h3>Still to complete</h3><ul>{issues.map(x=><li key={x}>{x}</li>)}</ul><p>You can save now and finish later, or leave pricing for Megha.</p></div>}</section>
         </>}
         </fieldset>
         <footer className="cs-footer"><div><span className={`cs-save-dot ${dirty?'pending':''}`}/>{busy?'Saving…':published?'Published to website':dirty?'Changes waiting to save':'Saved to Decorbeats'}{dirty&&!published&&<button disabled={busy} onClick={()=>save(false)}>Save draft</button>}</div><div className="cs-footer-buttons">{published?<button className="cs-primary" onClick={exit}>Next product →</button>:<><button disabled={busy} onClick={()=>save(true)}>Save & next product</button>{step<3?<button className="cs-primary" disabled={busy} onClick={()=>run(async()=>{await persist(draft,step+1);setStep(step+1);})}>Save & continue →</button>:<button className="cs-primary" disabled={busy||issues.length>0} onClick={()=>setConfirm(true)}>Review & publish →</button>}</>}</div></footer>
