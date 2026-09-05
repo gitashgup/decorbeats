@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newDraft, countTotal, readiness, SHOTS } from '../src/capture/model.js';
+import { newDraft, countTotal, readiness, SHOTS, captureStepOrder, nextCaptureStep } from '../src/capture/model.js';
 
 function complete() {
  const d=newDraft({id:1,name:'Brass diya',sku:'DB-001',quantity:12,category:'Diya',material:'Brass',mrp:500,cost_price:200});
@@ -22,4 +22,21 @@ test('publishing requires identity, photos, stock confirmation and pricing',()=>
 });
 test('a new capture starts with no invented count or measurements',()=>{
  const d=newDraft(null,'Room 1');assert.equal(d.product_id,null);assert.equal(d.data.locations[0].sellable,'');assert.equal(d.data.weight_g,'');assert.ok(readiness(d).length>0);
+});
+test('new products start with photos then details; existing product order is unchanged',()=>{
+ const d=newDraft(null,'1');
+ assert.equal(d.data.step,1);
+ assert.equal(d.data.name,'');assert.equal(d.data.category,'');assert.equal(d.data.material,'');
+ assert.deepEqual(captureStepOrder(d),[1,0,2,3]);
+ assert.equal(nextCaptureStep(d,1),0);assert.equal(nextCaptureStep(d,0),2);
+ assert.deepEqual(captureStepOrder(complete()),[0,1,2,3]);
+ assert.equal(nextCaptureStep(complete(),1),2);
+});
+test('unnamed photo draft retains original and photo through saved detail-step serialization',()=>{
+ const draft=newDraft(null,'1');
+ draft.data.photos.hero={url:'https://example.com/test-photo.webp',original:'test-original.jpg'};
+ const saved=JSON.parse(JSON.stringify({...draft,data:{...draft.data,step:nextCaptureStep(draft,1)}}));
+ assert.equal(saved.data.step,0);assert.equal(saved.data.name,'');
+ assert.deepEqual(saved.data.photos,draft.data.photos);
+ assert.ok(readiness(saved).includes('Enter the product name'));
 });

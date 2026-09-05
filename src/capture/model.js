@@ -6,12 +6,17 @@ export const SHOTS = [
   { id: 'contents', name: 'Everything included', tip: 'For a set, show all pieces together. Optional for a single piece.' },
 ];
 export const STEPS = ['Match product', 'Photos & video', 'Count & measure', 'Price & review'];
+export const captureStepOrder = draft => draft?.product_id ? [0, 1, 2, 3] : [1, 0, 2, 3];
+export const nextCaptureStep = (draft, current) => {
+  const order = captureStepOrder(draft);
+  return order[Math.min(order.indexOf(current) + 1, order.length - 1)];
+};
 export const SNAPSHOT_KEYS = ['name', 'category', 'material', 'quantity', 'mrp', 'cost_price', 'b2b_price', 'size', 'weight', 'notes', 'image_url', 'image_urls', 'video_urls', 'archived_at'];
 export const snapshot = p => Object.fromEntries(SNAPSHOT_KEYS.map(k => [k, p?.[k] ?? null]));
 export function newDraft(product, location = '') {
   return { id: crypto.randomUUID(), revision: 0, product_id: product?.id ?? null, status: 'draft',
     baseline: product ? snapshot(product) : null,
-    data: { name: product?.name || '', category: product?.category || 'Decor', material: product?.material || 'Brass',
+    data: { name: product?.name || '', category: product?.category || '', material: product?.material || '',
       sku: product?.sku || '', mrp: product?.mrp ?? '', cost_price: product?.cost_price ?? '', b2b_price: product?.b2b_price ?? '',
       notes: product?.notes || '', unit: '', locations: [{ name: location, sellable: '', damaged: '0' }],
       length: '', width: '', height: '', weight_g: '', packed_length: '', packed_width: '', packed_height: '', packed_weight_g: '',
