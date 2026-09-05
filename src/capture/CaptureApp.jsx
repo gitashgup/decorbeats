@@ -5,6 +5,8 @@ import { uploadPhoto, uploadVideo } from './media';
 import './capture.css';
 import ReviewGallery from './ReviewGallery';
 import CameraCapture from './CameraCapture';
+import PhoneCapture from './PhoneCapture';
+import { mergeCaptureDraft, sameValue, updateSharedDraft } from './sharedDraft';
 
 const categories = ['Bell','Bowl','Box','Decor','Diya','Idol','Jars','Misc','Planter','Plate','Tree','Urli','Wall Decor'];
 const materials = ['Brass','Metal','Ceramic','Wood','Glass','Clay','Mixed','Other'];
@@ -27,6 +29,10 @@ export default function CaptureApp() {
   const [assetPreview,setAssetPreview] = useState(null);
   const [liveComparison,setLiveComparison] = useState(null);
   const [cameraOpen,setCameraOpen] = useState(false);
+  const [syncStatus,setSyncStatus] = useState('');
+  const phoneMode = new URLSearchParams(window.location.search).get('phone')==='1';
+  const savedBase=useRef(null), currentDraft=useRef(null);
+  currentDraft.current=draft;
   const fileRef=useRef(null), cameraRef=useRef(null), videoRef=useRef(null), cleanedRef=useRef(null), mounted=useRef(true), inFlight=useRef(false);
   const phoneCamera = /iPhone|iPad|Android/i.test(navigator.userAgent);
 
@@ -56,8 +62,31 @@ export default function CaptureApp() {
   },[dirty]);
   useEffect(()=>{setConfirm(false);},[draft?.revision,dirty]);
   useEffect(()=>{
+    if(!allowed||phoneMode||!draft?.revision||draft.status!=='draft')return;
+    let active=true, reading=false;
+    async function sync(){
+      if(reading||inFlight.current||document.hidden)return;
+      reading=true;
+      try{
+        const {data:remote,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();
+        if(error)throw error;
+        if(!active||inFlight.current||currentDraft.current?.id!==remote.id)return;
+        if(remote.revision!==savedBase.current?.revision){
+          const merged=mergeCaptureDraft(currentDraft.current,savedBase.current,remote);
+          savedBase.current=remote;setDraft(merged);setDirty(!sameValue(merged.data,remote.data));
+          setDrafts(old=>[remote,...old.filter(x=>x.id!==remote.id)]);
+        }
+        const recent=Date.now()-Date.parse(remote.data.phoneLastSeenAt||'')<45000;
+        setSyncStatus(recent?'Phone connected · photos update automatically':'Watching this draft · connect your iPhone');
+      }catch(e){if(active)setSyncStatus(`Sync paused: ${e.message}`);}
+      finally{reading=false;}
+    }
+    sync();const timer=setInterval(sync,3000);
+    return()=>{active=false;clearInterval(timer);};
+  },[allowed,phoneMode,draft?.id,!!draft?.revision,draft?.status]);
+  useEffect(()=>{
     if(!pair)return;
-    const url=`${window.location.origin}/admin/capture${draft?.revision ? `?draft=${draft.id}` : ''}`;
+    const url=`${window.location.origin}/admin/capture${draft?.revision ? `?draft=${draft.id}&phone=1` : ''}`;
     import('qrcode').then(m=>m.toDataURL(url,{width:240,margin:2,color:{dark:'#203b38'}})).then(setQr).catch(()=>setError('QR unavailable. Copy the capture link instead.'));
   },[pair,draft?.id,draft?.revision]);
 
@@ -76,18 +105,26 @@ export default function CaptureApp() {
     try{return await fn();}catch(e){setError(e.message||'Could not save. Please retry.');return null;}
     finally{inFlight.current=false;setBusy(false);}
   }
-  function open(item){setDraft(item);setStep(item.status==='published'?3:Number(item.data.step??1));setShot('hero');setDirty(false);setMessage('');setConfirm(false);history.replaceState(null,'',`/admin/capture?draft=${item.id}`);}
+  function open(item){savedBase.current=item;setDraft(item);setStep(item.status==='published'?3:Number(item.data.step??1));setShot('hero');setDirty(false);setMessage('');setConfirm(false);history.replaceState(null,'',`/admin/capture?draft=${item.id}${phoneMode?'&phone=1':''}`);}
   function change(key,value){setDraft(x=>({...x,data:{...x.data,[key]:value,...(key==='locations'?{allLocations:false,stockConfirmed:false}:{}),...(['mrp','cost_price','b2b_price'].includes(key)?{pricingApproved:false}:{})}}));setDirty(true);setMessage('');}
   function start(product){
     const existing=drafts.find(d=>d.status==='draft'&&d.product_id===product?.id&&product);
     if(existing){open(existing);return;}
-    setDraft(newDraft(product,location));setStep(1);setShot('hero');setDirty(true);setMessage('');history.replaceState(null,'','/admin/capture');
+    const fresh=newDraft(product,location);savedBase.current=fresh;setDraft(fresh);setStep(1);setShot('hero');setDirty(true);setMessage('');history.replaceState(null,'','/admin/capture');
   }
   async function persist(candidate=draft,nextStep=step){
-    const {data,error}=await supabase.rpc('save_capture_draft_v1',{p_id:candidate.id,p_revision:candidate.revision,p_product_id:candidate.product_id,p_data:{...candidate.data,step:nextStep}});
-    if(error)throw new Error(error.code==='23505'?'A saved draft already exists for this product. Go back and refresh the list.':error.message);
+    let data;
+    if(candidate.revision){
+      const base=savedBase.current, local={...candidate,data:{...candidate.data,step:nextStep}};
+      data=await updateSharedDraft(supabase,candidate.id,remote=>mergeCaptureDraft(local,base,remote));
+    }else{
+      const result=await supabase.rpc('save_capture_draft_v1',{p_id:candidate.id,p_revision:0,p_product_id:candidate.product_id,p_data:{...candidate.data,step:nextStep}});
+      if(result.error)throw new Error(result.error.code==='23505'?'A saved draft already exists for this product. Go back and refresh the list.':result.error.message);
+      data=result.data;
+    }
+    savedBase.current=data;
     setDraft(data);setDirty(false);setDrafts(old=>[data,...old.filter(x=>x.id!==data.id)]);if(data.data.locations?.[0]?.name)setLocation(data.data.locations[0].name);
-    history.replaceState(null,'',`/admin/capture?draft=${data.id}`);setMessage('Saved to Decorbeats');return data;
+    history.replaceState(null,'',`/admin/capture?draft=${data.id}${phoneMode?'&phone=1':''}`);setMessage('Saved to Decorbeats');return data;
   }
   async function save(next=false){await run(async()=>{await persist();if(next)exit();});}
   function exit(){setDraft(null);setDirty(false);setStep(0);setConfirm(false);history.replaceState(null,'','/admin/capture');}
@@ -120,7 +157,7 @@ export default function CaptureApp() {
   const d=draft?.data, issues=draft?readiness(draft):[];
   const published=draft?.status==='published';
   const selectedShot=SHOTS.find(s=>s.id===shot);
-  const pairUrl=`${window.location.origin}/admin/capture${draft?.revision?`?draft=${draft.id}`:''}`;
+  const pairUrl=`${window.location.origin}/admin/capture${draft?.revision?`?draft=${draft.id}&phone=1`:''}`;
   async function publish(){await run(async()=>{
     const current=dirty?await persist():draft;
     const {data,error}=await supabase.rpc('publish_capture_draft_v1',{p_id:current.id,p_revision:current.revision});
@@ -130,20 +167,21 @@ export default function CaptureApp() {
 
   return <div className="cs">
     <header className="cs-header"><a href="/admin" className="cs-brand"><img src="/assets/brand/decorbeats-logo.svg" alt=""/><span>DECORBEATS<small>Capture studio</small></span></a>
-      <div className="cs-header-actions"><button onClick={()=>setGuide(!guide)}>Setup guide</button>{allowed&&<button onClick={()=>setPair(!pair)}>Open on iPhone ↗</button>}{draft?.revision&&!published&&<button disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();if(error)throw error;open(data);setMessage('Latest saved version loaded');})}>Refresh from phone</button>}<a href="/admin">Inventory ↗</a></div>
+      <div className="cs-header-actions"><button onClick={()=>setGuide(!guide)}>Setup guide</button>{allowed&&!phoneMode&&<button disabled={busy} onClick={()=>run(async()=>{if(draft&&(dirty||!draft.revision))await persist();setCameraOpen(false);setPair(!pair);})}>Connect iPhone ↗</button>}{!!draft?.revision&&!published&&!phoneMode&&<button disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();if(error)throw error;open(data);setMessage('Latest saved version loaded');})}>Refresh from phone</button>}<a href="/admin">Inventory ↗</a></div>
     </header>
     <main className="cs-main">
       {error&&<div role="alert" className="cs-alert">{error}<button onClick={()=>setError('')} aria-label="Dismiss error">×</button></div>}
       {message&&<div role="status" className="cs-notice">{message}</div>}
+      {!phoneMode&&draft?.revision>0&&<p role="status" className="cs-sync-status">{syncStatus||'Watching this draft…'}{d?.lastPhonePhotoAt&&<> · Last phone photo {new Date(d.lastPhonePhotoAt).toLocaleTimeString()}</>}</p>}
       {guide&&<section className="cs-guide"><h2>Your photo station</h2><ol><li>Use the white lightbox backdrop. Clean the product and your camera lens.</li><li>Use the rear 1× camera. Turn off flash and filters. Tap the brass to focus; lower exposure if highlights look white.</li><li>For turntable video: 1080p, 30 fps, Most Compatible / H.264. Hold the phone still for one complete turn, ideally 10–20 seconds.</li><li>For cable import: unlock the iPhone, trust this Mac, open Image Capture, select only this product’s files and import to a folder. Choose those files here.</li><li>Or open this capture page on your iPhone and upload directly. Both devices use your Decorbeats login.</li></ol><p>A website cannot read the connected iPhone’s camera roll automatically. You choose the files to import.</p></section>}
-      {pair&&<section className="cs-pair"><div>{qr&&<img src={qr} alt="Scan to open this capture page on iPhone"/>}</div><div><h2>Continue on your iPhone</h2><p>Scan with Camera, open in Safari and sign in. Save on one device before continuing on the other.</p><a href={pairUrl}>{pairUrl}</a><button onClick={()=>run(async()=>{await navigator.clipboard.writeText(pairUrl);setMessage('Capture link copied');})}>Copy link</button><button onClick={()=>setPair(false)}>Close</button></div></section>}
+      {pair&&<section className="cs-pair"><div>{qr&&<img src={qr} alt="Scan to open this draft camera on iPhone"/>}</div><div><h2>Photograph on your iPhone</h2>{draft?.revision?<><p>Scan, sign in, then open the phone camera. Each shutter tap saves to this product; photos appear here automatically without replacing your unsaved details.</p><p>Use the Decorbeats camera page, not Apple’s separate Camera app. Close the Mac camera before starting on the phone.</p><a href={pairUrl}>{pairUrl}</a><button onClick={()=>run(async()=>{await navigator.clipboard.writeText(pairUrl);setMessage('Phone camera link copied');})}>Copy phone link</button></>:<p>Choose or start a product first to link the phone to its draft.</p>}<button onClick={()=>setPair(false)}>Close</button></div></section>}
       {!authReady?<p>Opening capture studio…</p>:!allowed?<section className="cs-login"><p className="cs-eyebrow">Your photography station</p><h1>One product.<br/>Everything together.</h1><p>Match the inventory, capture photographs and a full turn, then count, measure and save.</p><div className="cs-login-steps">01 Match <span>→</span> 02 Capture <span>→</span> 03 Measure <span>→</span> 04 Review</div>
         {session?<p>Checking access for {session.user.email}…</p>:<form onSubmit={e=>{e.preventDefault();run(async()=>{const {error}=await supabase.auth.signInWithPassword({email,password});if(error)throw error;setPassword('');});}}>
           <Field label="Admin email" value={email} onChange={setEmail} type="email" required autoComplete="username"/>
           <Field label="Password" value={password} onChange={setPassword} type="password" required autoComplete="current-password"/>
           <button className="cs-primary" disabled={busy||!supabase}>{busy?'Signing in…':'Open capture studio →'}</button>
         </form>}
-      </section>:!draft?<>
+      </section>:phoneMode&&draft?<PhoneCapture key={draft.id} initial={draft}/>:!draft?<>
         <div className="cs-heading"><div><p className="cs-eyebrow">Room by room. Product by product.</p><h1>What are we photographing?</h1></div><button className="cs-primary" onClick={()=>start(null)}>+ New product</button></div>
         <section className="cs-toolbar"><Field label="Working location" value={location} onChange={setLocation} placeholder="e.g. Room 1 · Rack A · Shelf 2"/><Field label="Find an existing product" value={search} onChange={setSearch} placeholder="Search name, SKU or category"/><button disabled={busy} onClick={()=>run(()=>refresh(false))}>↻ Refresh</button></section>
         <div className="cs-tabs" role="tablist" aria-label="Capture queues">{[['capture',`Inventory · ${products.length}`],['drafts',`Saved drafts · ${pending.length}`],['pricing',`For Megha · ${pending.filter(x=>!x.data.pricingApproved).length}`],['published',`Completed · ${drafts.filter(x=>x.status==='published').length}`]].map(([key,title])=><button key={key} role="tab" aria-selected={queue===key} className={queue===key?'active':''} onClick={()=>setQueue(key)}>{title}</button>)}</div>

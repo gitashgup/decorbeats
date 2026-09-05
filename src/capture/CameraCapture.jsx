@@ -7,11 +7,13 @@ const cameraError = error => ({
   OverconstrainedError: 'That camera is no longer available. Refresh the camera list and choose another.',
 }[error.name] || 'Could not start the camera. Check its connection and browser permissions, then retry.');
 
-export default function CameraCapture({ productName, shotName, onUse, onClose }) {
+export default function CameraCapture({ productName, shotName, onUse, onClose, autoSave=false }) {
   const dialog = useRef(null), video = useRef(null), stream = useRef(null), generation = useRef(0), previewUrl = useRef(null);
   const [devices,setDevices] = useState([]), [device,setDevice] = useState('');
   const [state,setState] = useState('opening'), [error,setError] = useState('');
   const [size,setSize] = useState(null), [photo,setPhoto] = useState(null), [saving,setSaving] = useState(false);
+  const [notice,setNotice] = useState('');
+  const alive=useRef(true);
   function stop() { stream.current?.getTracks().forEach(track=>track.stop()); stream.current=null; }
   async function list() {
     if (!navigator.mediaDevices?.enumerateDevices) return;
@@ -45,14 +47,14 @@ export default function CameraCapture({ productName, shotName, onUse, onClose })
     }
   }
   useEffect(()=>{
-    dialog.current.showModal();start();
+    alive.current=true;dialog.current.showModal();start();
     const pause=()=>{++generation.current;stop();setState('stopped');};
     const visibility=()=>{if(document.hidden)pause();};
     const refresh=()=>list().catch(()=>{});
     document.addEventListener('visibilitychange',visibility);
     window.addEventListener('pagehide',pause);
     navigator.mediaDevices?.addEventListener('devicechange',refresh);
-    return()=>{++generation.current;stop();if(previewUrl.current)URL.revokeObjectURL(previewUrl.current);
+    return()=>{alive.current=false;++generation.current;stop();if(previewUrl.current)URL.revokeObjectURL(previewUrl.current);
       document.removeEventListener('visibilitychange',visibility);window.removeEventListener('pagehide',pause);
       navigator.mediaDevices?.removeEventListener('devicechange',refresh);};
   },[]);
@@ -71,12 +73,18 @@ export default function CameraCapture({ productName, shotName, onUse, onClose })
     if(previewUrl.current)URL.revokeObjectURL(previewUrl.current);
     previewUrl.current=URL.createObjectURL(blob);
     setSize({width:canvas.width,height:canvas.height});
-    setPhoto({file:new File([blob],`camera-${Date.now()}.jpg`,{type:'image/jpeg'}),url:previewUrl.current});
+    const file=new File([blob],`camera-${Date.now()}.jpg`,{type:'image/jpeg'});
+    setPhoto({file,url:previewUrl.current});
     ++generation.current;stop();setState('review');
+    if(autoSave)await usePhoto(file);
   }
-  async function usePhoto() {
+  async function usePhoto(file=photo.file) {
     setSaving(true);setError('');
-    try {const saved=await onUse(photo.file);if(!saved)throw new Error('Photo was not saved. Check the connection and retry.');onClose();}
+    try {
+      const saved=await onUse(file);if(!saved)throw new Error('Photo was not saved. Check the connection and retry.');
+      if(!alive.current)return;
+      if(autoSave){setNotice('Uploaded ✓ · saved to this draft');setPhoto(null);await start(device);}else onClose();
+    }
     catch(e){setError(e.message);}finally{setSaving(false);}
   }
   return <dialog ref={dialog} className="cs-camera-dialog" onCancel={e=>{e.preventDefault();if(!saving)onClose();}}>
@@ -85,7 +93,8 @@ export default function CameraCapture({ productName, shotName, onUse, onClose })
       {!devices.some(item=>item.deviceId===device)&&<option value={device}>Default camera</option>}
       {devices.map((item,index)=><option key={item.deviceId||index} value={item.deviceId}>{item.label||`Camera ${index+1} (permission needed for name)`}</option>)}
     </select></label>
-    <p className="cs-camera-help">Choose your iPhone if it appears here. USB alone does not expose it: enable Continuity Camera on your iPhone and make it available to this Mac. Close other camera apps if it is busy.</p>
+    <p className="cs-camera-help">{autoSave?'Frame the product on this phone. Each shutter tap uploads to the linked draft automatically.':'Choose your iPhone if it appears here. USB alone does not expose it: enable Continuity Camera on your iPhone and make it available to this Mac. Close other camera apps if it is busy.'}</p>
+    {notice&&<p role="status">{notice}</p>}
     {error&&<p role="alert" className="cs-warning">{error}</p>}
     <div className="cs-camera-feed">
       <video ref={video} muted playsInline autoPlay hidden={!!photo} onResize={e=>setSize({width:e.currentTarget.videoWidth,height:e.currentTarget.videoHeight})}/>
@@ -94,7 +103,7 @@ export default function CameraCapture({ productName, shotName, onUse, onClose })
     </div>
     <p>{size?.width?`${size.width} × ${size.height} pixels · `:''}Captured from the browser video stream, not a native full-resolution iPhone still. Rotate the phone before capturing; check the preview.</p>
     {size?.width&&Math.min(size.width,size.height)<1000?<p className="cs-warning">Low-resolution stream. For finer product detail, use a higher-resolution camera or import an original photo.</p>:null}
-    <div className="cs-camera-actions">{photo?<><button type="button" disabled={saving} onClick={()=>{setPhoto(null);start(device);}}>Retake</button><button type="button" className="cs-primary" disabled={saving} onClick={usePhoto}>{saving?'Saving to this draft…':'Use photo · save to draft'}</button></>:<><button type="button" onClick={()=>start(device)} disabled={state==='opening'}>Retry / refresh cameras</button><button type="button" className="cs-primary" disabled={state!=='live'||!size?.width} onClick={shutter}>Capture photo</button></>}</div>
-    <p>Camera only—no microphone. Nothing uploads until you choose Use photo.</p>
+    <div className="cs-camera-actions">{photo?<><button type="button" disabled={saving} onClick={()=>{setPhoto(null);start(device);}}>Retake</button><button type="button" className="cs-primary" disabled={saving} onClick={()=>usePhoto()}>{saving?'Uploading to this draft…':autoSave?'Retry upload':'Use photo · save to draft'}</button></>:<><button type="button" onClick={()=>start(device)} disabled={state==='opening'||saving}>Retry / refresh cameras</button><button type="button" className="cs-primary" disabled={saving||state!=='live'||!size?.width} onClick={shutter}>{autoSave?'Take photo & save':'Capture photo'}</button></>}</div>
+    <p>{autoSave?'Camera only—no microphone. Photos upload on capture; keep this page open until Uploaded appears.':'Camera only—no microphone. Nothing uploads until you choose Use photo.'}</p>
   </dialog>;
 }
