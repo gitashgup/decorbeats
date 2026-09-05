@@ -1,0 +1,41 @@
+export const SHOTS = [
+  { id: 'hero', name: 'Main photo', tip: 'Turn the product slightly. Show the whole piece with space on every side.' },
+  { id: 'front', name: 'Straight front', tip: 'Camera level with the product. Keep the edges straight and the background clear.' },
+  { id: 'back', name: 'Side or back', tip: 'Show the shape and the side a customer cannot see in the main photo.' },
+  { id: 'detail', name: 'Craft detail', tip: 'Move closer to the carving, finish or working parts. Tap the product to focus.' },
+  { id: 'contents', name: 'Everything included', tip: 'For a set, show all pieces together. Optional for a single piece.' },
+];
+export const STEPS = ['Match product', 'Photos & video', 'Count & measure', 'Price & review'];
+export const SNAPSHOT_KEYS = ['name', 'category', 'material', 'quantity', 'mrp', 'cost_price', 'b2b_price', 'size', 'weight', 'notes', 'image_url', 'image_urls', 'video_urls', 'archived_at'];
+export const snapshot = p => Object.fromEntries(SNAPSHOT_KEYS.map(k => [k, p?.[k] ?? null]));
+export function newDraft(product, location = '') {
+  return { id: crypto.randomUUID(), revision: 0, product_id: product?.id ?? null, status: 'draft',
+    baseline: product ? snapshot(product) : null,
+    data: { name: product?.name || '', category: product?.category || 'Decor', material: product?.material || 'Brass',
+      sku: product?.sku || '', mrp: product?.mrp ?? '', cost_price: product?.cost_price ?? '', b2b_price: product?.b2b_price ?? '',
+      notes: product?.notes || '', unit: '', locations: [{ name: location, sellable: '', damaged: '0' }],
+      length: '', width: '', height: '', weight_g: '', packed_length: '', packed_width: '', packed_height: '', packed_weight_g: '',
+      photos: {}, video: null, keepExistingPhotos: true, allLocations: false, pricingApproved: false, stockConfirmed: false,
+      asin: '', sellerSku: '', step: 1 } };
+}
+export function countTotal(data, key = 'sellable') {
+  return (data.locations || []).reduce((n, p) => n + (Number(p[key]) || 0), 0);
+}
+export function readiness(draft) {
+  const d = draft.data;
+  const issues = [];
+  if (!d.name.trim()) issues.push('Enter the product name');
+  if (!d.unit.trim()) issues.push('Describe what one sellable unit contains');
+  if (!d.category || !d.material) issues.push('Confirm category and material');
+  if (!SHOTS.slice(0, 4).every(s => d.photos?.[s.id]?.url)) issues.push('Add the four required photographs');
+  const locations = d.locations || [];
+  if (!locations.length || locations.some(l => !l.name.trim() || l.sellable === '' || !Number.isInteger(Number(l.sellable)) || Number(l.sellable) < 0 || !Number.isInteger(Number(l.damaged)) || Number(l.damaged) < 0)) issues.push('Complete each location and its whole-number count');
+  if (new Set(locations.map(l => l.name.trim().toLowerCase())).size !== locations.length) issues.push('Combine duplicate location rows');
+  if (!d.allLocations || !d.stockConfirmed) issues.push('Confirm all locations and controlled sellable stock');
+  if (['length','width','height','weight_g','packed_length','packed_width','packed_height','packed_weight_g'].some(k => !Number.isFinite(Number(d[k])) || Number(d[k]) <= 0)) issues.push('Complete product and packed measurements');
+  if (Number(d.packed_weight_g) < Number(d.weight_g)) issues.push('Packed weight cannot be less than product weight');
+  if (!Number.isFinite(Number(d.mrp)) || Number(d.mrp) <= 0 || !d.pricingApproved) issues.push('Confirm the website price with Megha');
+  if (d.cost_price === '' || !Number.isFinite(Number(d.cost_price)) || Number(d.cost_price) < 0) issues.push('Enter the confirmed unit cost');
+  if (d.b2b_price !== '' && d.b2b_price != null && (!Number.isFinite(Number(d.b2b_price)) || Number(d.b2b_price)<0)) issues.push('Enter a valid B2B price or leave it blank');
+  return issues;
+}

@@ -1,0 +1,168 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { supabase } from '../lib/supabase';
+import { SHOTS, STEPS, countTotal, newDraft, readiness, snapshot } from './model';
+import { uploadPhoto, uploadVideo } from './media';
+import './capture.css';
+
+const categories = ['Bell','Bowl','Box','Decor','Diya','Idol','Jars','Misc','Planter','Plate','Tree','Urli','Wall Decor'];
+const materials = ['Brass','Metal','Ceramic','Wood','Glass','Clay','Mixed','Other'];
+const money = value => value === '' || value == null ? '—' : `₹${Number(value).toLocaleString('en-IN')}`;
+function Field({ label, value, onChange, type='text', ...props }) {
+  return <label className="cs-field"><span>{label}</span><input type={type} value={value ?? ''} onChange={e => onChange(e.target.value)} {...props}/></label>;
+}
+function Select({ label, value, values, onChange }) {
+  return <label className="cs-field"><span>{label}</span><select value={value} onChange={e=>onChange(e.target.value)}>{values.map(v=><option key={v}>{v}</option>)}</select></label>;
+}
+
+export default function CaptureApp() {
+  const [session,setSession] = useState(null), [authReady,setAuthReady] = useState(false);
+  const [allowed,setAllowed] = useState(false), [email,setEmail] = useState(''), [password,setPassword] = useState('');
+  const [products,setProducts] = useState([]), [drafts,setDrafts] = useState([]), [draft,setDraft] = useState(null);
+  const [search,setSearch] = useState(''), [queue,setQueue] = useState('capture'), [location,setLocation] = useState('');
+  const [busy,setBusy] = useState(false), [message,setMessage] = useState(''), [error,setError] = useState('');
+  const [dirty,setDirty] = useState(false), [step,setStep] = useState(0), [shot,setShot] = useState('hero');
+  const [pair,setPair] = useState(false), [qr,setQr] = useState(''), [guide,setGuide] = useState(false), [confirm,setConfirm] = useState(false);
+  const [assetPreview,setAssetPreview] = useState(null);
+  const [liveComparison,setLiveComparison] = useState(null);
+  const fileRef=useRef(null), videoRef=useRef(null), mounted=useRef(true), inFlight=useRef(false);
+
+  useEffect(()=>{
+    document.title='Capture Studio | Decorbeats';
+    mounted.current=true;
+    if (!supabase) { setError('Capture is not connected to the inventory. Please contact the administrator.'); setAuthReady(true); return; }
+    supabase.auth.getSession().then(({data})=>{if(mounted.current){setSession(data.session);setAuthReady(true);}});
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{setSession(s);setAuthReady(true);});
+    return ()=>{mounted.current=false;subscription.unsubscribe();};
+  },[]);
+
+  useEffect(()=>{
+    if(!session){setAllowed(false);setProducts([]);setDrafts([]);setDraft(null);return;}
+    let active=true;
+    supabase.rpc('is_decorbeats_admin').then(async ({data,error})=>{
+      if(!active)return;
+      if(error||!data){setError('This account does not have Decorbeats admin access.');return;}
+      setAllowed(true);await refresh();
+    });
+    return ()=>{active=false;};
+  },[session?.user?.id]);
+
+  useEffect(()=>{
+    const warn=e=>{if(dirty||inFlight.current){e.preventDefault();e.returnValue='';}};
+    window.addEventListener('beforeunload',warn);return ()=>window.removeEventListener('beforeunload',warn);
+  },[dirty]);
+  useEffect(()=>{setConfirm(false);},[draft?.revision,dirty]);
+  useEffect(()=>{
+    if(!pair)return;
+    const url=`${window.location.origin}/admin/capture${draft?.revision ? `?draft=${draft.id}` : ''}`;
+    import('qrcode').then(m=>m.toDataURL(url,{width:240,margin:2,color:{dark:'#203b38'}})).then(setQr).catch(()=>setError('QR unavailable. Copy the capture link instead.'));
+  },[pair,draft?.id,draft?.revision]);
+
+  async function refresh(openFromUrl=true){
+    const [p,d]=await Promise.all([
+      supabase.from('products').select('*').is('archived_at',null).order('name'),
+      supabase.from('capture_drafts').select('*').order('updated_at',{ascending:false}).limit(500)
+    ]);
+    if(p.error||d.error){setError(d.error ? 'The capture workspace is not ready yet. Your existing inventory has not changed.' : p.error.message);return;}
+    setProducts(p.data);setDrafts(d.data);
+    if(openFromUrl){const id=new URLSearchParams(window.location.search).get('draft'); const found=d.data.find(x=>x.id===id);if(found)open(found);}
+  }
+  async function run(fn){
+    if(inFlight.current)return;
+    inFlight.current=true;setBusy(true);setError('');
+    try{return await fn();}catch(e){setError(e.message||'Could not save. Please retry.');return null;}
+    finally{inFlight.current=false;setBusy(false);}
+  }
+  function open(item){setDraft(item);setStep(item.status==='published'?3:Number(item.data.step||1));setDirty(false);setMessage('');setConfirm(false);history.replaceState(null,'',`/admin/capture?draft=${item.id}`);}
+  function change(key,value){setDraft(x=>({...x,data:{...x.data,[key]:value,...(key==='locations'?{allLocations:false,stockConfirmed:false}:{}),...(['mrp','cost_price','b2b_price'].includes(key)?{pricingApproved:false}:{})}}));setDirty(true);setMessage('');}
+  function start(product){
+    const existing=drafts.find(d=>d.status==='draft'&&d.product_id===product?.id&&product);
+    if(existing){open(existing);return;}
+    setDraft(newDraft(product,location));setStep(product?1:0);setDirty(true);setMessage('');history.replaceState(null,'','/admin/capture');
+  }
+  async function persist(candidate=draft,nextStep=step){
+    const {data,error}=await supabase.rpc('save_capture_draft_v1',{p_id:candidate.id,p_revision:candidate.revision,p_product_id:candidate.product_id,p_data:{...candidate.data,step:nextStep}});
+    if(error)throw new Error(error.code==='23505'?'A saved draft already exists for this product. Go back and refresh the list.':error.message);
+    setDraft(data);setDirty(false);setDrafts(old=>[data,...old.filter(x=>x.id!==data.id)]);if(data.data.locations?.[0]?.name)setLocation(data.data.locations[0].name);
+    history.replaceState(null,'',`/admin/capture?draft=${data.id}`);setMessage('Saved to Decorbeats');return data;
+  }
+  async function save(next=false){await run(async()=>{await persist();if(next)exit();});}
+  function exit(){setDraft(null);setDirty(false);setStep(0);setConfirm(false);history.replaceState(null,'','/admin/capture');}
+  async function capture(file,video=false){
+    if(!file)return;
+    await run(async()=>{
+      let saved=draft;
+      if(dirty||!draft.revision)saved=await persist();
+      const asset=video?await uploadVideo(saved.id,file,setMessage):await uploadPhoto(saved.id,shot,file,setMessage);
+      const next={...saved,data:{...saved.data,...(video?{video:asset}:{photos:{...saved.data.photos,[shot]:asset}})}};
+      setDraft(next);setDirty(true);
+      await persist(next);
+      if(!video){const remaining=SHOTS.find(s=>!next.data.photos[s.id]);if(remaining)setShot(remaining.id);}
+      setMessage(video?'360° video saved':'Photo saved · original preserved');
+    });
+  }
+  const visibleProducts=useMemo(()=>products.filter(p=>[p.name,p.sku,p.category].some(x=>String(x||'').toLowerCase().includes(search.toLowerCase()))),[products,search]);
+  const pending=drafts.filter(d=>d.status==='draft');
+  const d=draft?.data, issues=draft?readiness(draft):[];
+  const published=draft?.status==='published';
+  const selectedShot=SHOTS.find(s=>s.id===shot);
+  const pairUrl=`${window.location.origin}/admin/capture${draft?.revision?`?draft=${draft.id}`:''}`;
+  async function publish(){await run(async()=>{
+    const current=dirty?await persist():draft;
+    const {data,error}=await supabase.rpc('publish_capture_draft_v1',{p_id:current.id,p_revision:current.revision});
+    if(error)throw error;
+    setDraft(data);setDirty(false);setConfirm(false);setMessage('Published. Photos, details and reconciled stock are saved.');await refresh(false);
+  });}
+
+  return <div className="cs">
+    <header className="cs-header"><a href="/admin" className="cs-brand"><img src="/assets/brand/decorbeats-logo.svg" alt=""/><span>DECORBEATS<small>Capture studio</small></span></a>
+      <div className="cs-header-actions"><button onClick={()=>setGuide(!guide)}>Setup guide</button>{allowed&&<button onClick={()=>setPair(!pair)}>Open on iPhone ↗</button>}{draft?.revision&&!published&&<button disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();if(error)throw error;open(data);setMessage('Latest saved version loaded');})}>Refresh from phone</button>}<a href="/admin">Inventory ↗</a></div>
+    </header>
+    <main className="cs-main">
+      {error&&<div role="alert" className="cs-alert">{error}<button onClick={()=>setError('')} aria-label="Dismiss error">×</button></div>}
+      {message&&<div role="status" className="cs-notice">{message}</div>}
+      {guide&&<section className="cs-guide"><h2>Your photo station</h2><ol><li>Use the white lightbox backdrop. Clean the product and your camera lens.</li><li>Use the rear 1× camera. Turn off flash and filters. Tap the brass to focus; lower exposure if highlights look white.</li><li>For turntable video: 1080p, 30 fps, Most Compatible / H.264. Hold the phone still for one complete turn, ideally 10–20 seconds.</li><li>For cable import: unlock the iPhone, trust this Mac, open Image Capture, select only this product’s files and import to a folder. Choose those files here.</li><li>Or open this capture page on your iPhone and upload directly. Both devices use your Decorbeats login.</li></ol><p>A website cannot read the connected iPhone’s camera roll automatically. You choose the files to import.</p></section>}
+      {pair&&<section className="cs-pair"><div>{qr&&<img src={qr} alt="Scan to open this capture page on iPhone"/>}</div><div><h2>Continue on your iPhone</h2><p>Scan with Camera, open in Safari and sign in. Save on one device before continuing on the other.</p><a href={pairUrl}>{pairUrl}</a><button onClick={()=>run(async()=>{await navigator.clipboard.writeText(pairUrl);setMessage('Capture link copied');})}>Copy link</button><button onClick={()=>setPair(false)}>Close</button></div></section>}
+      {!authReady?<p>Opening capture studio…</p>:!allowed?<section className="cs-login"><p className="cs-eyebrow">Your photography station</p><h1>One product.<br/>Everything together.</h1><p>Match the inventory, capture photographs and a full turn, then count, measure and save.</p><div className="cs-login-steps">01 Match <span>→</span> 02 Capture <span>→</span> 03 Measure <span>→</span> 04 Review</div>
+        {session?<p>Checking access for {session.user.email}…</p>:<form onSubmit={e=>{e.preventDefault();run(async()=>{const {error}=await supabase.auth.signInWithPassword({email,password});if(error)throw error;setPassword('');});}}>
+          <Field label="Admin email" value={email} onChange={setEmail} type="email" required autoComplete="username"/>
+          <Field label="Password" value={password} onChange={setPassword} type="password" required autoComplete="current-password"/>
+          <button className="cs-primary" disabled={busy||!supabase}>{busy?'Signing in…':'Open capture studio →'}</button>
+        </form>}
+      </section>:!draft?<>
+        <div className="cs-heading"><div><p className="cs-eyebrow">Room by room. Product by product.</p><h1>What are we photographing?</h1></div><button className="cs-primary" onClick={()=>start(null)}>+ New product</button></div>
+        <section className="cs-toolbar"><Field label="Working location" value={location} onChange={setLocation} placeholder="e.g. Room 1 · Rack A · Shelf 2"/><Field label="Find an existing product" value={search} onChange={setSearch} placeholder="Search name, SKU or category"/><button disabled={busy} onClick={()=>run(()=>refresh(false))}>↻ Refresh</button></section>
+        <div className="cs-tabs" role="tablist" aria-label="Capture queues">{[['capture',`Inventory · ${products.length}`],['drafts',`Saved drafts · ${pending.length}`],['pricing',`For Megha · ${pending.filter(x=>!x.data.pricingApproved).length}`],['published',`Completed · ${drafts.filter(x=>x.status==='published').length}`]].map(([key,title])=><button key={key} role="tab" aria-selected={queue===key} className={queue===key?'active':''} onClick={()=>setQueue(key)}>{title}</button>)}</div>
+        {queue==='capture'?<div className="cs-product-grid">{visibleProducts.map(p=>{const saved=pending.find(x=>x.product_id===p.id);return <button className="cs-product" key={p.id} onClick={()=>start(p)}><img src={p.image_url||'/assets/images/product-fallback.svg'} alt="" loading="lazy"/><div><small>{p.sku}</small><h3>{p.name}</h3><p>{p.material} · {p.quantity} in system</p><span>{saved?'Continue draft →':'Match & capture →'}</span></div></button>;})}{!visibleProducts.length&&<p>No matching products. Use “New product” if this is a new size, finish or set.</p>}</div>:<div className="cs-draft-list">{drafts.filter(x=>queue==='published'?x.status==='published':x.status==='draft'&&(queue!=='pricing'||!x.data.pricingApproved)).filter(x=>x.data.name.toLowerCase().includes(search.toLowerCase())).map(x=><button key={x.id} className="cs-draft-row" onClick={()=>{open(x);if(queue==='pricing')setStep(3);}}><img src={x.data.photos?.hero?.url||x.baseline?.image_url||'/assets/images/product-fallback.svg'} alt=""/><div><h3>{x.data.name||'New product'}</h3><p>{Object.keys(x.data.photos||{}).length} photos · {x.data.video?'360° saved':'No video'} · {countTotal(x.data)} counted</p><small>Saved {new Date(x.updated_at).toLocaleString('en-IN')}</small></div><span>{x.status==='published'?'View record':'Continue →'}</span></button>)}{!drafts.some(x=>queue==='published'?x.status==='published':x.status==='draft')&&<p className="cs-empty">Your saved products will appear here. Start with one product from Inventory.</p>}</div>}
+      </>:<>
+        <div className="cs-heading"><div><button className="cs-back" disabled={busy} onClick={()=>dirty?save(true):exit()}>← {dirty?'Save & return to products':'Products'}</button><h1>{d.name||'New product'}</h1><p>{d.sku||'A permanent SKU is assigned when published'} <span className="cs-pill">{published?'Published':dirty?'Unsaved changes':'Saved draft'}</span></p></div><div className="cs-current">System stock<strong>{draft.baseline?.quantity??'New'}</strong></div></div>
+        <nav className="cs-stepper" aria-label="Capture steps">{STEPS.map((name,i)=><button key={name} className={step===i?'active':''} aria-current={step===i?'step':undefined} disabled={busy} onClick={()=>setStep(i)}><span>{i+1}</span>{name}</button>)}</nav>
+        <fieldset className="cs-editor" disabled={busy||published}>
+        {step===0&&<section className="cs-panel"><h2>Confirm the exact product</h2><p>Different size, finish or pieces per set? Return to products and create a separate item.</p><div className="cs-fields"><Field label="Product name" value={d.name} onChange={v=>change('name',v)}/><Field label="One sellable unit contains" value={d.unit} onChange={v=>change('unit',v)} placeholder="e.g. Set of 2 diyas"/><Select label="Category" value={d.category} values={categories.includes(d.category)?categories:[d.category,...categories]} onChange={v=>change('category',v)}/><Select label="Material" value={d.material} values={materials.includes(d.material)?materials:[d.material,...materials]} onChange={v=>change('material',v)}/></div>{draft.baseline?.image_url&&<img className="cs-reference" src={draft.baseline.image_url} alt="Existing website reference"/>}</section>}
+        {step===1&&<div className="cs-shoot-layout"><section className="cs-panel"><div className="cs-section-heading"><h2>Photographs</h2><span>{SHOTS.filter(s=>d.photos?.[s.id]).length} / 5</span></div><div className="cs-shots">{SHOTS.map((s,i)=><button key={s.id} type="button" onClick={()=>setShot(s.id)} className={shot===s.id?'active':''}>{d.photos?.[s.id]?<img src={d.photos[s.id].url} alt=""/>:<span className="cs-shot-number">0{i+1}</span>}<span>{s.name}<small>{d.photos?.[s.id]?'Saved ✓':i===4?'Optional':'Required'}</small></span></button>)}</div></section>
+          <section className="cs-panel cs-shoot"><p className="cs-eyebrow">{SHOTS.findIndex(s=>s.id===shot)+1} · {selectedShot.name}</p><h2>{selectedShot.tip}</h2><div className="cs-viewfinder">{d.photos?.[shot]?<img src={d.photos[shot].url} alt={selectedShot.name}/>:<div><span className="cs-camera-icon">◎</span><p>White backdrop · rear 1× camera</p><small>Keep the full product inside the frame</small></div>}</div>{d.photos?.[shot]?.warning&&<p className="cs-warning">{d.photos[shot].warning}</p>}
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" onChange={e=>{capture(e.target.files?.[0]);e.target.value='';}} hidden/>
+          <button className="cs-primary cs-wide" type="button" onClick={()=>fileRef.current?.click()}>{d.photos?.[shot]?'Replace photo':'Take or import photo'} ↑</button>
+          <p className="cs-caption">1600 × 1600 website image · full product retained · original saved</p>
+          {d.photos?.[shot]&&<button type="button" onClick={()=>setAssetPreview(d.photos[shot])}>Inspect full photo</button>}
+          </section>
+          <section className="cs-panel cs-video"><div><p className="cs-eyebrow">Turntable · optional</p><h2>Give it one full turn.</h2><p>Hold the camera still. Centre the product. Record one rotation at 1080p / 30 fps, ideally 10–20 seconds.</p><small>Use Most Compatible / H.264 on iPhone. Up to 45 MB.</small></div>{d.video&&<video src={d.video.url} controls playsInline preload="metadata"/>}<input ref={videoRef} type="file" accept="video/mp4,video/quicktime,video/webm,.mov" hidden onChange={e=>{capture(e.target.files?.[0],true);e.target.value='';}}/><button type="button" onClick={()=>videoRef.current?.click()}>{d.video?'Replace 360° video':'Add 360° video'} ↑</button></section>
+        </div>}
+        {step===2&&<><section className="cs-panel"><div className="cs-section-heading"><div><h2>Count this product</h2><p>Count complete sellable units. Add every place this same product is stored.</p></div><strong className="cs-count-total">{countTotal(d)}<small>sellable total</small></strong></div>
+          {d.locations.map((l,i)=><div className="cs-location" key={i}><Field label="Room / rack / shelf" value={l.name} onChange={v=>change('locations',d.locations.map((x,j)=>j===i?{...x,name:v}:x))}/><Field label="Sellable units" type="number" min="0" step="1" inputMode="numeric" value={l.sellable} onChange={v=>change('locations',d.locations.map((x,j)=>j===i?{...x,sellable:v}:x))}/><Field label="Damaged / incomplete" type="number" min="0" step="1" inputMode="numeric" value={l.damaged} onChange={v=>change('locations',d.locations.map((x,j)=>j===i?{...x,damaged:v}:x))}/>{i>0&&<button type="button" aria-label={`Remove location ${i+1}`} onClick={()=>change('locations',d.locations.filter((_,j)=>j!==i))}>×</button>}</div>)}
+          <button type="button" onClick={()=>change('locations',[...d.locations,{name:'',sellable:'',damaged:'0'}])}>+ Also stored somewhere else</button>
+          <label className="cs-check"><input type="checkbox" checked={d.allLocations} onChange={e=>change('allLocations',e.target.checked)}/>I have counted this product in all its locations.</label><label className="cs-check"><input type="checkbox" checked={d.stockConfirmed} onChange={e=>change('stockConfirmed',e.target.checked)}/>These sellable units are in Decorbeats’ control and ready for us to fulfil.</label>
+        </section><section className="cs-panel"><h2>Measure once. Use everywhere.</h2><p>Use centimetres and grams. Measure the complete sellable unit.</p><div className="cs-measure-grid">{[['Product, without packaging',''],['Packed, ready to ship','packed_']].map(([label,prefix])=><div key={prefix}><h3>{label}</h3><div className="cs-fields">{[['length','Length (cm)'],['width','Width (cm)'],['height','Height (cm)'],['weight_g','Weight (g)']].map(([key,title])=><Field key={key} label={title} type="number" min="0.01" step="any" inputMode="decimal" value={d[prefix+key]} onChange={v=>change(prefix+key,v)}/>)}</div></div>)}</div></section></>}
+        {step===3&&<><section className="cs-panel"><h2>Pricing with Megha</h2><p>Existing prices are prefilled. Confirm them before publishing.</p><div className="cs-fields"><Field label="Website selling price (₹)" type="number" min="0" step="0.01" value={d.mrp} onChange={v=>change('mrp',v)}/><Field label="Unit cost (₹) · private" type="number" min="0" step="0.01" value={d.cost_price} onChange={v=>change('cost_price',v)}/><Field label="B2B price (₹) · optional" type="number" min="0" step="0.01" value={d.b2b_price} onChange={v=>change('b2b_price',v)}/><Field label="One sellable unit contains" value={d.unit} onChange={v=>change('unit',v)}/></div><label className="cs-check"><input type="checkbox" checked={d.pricingApproved} onChange={e=>change('pricingApproved',e.target.checked)}/>Megha / the pricing owner has confirmed these prices.</label><label className="cs-field"><span>Product description · shown on website</span><textarea value={d.notes} onChange={e=>change('notes',e.target.value)} rows="4" placeholder="Describe the material, finish and what is included. Keep internal notes out of this field."/></label><details><summary>Amazon reference · optional</summary><div className="cs-fields"><Field label="ASIN" value={d.asin} onChange={v=>change('asin',v.toUpperCase())} maxLength="10"/><Field label="Amazon Seller SKU" value={d.sellerSku} onChange={v=>change('sellerSku',v)}/></div><p>Saved with this capture record for matching later. This does not list or receive stock on Amazon.</p></details>
+          {draft.product_id&&<details><summary>Inventory changed while photographing?</summary><p>Review the latest inventory and reconfirm your count and pricing before publishing.</p><button type="button" disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('products').select('*').eq('id',draft.product_id).single();if(error)throw error;setLiveComparison(data);})}>Compare current inventory</button>{dirty&&<p>Save the draft first.</p>}</details>}
+          </section>
+          <section className="cs-panel"><h2>Review the website update</h2><div className="cs-review"><div>{d.photos?.hero&&<img src={d.photos.hero.url} alt="New website cover"/>}<strong>{d.name}</strong><p>{money(d.mrp)} · {d.unit}</p></div><dl><dt>Current → counted stock</dt><dd>{draft.baseline?.quantity??0} → {countTotal(d)} sellable</dd><dt>Damaged / incomplete</dt><dd>{countTotal(d,'damaged')} excluded</dd><dt>Product size</dt><dd>{d.length||'—'} × {d.width||'—'} × {d.height||'—'} cm</dd><dt>Product / packed weight</dt><dd>{d.weight_g||'—'} g / {d.packed_weight_g||'—'} g</dd><dt>New photos / video</dt><dd>{Object.keys(d.photos||{}).length} / {d.video?'360° included':'Existing video retained'}</dd></dl></div><label className="cs-check"><input type="checkbox" checked={d.keepExistingPhotos} onChange={e=>change('keepExistingPhotos',e.target.checked)}/>Keep existing gallery photos after the new photographs.</label>{!published&&issues.length>0&&<div className="cs-todo"><h3>Still to complete</h3><ul>{issues.map(x=><li key={x}>{x}</li>)}</ul><p>You can save now and finish later, or leave pricing for Megha.</p></div>}</section>
+        </>}
+        </fieldset>
+        <footer className="cs-footer"><div><span className={`cs-save-dot ${dirty?'pending':''}`}/>{busy?'Saving…':published?'Published to website':dirty?'Changes waiting to save':'Saved to Decorbeats'}{dirty&&!published&&<button disabled={busy} onClick={()=>save(false)}>Save draft</button>}</div><div className="cs-footer-buttons">{published?<button className="cs-primary" onClick={exit}>Next product →</button>:<><button disabled={busy} onClick={()=>save(true)}>Save & next product</button>{step<3?<button className="cs-primary" disabled={busy} onClick={()=>run(async()=>{await persist(draft,step+1);setStep(step+1);})}>Save & continue →</button>:<button className="cs-primary" disabled={busy||issues.length>0} onClick={()=>setConfirm(true)}>Review & publish →</button>}</>}</div></footer>
+        {confirm&&<div className="cs-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="cs-publish-title" className="cs-modal"><h2 id="cs-publish-title">Publish {d.name}?</h2><p>This sets website stock to <strong>{countTotal(d)} sellable units</strong>, changes the price to <strong>{money(d.mrp)}</strong>, and publishes the reviewed photos and details.</p><button disabled={busy} onClick={()=>setConfirm(false)}>Back to review</button><button disabled={busy} className="cs-primary" onClick={publish}>{busy?'Publishing…':'Confirm inventory & publish'}</button></section></div>}
+      </>}
+      {assetPreview&&<div className="cs-modal-backdrop"><section role="dialog" aria-modal="true" aria-label="Inspect photo" className="cs-modal cs-photo-modal"><button onClick={()=>setAssetPreview(null)}>Close ×</button><img src={assetPreview.url} alt="Full processed photograph"/><p>{assetPreview.filename} · original {assetPreview.width} × {assetPreview.height}</p></section></div>}
+      {liveComparison&&draft&&<div className="cs-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="cs-compare-title" className="cs-modal"><h2 id="cs-compare-title">Review the latest inventory</h2><p>System stock was {draft.baseline.quantity}; it is now <strong>{liveComparison.quantity}</strong>. Current website price: <strong>{money(liveComparison.mrp)}</strong>.</p><p>Your saved count is {countTotal(draft.data)}. Check the physical stock again if anything was sold or moved. Photos and measurements stay saved.</p><details><summary>See all current product details</summary><dl>{Object.entries(snapshot(liveComparison)).filter(([key])=>!['image_url','image_urls','video_urls'].includes(key)).map(([key,val])=><React.Fragment key={key}><dt>{key.replaceAll('_',' ')}</dt><dd>{String(val??'—')}</dd></React.Fragment>)}</dl></details><button onClick={()=>setLiveComparison(null)}>Cancel</button><button className="cs-primary" disabled={busy} onClick={()=>run(async()=>{const {data,error}=await supabase.rpc('refresh_capture_baseline_v1',{p_id:draft.id,p_revision:draft.revision,p_current:snapshot(liveComparison)});if(error)throw error;setDraft(data);setDirty(false);setStep(2);setLiveComparison(null);setMessage('Latest inventory reviewed. Recheck counts and reconfirm pricing.');})}>Reviewed · return to count</button></section></div>}
+    </main>
+  </div>;
+}

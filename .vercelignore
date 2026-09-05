@@ -1,0 +1,10 @@
+.git
+node_modules
+.env*
+tests
+docs
+migrations
+scripts
+deploy
+bronze_catalog_assets
+exports
