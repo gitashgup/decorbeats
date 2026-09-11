@@ -24,7 +24,7 @@ export async function preparePhoto(file) {
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, size, size);
-  const scale = Math.min(size * 0.94 / img.naturalWidth, size * 0.94 / img.naturalHeight);
+  const scale = Math.min(size / img.naturalWidth, size / img.naturalHeight);
   const w = img.naturalWidth * scale, h = img.naturalHeight * scale;
   ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
   const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.88));

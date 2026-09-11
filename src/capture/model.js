@@ -1,8 +1,8 @@
 export const SHOTS = [
-  { id: 'hero', name: 'Main photo', tip: 'Turn the product slightly. Show the whole piece with space on every side.' },
-  { id: 'front', name: 'Straight front', tip: 'Camera level with the product. Keep the edges straight and the background clear.' },
-  { id: 'back', name: 'Side or back', tip: 'Show the shape and the side a customer cannot see in the main photo.' },
-  { id: 'detail', name: 'Craft detail', tip: 'Move closer to the carving, finish or working parts. Tap the product to focus.' },
+  { id: 'hero', name: 'Main photo', hindi: 'पूरा सामान', icon: '📸', direction: 'पूरा सामान सामने रखें। सेट है तो सभी टुकड़े साथ रखें।', tip: 'Show the whole product or complete set together.' },
+  { id: 'front', name: 'Straight front', hindi: 'सामने से फोटो', icon: '⬆️', direction: 'कैमरा सामान की ऊँचाई पर रखें। सीधे सामने से फोटो लें।', tip: 'Camera level with the product. Photograph straight from the front.' },
+  { id: 'back', name: 'Side or back', hindi: 'साइड से फोटो', icon: '↪️', direction: 'सामान को थोड़ा घुमाएँ। अब साइड से फोटो लें।', tip: 'Turn the product and photograph its side.' },
+  { id: 'detail', name: 'Craft detail', hindi: 'नक्काशी पास से', icon: '🔍', direction: 'नक्काशी के पास कैमरा लाएँ। साफ दिखे तब फोटो लें।', tip: 'Move closer to show the carving or finish clearly.' },
   { id: 'contents', name: 'Everything included', tip: 'For a set, show all pieces together. Optional for a single piece.' },
 ];
 export const STEPS = ['Match product', 'Photos & video', 'Count & measure', 'Price & review'];
@@ -30,8 +30,10 @@ export function readiness(draft) {
   const d = draft.data;
   const issues = [];
   if (!d.name.trim()) issues.push('Enter the product name');
+  if (d.reviewStatus === 'submitted' && !d.marketing?.description) issues.push('Generate and review the smart website listing');
   if (!d.unit.trim()) issues.push('Describe what one sellable unit contains');
   if (!d.category || !d.material) issues.push('Confirm category and material');
+  if (!draft.product_id && d.destination !== 'new') issues.push('Choose create new product or match an existing product');
   if (!SHOTS.slice(0, 4).every(s => d.photos?.[s.id]?.url)) issues.push('Add the four required photographs');
   const locations = d.locations || [];
   if (!locations.length || locations.some(l => !l.name.trim() || l.sellable === '' || !Number.isInteger(Number(l.sellable)) || Number(l.sellable) < 0 || !Number.isInteger(Number(l.damaged)) || Number(l.damaged) < 0)) issues.push('Complete each location and its whole-number count');

@@ -7,12 +7,13 @@ const cameraError = error => ({
   OverconstrainedError: 'That camera is no longer available. Refresh the camera list and choose another.',
 }[error.name] || 'Could not start the camera. Check its connection and browser permissions, then retry.');
 
-export default function CameraCapture({ productName, shotName, onUse, onClose, autoSave=false }) {
+export default function CameraCapture({ productName, shotName, guidance='पूरा सामान चौकोर फ्रेम में रखें।', icon='📸', onUse, onClose, autoSave=false }) {
   const dialog = useRef(null), video = useRef(null), stream = useRef(null), generation = useRef(0), previewUrl = useRef(null);
   const [devices,setDevices] = useState([]), [device,setDevice] = useState('');
   const [state,setState] = useState('opening'), [error,setError] = useState('');
   const [size,setSize] = useState(null), [photo,setPhoto] = useState(null), [saving,setSaving] = useState(false);
   const [notice,setNotice] = useState('');
+  const [zoom,setZoom] = useState(1);
   const alive=useRef(true);
   function stop() { stream.current?.getTracks().forEach(track=>track.stop()); stream.current=null; }
   async function list() {
@@ -29,7 +30,7 @@ export default function CameraCapture({ productName, shotName, onUse, onClose, a
     try {
       const media=await navigator.mediaDevices.getUserMedia({audio:false,video:{
         ...(id?{deviceId:{exact:id}}:{facingMode:{ideal:'environment'}}),
-        width:{ideal:3840},height:{ideal:2160}
+        width:{ideal:2160},height:{ideal:2160},aspectRatio:{ideal:1}
       }});
       if (ticket!==generation.current) {media.getTracks().forEach(track=>track.stop());return;}
       stream.current=media;
@@ -64,8 +65,11 @@ export default function CameraCapture({ productName, shotName, onUse, onClose, a
     if(!source?.videoWidth||!source.videoHeight||source.readyState<2)return;
     setError('');
     const canvas=document.createElement('canvas');
-    canvas.width=source.videoWidth;canvas.height=source.videoHeight;
-    canvas.getContext('2d').drawImage(source,0,0);
+    // The video is displayed in a square with this same centred zoom.
+    const crop=Math.floor(Math.min(source.videoWidth,source.videoHeight)/zoom);
+    const sx=(source.videoWidth-crop)/2, sy=(source.videoHeight-crop)/2;
+    canvas.width=crop;canvas.height=crop;
+    canvas.getContext('2d').drawImage(source,sx,sy,crop,crop,0,0,crop,crop);
     setState('capturing');
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.96));
     if(ticket!==generation.current)return;
@@ -76,34 +80,34 @@ export default function CameraCapture({ productName, shotName, onUse, onClose, a
     const file=new File([blob],`camera-${Date.now()}.jpg`,{type:'image/jpeg'});
     setPhoto({file,url:previewUrl.current});
     ++generation.current;stop();setState('review');
-    if(autoSave)await usePhoto(file);
   }
   async function usePhoto(file=photo.file) {
     setSaving(true);setError('');
     try {
       const saved=await onUse(file);if(!saved)throw new Error('Photo was not saved. Check the connection and retry.');
       if(!alive.current)return;
-      if(autoSave){setNotice('Uploaded ✓ · saved to this draft');setPhoto(null);await start(device);}else onClose();
+      if(autoSave){setNotice('फोटो सेव हो गई ✓');setPhoto(null);await start(device);}else onClose();
     }
     catch(e){setError(e.message);}finally{setSaving(false);}
   }
   return <dialog ref={dialog} className="cs-camera-dialog" onCancel={e=>{e.preventDefault();if(!saving)onClose();}}>
-    <div className="cs-camera-heading"><div><h2>Take photo</h2><p>{productName || 'New product'} · {shotName}</p></div><button type="button" disabled={saving} onClick={onClose}>Close camera</button></div>
-    <label className="cs-field"><span>Camera available to this browser</span><select value={device} disabled={saving||state==='opening'||!!photo} onChange={e=>{setDevice(e.target.value);start(e.target.value);}}>
+    <div className="cs-camera-heading"><div><span>{productName || 'Decorbeats'}</span><h2>{icon} {photo?'फोटो ठीक है?':shotName}</h2></div><button type="button" aria-label="Close camera" disabled={saving} onClick={onClose}>×</button></div>
+    <label className="cs-field cs-camera-picker"><span>Camera</span><select value={device} disabled={saving||state==='opening'||!!photo} onChange={e=>{setDevice(e.target.value);start(e.target.value);}}>
       {!devices.some(item=>item.deviceId===device)&&<option value={device}>Default camera</option>}
       {devices.map((item,index)=><option key={item.deviceId||index} value={item.deviceId}>{item.label||`Camera ${index+1} (permission needed for name)`}</option>)}
     </select></label>
-    <p className="cs-camera-help">{autoSave?'Frame the product on this phone. Each shutter tap uploads to the linked draft automatically.':'Choose your iPhone if it appears here. USB alone does not expose it: enable Continuity Camera on your iPhone and make it available to this Mac. Close other camera apps if it is busy.'}</p>
+    <p className="cs-camera-help">{photo?'सामान पूरा और साफ दिख रहा है?':guidance}</p>
     {notice&&<p role="status">{notice}</p>}
     {error&&<p role="alert" className="cs-warning">{error}</p>}
-    <div className="cs-camera-feed">
-      <video ref={video} muted playsInline autoPlay hidden={!!photo} onResize={e=>setSize({width:e.currentTarget.videoWidth,height:e.currentTarget.videoHeight})}/>
+    <div className={`cs-camera-feed ${photo?'is-review':'is-live'}`}>
+      <video ref={video} style={{transform:`scale(${zoom})`}} muted playsInline autoPlay hidden={!!photo} onResize={e=>setSize({width:e.currentTarget.videoWidth,height:e.currentTarget.videoHeight})}/>
       {photo&&<img src={photo.url} alt="Captured photo awaiting approval"/>}
-      {!photo&&state!=='live'&&<p role="status">{state==='opening'?'Waiting for camera permission or connection…':'Camera stopped. No live preview.'}</p>}
+      {!photo&&state==='live'&&<div className="cs-square-guide" aria-hidden="true"><span>सामान इस बॉक्स जितना बड़ा दिखे</span></div>}
+      {!photo&&state!=='live'&&<p role="status">{state==='opening'?'कैमरा खोलने के लिए Allow दबाएँ…':'कैमरा बंद है। दोबारा खोलें।'}</p>}
     </div>
-    <p>{size?.width?`${size.width} × ${size.height} pixels · `:''}Captured from the browser video stream, not a native full-resolution iPhone still. Rotate the phone before capturing; check the preview.</p>
+    {!photo&&<div className="cs-camera-zoom"><span>छोटा दिख रहा है?</span>{[1,1.5,2].map(z=><button type="button" key={z} aria-pressed={zoom===z} onClick={()=>setZoom(z)}>{z}×</button>)}</div>}
+    <p className="cs-camera-detail">यही चौकोर फोटो सेव होगी।</p>
     {size?.width&&Math.min(size.width,size.height)<1000?<p className="cs-warning">Low-resolution stream. For finer product detail, use a higher-resolution camera or import an original photo.</p>:null}
-    <div className="cs-camera-actions">{photo?<><button type="button" disabled={saving} onClick={()=>{setPhoto(null);start(device);}}>Retake</button><button type="button" className="cs-primary" disabled={saving} onClick={()=>usePhoto()}>{saving?'Uploading to this draft…':autoSave?'Retry upload':'Use photo · save to draft'}</button></>:<><button type="button" onClick={()=>start(device)} disabled={state==='opening'||saving}>Retry / refresh cameras</button><button type="button" className="cs-primary" disabled={saving||state!=='live'||!size?.width} onClick={shutter}>{autoSave?'Take photo & save':'Capture photo'}</button></>}</div>
-    <p>{autoSave?'Camera only—no microphone. Photos upload on capture; keep this page open until Uploaded appears.':'Camera only—no microphone. Nothing uploads until you choose Use photo.'}</p>
+    <div className="cs-camera-actions">{photo?<><button type="button" disabled={saving} onClick={()=>{setPhoto(null);start(device);}}>↻ दोबारा लें</button><button type="button" className="cs-primary" disabled={saving} onClick={()=>usePhoto()}>{saving?'सेव हो रहा है…':'✓ ठीक है · आगे'}</button></>:<><button className="cs-camera-retry" type="button" onClick={()=>start(device)} disabled={state==='opening'||saving}>कैमरा फिर खोलें</button><button type="button" className="cs-shutter" aria-label="फोटो लें" disabled={saving||state!=='live'||!size?.width} onClick={shutter}><span/></button></>}</div>
   </dialog>;
 }
