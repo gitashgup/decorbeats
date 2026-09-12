@@ -3,10 +3,11 @@ import { createRoot } from "react-dom/client";
 import { Analytics } from "@vercel/analytics/react";
 import App from "./App";
 import "./styles.css";
+import { useCaptureAdmin } from './adminRoute';
 
 const CaptureApp = lazy(() => import("./capture/CaptureApp"));
 document.documentElement.classList.add("js");
-const isCaptureRoute = window.location.pathname === "/admin/capture";
+const isCaptureRoute = useCaptureAdmin(window.location.pathname, window.location.search);
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>

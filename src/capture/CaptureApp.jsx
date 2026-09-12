@@ -24,7 +24,7 @@ export default function CaptureApp() {
   const [session,setSession] = useState(null), [authReady,setAuthReady] = useState(false);
   const [allowed,setAllowed] = useState(false), [email,setEmail] = useState(''), [password,setPassword] = useState('');
   const [products,setProducts] = useState([]), [drafts,setDrafts] = useState([]), [draft,setDraft] = useState(null);
-  const [search,setSearch] = useState(''), [queue,setQueue] = useState(()=>['pricing','review','drafts','published'].includes(new URLSearchParams(window.location.search).get('view'))?new URLSearchParams(window.location.search).get('view'):'capture'), [location,setLocation] = useState('');
+  const [search,setSearch] = useState(''), [queue,setQueue] = useState(()=>['pricing','review','drafts','published'].includes(new URLSearchParams(window.location.search).get('view'))?new URLSearchParams(window.location.search).get('view'):window.location.pathname.replace(/\/+$/, '')==='/admin'?'review':'capture'), [location,setLocation] = useState('');
   const [busy,setBusy] = useState(false), [message,setMessage] = useState(''), [error,setError] = useState('');
   const [dirty,setDirty] = useState(false), [step,setStep] = useState(0), [shot,setShot] = useState('hero');
   const [pair,setPair] = useState(false), [guide,setGuide] = useState(false), [confirm,setConfirm] = useState(false);
@@ -224,7 +224,7 @@ export default function CaptureApp() {
 
   return <div className={`cs ${phoneMode?'cs-phone-mode':''} ${draft&&step===3&&!phoneMode?'cs-review-mode':''}`}>
     <header className="cs-header"><a href="/admin" className="cs-brand"><img src="/assets/brand/decorbeats-logo.svg" alt=""/><span>DECORBEATS<small>Capture studio</small></span></a>
-      <div className="cs-header-actions"><button onClick={()=>setGuide(!guide)}>Setup guide</button>{allowed&&!phoneMode&&<button disabled={busy} onClick={()=>run(async()=>{if(draft&&(dirty||!draft.revision))await persist();setCameraOpen(false);setPair(!pair);})}>Connect iPhone ↗</button>}{!!draft?.revision&&!published&&!phoneMode&&<button disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();if(error)throw error;open(data);setMessage('Latest saved version loaded');})}>Refresh from phone</button>}<a href="/admin">Inventory ↗</a></div>
+      <div className="cs-header-actions"><button onClick={()=>setGuide(!guide)}>Setup guide</button>{allowed&&!phoneMode&&<button disabled={busy} onClick={()=>run(async()=>{if(draft&&(dirty||!draft.revision))await persist();setCameraOpen(false);setPair(!pair);})}>Connect iPhone ↗</button>}{!!draft?.revision&&!published&&!phoneMode&&<button disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();if(error)throw error;open(data);setMessage('Latest saved version loaded');})}>Refresh from phone</button>}<a href="/admin/capture">Inventory ↗</a>{!phoneMode&&<><a href="/admin">Review</a><a href="/admin?view=pricing">Megha · Prices</a><a href="/admin?legacy=1">Sales & older tools</a></>}</div>
     </header>
     <main className="cs-main">
       {error&&<div role="alert" className="cs-alert">{error}<button onClick={()=>setError('')} aria-label="Dismiss error">×</button></div>}
