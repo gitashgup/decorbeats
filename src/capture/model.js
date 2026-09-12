@@ -30,7 +30,7 @@ export function readiness(draft) {
   const d = draft.data;
   const issues = [];
   if (!d.name.trim()) issues.push('Enter the product name');
-  if (d.reviewStatus === 'submitted' && !d.marketing?.description) issues.push('Generate and review the smart website listing');
+  if (d.reviewStatus === 'submitted' && !d.notes?.trim()) issues.push('Add and review the product description');
   if (!d.unit.trim()) issues.push('Describe what one sellable unit contains');
   if (!d.category || !d.material) issues.push('Confirm category and material');
   if (!draft.product_id && d.destination !== 'new') issues.push('Choose create new product or match an existing product');
