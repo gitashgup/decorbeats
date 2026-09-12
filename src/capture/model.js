@@ -1,8 +1,8 @@
 export const SHOTS = [
-  { id: 'hero', name: 'Main photo', hindi: 'पूरा सामान', icon: '📸', direction: 'पूरा सामान सामने रखें। सेट है तो सभी टुकड़े साथ रखें।', tip: 'Show the whole product or complete set together.' },
-  { id: 'front', name: 'Straight front', hindi: 'सामने से फोटो', icon: '⬆️', direction: 'कैमरा सामान की ऊँचाई पर रखें। सीधे सामने से फोटो लें।', tip: 'Camera level with the product. Photograph straight from the front.' },
-  { id: 'back', name: 'Side or back', hindi: 'साइड से फोटो', icon: '↪️', direction: 'सामान को थोड़ा घुमाएँ। अब साइड से फोटो लें।', tip: 'Turn the product and photograph its side.' },
-  { id: 'detail', name: 'Craft detail', hindi: 'नक्काशी पास से', icon: '🔍', direction: 'नक्काशी के पास कैमरा लाएँ। साफ दिखे तब फोटो लें।', tip: 'Move closer to show the carving or finish clearly.' },
+  { id: 'hero', name: 'Main photo', hindi: 'पूरा सामान', icon: '📸', direction: 'पूरा सेट एक ही फ्रेम में। एकदम ऊपर या नीचे से नहीं।', angleHint: 'फोन आँख की ऊँचाई पर रखें।', lightHint: 'मुलायम सामने की रोशनी रखें।', tip: 'Show the whole product or complete set together.' },
+  { id: 'front', name: 'Straight front', hindi: 'सामने से फोटो', icon: '⬆️', direction: 'सामने से सीधा। कैमरा ऊपर-नीचे मत हिलाएँ।', angleHint: 'फोन को सीधा रखें, ऊपर-नीचे झुकाव न दें।', lightHint: 'पीछे से तेज़ लाइट मत आने दें।', tip: 'Camera level with the product. Photograph straight from the front.' },
+  { id: 'back', name: 'Side or back', hindi: 'साइड से फोटो', icon: '↪️', direction: 'अब साइड एंगल लो। प्रोडक्ट को थोड़ा घुमाओ।', angleHint: 'एक-एक साइड साफ दिखे ऐसा घुमाओ।', lightHint: 'समान रोशनी रखें ताकि दूसरी तरफ दिखे।', tip: 'Turn the product and photograph its side.' },
+  { id: 'detail', name: 'Craft detail', hindi: 'नक्काशी पास से', icon: '🔍', direction: 'नक्काशी या टेक्सचर के पास जाएँ।', angleHint: 'पास आएँ, लेकिन पूरा सामान फ्रेम में रहे।', lightHint: 'यह शॉट तेज़ रोशनी में साफ़ आता है — लाइट सीधी रखें।', tip: 'Move closer to show the carving or finish clearly.' },
   { id: 'contents', name: 'Everything included', tip: 'For a set, show all pieces together. Optional for a single piece.' },
 ];
 export const STEPS = ['Match product', 'Photos & video', 'Count & measure', 'Price & review'];
