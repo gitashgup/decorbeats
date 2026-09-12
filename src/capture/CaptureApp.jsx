@@ -222,7 +222,7 @@ export default function CaptureApp() {
     setDraft(data);setDirty(false);setConfirm(false);setMessage('Published. Photos, details and reconciled stock are saved.');await refresh(false);
   });}
 
-  return <div className={`cs ${phoneMode?'cs-phone-mode':''}`}>
+  return <div className={`cs ${phoneMode?'cs-phone-mode':''} ${draft&&step===3&&!phoneMode?'cs-review-mode':''}`}>
     <header className="cs-header"><a href="/admin" className="cs-brand"><img src="/assets/brand/decorbeats-logo.svg" alt=""/><span>DECORBEATS<small>Capture studio</small></span></a>
       <div className="cs-header-actions"><button onClick={()=>setGuide(!guide)}>Setup guide</button>{allowed&&!phoneMode&&<button disabled={busy} onClick={()=>run(async()=>{if(draft&&(dirty||!draft.revision))await persist();setCameraOpen(false);setPair(!pair);})}>Connect iPhone ↗</button>}{!!draft?.revision&&!published&&!phoneMode&&<button disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();if(error)throw error;open(data);setMessage('Latest saved version loaded');})}>Refresh from phone</button>}<a href="/admin">Inventory ↗</a></div>
     </header>
