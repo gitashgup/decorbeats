@@ -4,6 +4,7 @@ import { SHOTS, STEPS, captureStepOrder, nextCaptureStep, countTotal, newDraft, 
 import { uploadPhoto, uploadVideo } from './media';
 import './capture.css';
 import ReviewGallery from './ReviewGallery';
+import ReviewTable from './ReviewTable';
 import CameraCapture from './CameraCapture';
 import PhoneCapture from './PhoneCapture';
 import { mergeCaptureDraft, sameValue, updateSharedDraft } from './sharedDraft';
@@ -22,7 +23,7 @@ export default function CaptureApp() {
   const [session,setSession] = useState(null), [authReady,setAuthReady] = useState(false);
   const [allowed,setAllowed] = useState(false), [email,setEmail] = useState(''), [password,setPassword] = useState('');
   const [products,setProducts] = useState([]), [drafts,setDrafts] = useState([]), [draft,setDraft] = useState(null);
-  const [search,setSearch] = useState(''), [queue,setQueue] = useState('capture'), [location,setLocation] = useState('');
+  const [search,setSearch] = useState(''), [queue,setQueue] = useState(()=>['pricing','review','drafts','published'].includes(new URLSearchParams(window.location.search).get('view'))?new URLSearchParams(window.location.search).get('view'):'capture'), [location,setLocation] = useState('');
   const [busy,setBusy] = useState(false), [message,setMessage] = useState(''), [error,setError] = useState('');
   const [dirty,setDirty] = useState(false), [step,setStep] = useState(0), [shot,setShot] = useState('hero');
   const [pair,setPair] = useState(false), [guide,setGuide] = useState(false), [confirm,setConfirm] = useState(false);
@@ -133,6 +134,13 @@ export default function CaptureApp() {
     history.replaceState(null,'',`/admin/capture?draft=${data.id}${phoneMode?'&phone=1':''}`);setMessage('Saved to Decorbeats');return data;
   }
   async function save(next=false){await run(async()=>{await persist();if(next)exit();});}
+  async function deleteWork(item){
+    if(!window.confirm(`Delete capture work for ${item.data.name||'this product'}? Website stock and listing will stay unchanged. This cannot be undone.`))return;
+    await run(async()=>{
+      if(item.revision){const {error}=await supabase.rpc('delete_capture_draft_v1',{p_id:item.id,p_revision:item.revision});if(error)throw error;}
+      setDrafts(old=>old.filter(x=>x.id!==item.id));if(draft?.id===item.id)exit();setMessage('Capture work deleted. Website inventory unchanged.');
+    });
+  }
   function exit(){setDraft(null);setDirty(false);setStep(0);setConfirm(false);history.replaceState(null,'','/admin/capture');}
   async function capture(file,video=false){
     if(!file)return;
@@ -206,7 +214,6 @@ export default function CaptureApp() {
   const d=draft?.data, issues=draft?readiness(draft):[];
   const published=draft?.status==='published';
   const selectedShot=SHOTS.find(s=>s.id===shot);
-  const pairUrl=`${window.location.origin}/admin/capture${draft?.revision?`?draft=${draft.id}&phone=1`:''}`;
   async function publish(){await run(async()=>{
     const current=dirty?await persist():draft;
     const {data,error}=await supabase.rpc('publish_capture_draft_v1',{p_id:current.id,p_revision:current.revision});
@@ -231,8 +238,8 @@ export default function CaptureApp() {
           <button className="cs-primary" disabled={busy||!supabase}>{busy?'Signing in…':'Open capture studio →'}</button>
         </form>}
       </section>:phoneMode&&draft?<PhoneCapture key={draft.id} initial={draft}/>:phoneMode?<PhoneStart products={products} drafts={drafts} search={search} setSearch={setSearch} busy={busy} onStart={startOnPhone}/>:!draft?<>
-        <div className="cs-heading"><div><p className="cs-eyebrow">Capture dashboard</p><h1>Inventory photography</h1><p>See what is done, finish saved work, or begin the next product.</p></div><button className="cs-primary" onClick={()=>start(null)}>+ Start new product</button></div>
-        <section className="cs-dashboard" aria-label="Capture progress">
+        <div className="cs-heading"><div><h1>{queue==='capture'?'Inventory photography':queue==='pricing'?'Megha · Prices':'Capture review'}</h1>{queue==='pricing'&&<p>Enter cost and selling price. Save each row.</p>}</div><button className="cs-primary" onClick={()=>start(null)}>+ New product</button></div>
+        {queue==='capture'&&<><section className="cs-dashboard" aria-label="Capture progress">
           <button type="button" onClick={()=>setQueue('capture')}><span>Inventory</span><strong>{products.length}</strong><small>active products</small></button>
           <button type="button" onClick={()=>setQueue('drafts')}><span>In progress</span><strong>{workingDrafts.length}</strong><small>Pranav is working</small></button>
           <button type="button" className="cs-review-tile" onClick={()=>setQueue('review')}><span>Ready to review</span><strong>{readyForReview.length}</strong><small>check and publish</small></button>
@@ -251,9 +258,10 @@ export default function CaptureApp() {
           <div className="cs-section-heading"><h2>Recent work</h2><span>Newest first</span></div>
           <ol>{drafts.slice(0,5).map(x=>{const place=x.data.locations?.find(l=>l.name)?.name;return <li key={x.id}><span><strong>{x.data.name||'Unnamed new product'}</strong><small>{place||'Section not recorded'}</small></span><span>{Object.keys(x.data.photos||{}).length} photos · {countTotal(x.data)} units</span><time dateTime={x.updated_at}>{new Date(x.updated_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'})}</time></li>})}</ol>
         </section>
-        <section className="cs-toolbar"><Field label="Working location / section" value={location} onChange={setLocation} placeholder="e.g. Section 1 · Rack A"/><Field label="Find an existing product" value={search} onChange={setSearch} placeholder="Search name, SKU or category"/><button disabled={busy} onClick={()=>run(()=>refresh(false))}>↻ Refresh</button></section>
+        </>}
+        <section className="cs-toolbar">{queue==='capture'&&<Field label="Working location / section" value={location} onChange={setLocation} placeholder="e.g. Section 1 · Rack A"/>}<Field label="Find product" value={search} onChange={setSearch} placeholder="Name or SKU"/><button disabled={busy} onClick={()=>run(()=>refresh(false))}>↻ Refresh</button></section>
         <div className="cs-tabs" role="tablist" aria-label="Capture queues">{[['capture',`Inventory · ${products.length}`],['drafts',`In progress · ${workingDrafts.length}`],['review',`Review · ${readyForReview.length}`],['pricing',`For Megha · ${awaitingPricing.length}`],['published',`Completed · ${completed.length}`]].map(([key,title])=><button key={key} role="tab" aria-selected={queue===key} className={queue===key?'active':''} onClick={()=>setQueue(key)}>{title}</button>)}</div>
-        {queue==='capture'?<div className="cs-product-grid">{visibleProducts.map(p=>{const saved=pending.find(x=>x.product_id===p.id);return <button className="cs-product" key={p.id} onClick={()=>start(p)}><img src={p.image_url||'/assets/images/product-fallback.svg'} alt="" loading="lazy"/><div><small>{p.sku}</small><h3>{p.name}</h3><p>{p.material} · {p.quantity} in system</p><span>{saved?'Continue draft →':'Match & capture →'}</span></div></button>;})}{!visibleProducts.length&&<p>No matching products. Use “New product” if this is a new size, finish or set.</p>}</div>:<div className="cs-draft-list">{drafts.filter(x=>queue==='published'?x.status==='published':queue==='review'?x.status==='draft'&&x.data.reviewStatus==='submitted':queue==='drafts'?x.status==='draft'&&x.data.reviewStatus!=='submitted':x.status==='draft'&&!x.data.pricingApproved).filter(x=>String(x.data.name||'').toLowerCase().includes(search.toLowerCase())).map(x=><button key={x.id} className="cs-draft-row" onClick={()=>{open(x);if(queue==='pricing'||queue==='review')setStep(3);}}><img src={x.data.photos?.hero?.url||x.baseline?.image_url||'/assets/images/product-fallback.svg'} alt=""/><div><h3>{x.data.name||'New product'}</h3><p>{Object.keys(x.data.photos||{}).length} photos · {x.data.video?'360° saved':'No video'} · {countTotal(x.data)} counted</p><small>{x.data.reviewStatus==='submitted'?'Submitted for your review':'Saved'} {new Date(x.updated_at).toLocaleString('en-IN')}</small></div><span>{x.status==='published'?'View record':queue==='review'?'Review →':'Continue →'}</span></button>)}{!(queue==='review'?readyForReview.length:queue==='drafts'?workingDrafts.length:drafts.some(x=>queue==='published'?x.status==='published':x.status==='draft'))&&<p className="cs-empty">{queue==='review'?'Nothing is waiting for review.':'Your saved products will appear here.'}</p>}</div>}
+        {queue==='capture'?<div className="cs-product-grid">{visibleProducts.map(p=>{const saved=pending.find(x=>x.product_id===p.id);return <button className="cs-product" key={p.id} onClick={()=>start(p)}><img src={p.image_url||'/assets/images/product-fallback.svg'} alt="" loading="lazy"/><div><small>{p.sku}</small><h3>{p.name}</h3><p>{p.material} · {p.quantity} in system</p><span>{saved?'Continue draft →':'Match & capture →'}</span></div></button>;})}{!visibleProducts.length&&<p>No matching products. Use “New product” if this is a new size, finish or set.</p>}</div>:<ReviewTable rows={drafts.filter(x=>queue==='published'?x.status==='published':queue==='review'?x.status==='draft'&&x.data.reviewStatus==='submitted':queue==='drafts'?x.status==='draft'&&x.data.reviewStatus!=='submitted':x.status==='draft').filter(x=>[x.data.name,x.data.sku].some(v=>String(v||'').toLowerCase().includes(search.toLowerCase())))} busy={busy} onSaved={saved=>setDrafts(old=>old.map(x=>x.id===saved.id?saved:x))} onOpen={x=>{open(x);if(queue==='pricing'||queue==='review')setStep(3);}} onDelete={deleteWork}/> }
       </>:<>
         <div className="cs-heading"><div><button className="cs-back" disabled={busy} onClick={()=>dirty?save(true):exit()}>← {dirty?'Save & return to products':'Products'}</button><h1>{d.name||'New product'}</h1><p>{d.sku||'A permanent SKU is assigned when published'} <span className="cs-pill">{published?'Published':dirty?'Unsaved changes':'Saved draft'}</span></p></div><div className="cs-current">System stock<strong>{draft.baseline?.quantity??'New'}</strong></div></div>
         <nav className="cs-stepper" aria-label="Capture steps">{captureStepOrder(draft).map((id,index)=><button key={id} className={step===id?'active':''} aria-current={step===id?'step':undefined} disabled={busy} onClick={()=>setStep(id)}><span>{index+1}</span>{!draft.product_id&&id===0?'Name & details':STEPS[id]}</button>)}</nav>
