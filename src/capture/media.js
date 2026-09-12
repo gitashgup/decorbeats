@@ -2,11 +2,6 @@ import { supabase } from '../lib/supabase';
 
 async function decode(file) {
   let blob = file;
-  if (/hei[cf]$/i.test(file.name) || /hei[cf]/i.test(file.type)) {
-    const { default: convert } = await import('heic2any');
-    blob = await convert({ blob: file, toType: 'image/jpeg', quality: 0.95 });
-    if (Array.isArray(blob)) blob = blob[0];
-  }
   const url = URL.createObjectURL(blob);
   try {
     const img = new Image();
@@ -18,7 +13,7 @@ async function decode(file) {
 
 export async function preparePhoto(file) {
   if (file.size > 35 * 1024 * 1024) throw new Error('Choose a photo smaller than 35 MB.');
-  const img = await decode(file).catch(() => { throw new Error('This photo could not be opened. Choose JPEG/HEIC, or set iPhone Camera → Formats → Most Compatible and retake.'); });
+  const img = await decode(file).catch(() => { throw new Error('This photo could not be opened. Use JPEG/PNG/WebP and retake if needed.'); });
   const size = 1600;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
