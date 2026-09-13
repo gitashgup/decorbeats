@@ -6,6 +6,7 @@ import './capture.css';
 import ReviewGallery from './ReviewGallery';
 import ReviewTable from './ReviewTable';
 import InventoryTable from './InventoryTable';
+import StockIntake from './StockIntake';
 import ProductReview from './ProductReview';
 import CameraCapture from './CameraCapture';
 import PhoneCapture from './PhoneCapture';
@@ -34,6 +35,7 @@ export default function CaptureApp() {
   const [cameraOpen,setCameraOpen] = useState(false);
   const [syncStatus,setSyncStatus] = useState('');
   const phoneMode = new URLSearchParams(window.location.search).get('phone')==='1';
+  const [movement,setMovement]=useState(new URLSearchParams(window.location.search).get('view')==='movements');
   const savedBase=useRef(null), currentDraft=useRef(null);
   currentDraft.current=draft;
   const fileRef=useRef(null), cameraRef=useRef(null), videoRef=useRef(null), cleanedRef=useRef(null), mounted=useRef(true), inFlight=useRef(false);
@@ -110,6 +112,15 @@ export default function CaptureApp() {
     const existing=drafts.find(d=>d.status==='draft'&&d.product_id===product?.id&&product);
     if(existing){open(existing);return;}
     const fresh=newDraft(product,location);savedBase.current=fresh;setDraft(fresh);setStep(1);setShot('hero');setDirty(true);setMessage('');history.replaceState(null,'','/admin/capture');
+  }
+  async function linkProduct(product){
+    await run(async()=>{
+      if(!window.confirm(`Link these photos to ${product.name} (${product.sku})? Existing prices will be kept. Stock will not change.`))return;
+      const saved=await persist();
+      const {data,error}=await supabase.rpc('link_capture_product_v1',{p_id:saved.id,p_revision:saved.revision,p_product_id:product.id});
+      if(error)throw error;
+      open(data);setStep(3);setMessage('Linked. Photos retained; stock unchanged.');await refresh(false);
+    });
   }
   async function startOnPhone(product){
     const existing=drafts.find(d=>d.status==='draft'&&d.product_id===product?.id&&product);
@@ -241,6 +252,8 @@ export default function CaptureApp() {
         </form>}
       </section>:phoneMode&&draft?<PhoneCapture key={draft.id} initial={draft}/>:phoneMode?<PhoneStart products={products} drafts={drafts} search={search} setSearch={setSearch} busy={busy} onStart={startOnPhone}/>:!draft?<>
         <div className="cs-heading"><div><h1>{queue==='capture'?'Inventory photography':queue==='pricing'?'Megha · Prices':'Capture review'}</h1>{queue==='pricing'&&<p>Enter cost and selling price. Save each row.</p>}</div><button className="cs-primary" onClick={()=>start(null)}>+ New product</button></div>
+        <div className="cs-row-actions"><button onClick={()=>setMovement(!movement)}>{movement?'Back to inventory':'Stock arrived / sold / count'}</button></div>
+        {movement?<StockIntake/>:<>
         {queue==='capture'&&<><p>Enter prices and Save each row. This updates website prices; stock and photos stay unchanged.</p><details><summary>Capture progress & recent work</summary><section className="cs-dashboard" aria-label="Capture progress">
           <button type="button" onClick={()=>setQueue('capture')}><span>Inventory</span><strong>{products.length}</strong><small>active products</small></button>
           <button type="button" onClick={()=>setQueue('drafts')}><span>In progress</span><strong>{workingDrafts.length}</strong><small>Pranav is working</small></button>
@@ -264,6 +277,7 @@ export default function CaptureApp() {
         <section className="cs-toolbar">{queue==='capture'&&<Field label="Working location / section" value={location} onChange={setLocation} placeholder="e.g. Section 1 · Rack A"/>}<Field label="Find product" value={search} onChange={setSearch} placeholder="Name or SKU"/><button disabled={busy} onClick={()=>run(()=>refresh(false))}>↻ Refresh</button></section>
         <div className="cs-tabs" role="tablist" aria-label="Capture queues">{[['capture',`Inventory · ${products.length}`],['drafts',`In progress · ${workingDrafts.length}`],['review',`Review · ${readyForReview.length}`],['pricing',`For Megha · ${awaitingPricing.length}`],['published',`Completed · ${completed.length}`]].map(([key,title])=><button key={key} role="tab" aria-selected={queue===key} className={queue===key?'active':''} onClick={()=>setQueue(key)}>{title}</button>)}</div>
         {queue==='capture'?<InventoryTable products={visibleProducts} pending={pending} busy={busy} onOpen={start} onSaved={saved=>setProducts(old=>old.map(p=>p.id===saved.id?saved:p))}/>:<ReviewTable rows={drafts.filter(x=>queue==='published'?x.status==='published':queue==='review'?x.status==='draft'&&x.data.reviewStatus==='submitted':queue==='drafts'?x.status==='draft'&&x.data.reviewStatus!=='submitted':x.status==='draft').filter(x=>[x.data.name,x.data.sku].some(v=>String(v||'').toLowerCase().includes(search.toLowerCase())))} busy={busy} onSaved={saved=>setDrafts(old=>old.map(x=>x.id===saved.id?saved:x))} onOpen={x=>{open(x);if(queue==='pricing'||queue==='review')setStep(3);}} onDelete={deleteWork}/> }
+        </>}
       </>:<>
         <div className="cs-heading"><div><button className="cs-back" disabled={busy} onClick={()=>dirty?save(true):exit()}>← {dirty?'Save & return to products':'Products'}</button><h1>{d.name||'New product'}</h1><p>{d.sku||'A permanent SKU is assigned when published'} <span className="cs-pill">{published?'Published':dirty?'Unsaved changes':'Saved draft'}</span></p></div><div className="cs-current">System stock<strong>{draft.baseline?.quantity??'New'}</strong></div></div>
         <nav className="cs-stepper" aria-label="Capture steps">{captureStepOrder(draft).map((id,index)=><button key={id} className={step===id?'active':''} aria-current={step===id?'step':undefined} disabled={busy} onClick={()=>setStep(id)}><span>{index+1}</span>{!draft.product_id&&id===0?'Name & details':STEPS[id]}</button>)}</nav>
@@ -287,7 +301,7 @@ export default function CaptureApp() {
           {d.locationPhoto?.url&&<div className="cs-location-reference"><img src={d.locationPhoto.url} alt="Storage location reference"/><span>Storage location photo</span></div>}
           <label className="cs-check"><input type="checkbox" checked={d.allLocations} onChange={e=>change('allLocations',e.target.checked)}/>I have counted this product in all its locations.</label><label className="cs-check"><input type="checkbox" checked={d.stockConfirmed} onChange={e=>change('stockConfirmed',e.target.checked)}/>These sellable units are in Decorbeats’ control and ready for us to fulfil.</label>
         </section><section className="cs-panel"><h2>Measure once. Use everywhere.</h2><p>Use centimetres and grams. Measure the complete sellable unit.</p><div className="cs-measure-grid">{[['Product, without packaging',''],['Packed, ready to ship','packed_']].map(([label,prefix])=><div key={prefix}><h3>{label}</h3><div className="cs-fields">{[['length','Length (cm)'],['width','Width (cm)'],['height','Height (cm)'],['weight_g','Weight (g)']].map(([key,title])=><Field key={key} label={title} type="number" min="0.01" step="any" inputMode="decimal" value={d[prefix+key]} onChange={v=>change(prefix+key,v)}/>)}</div></div>)}</div></section></>}
-        {step===3&&<ProductReview draft={draft} change={change} onInspect={setAssetPreview} onPhotos={()=>setStep(1)} onGenerate={generateListing} busy={busy} dirty={dirty} issues={issues} products={visibleProducts} search={search} setSearch={setSearch} onMatch={p=>{setDraft(x=>({...x,product_id:p.id,baseline:snapshot(p),data:{...x.data,name:p.name,category:p.category,material:p.material,destination:'existing'}}));setDirty(true);}} onCompare={()=>run(async()=>{const {data,error}=await supabase.from('products').select('*').eq('id',draft.product_id).single();if(error)throw error;setLiveComparison(data);})}/>}
+        {step===3&&<ProductReview draft={draft} change={change} onInspect={setAssetPreview} onPhotos={()=>setStep(1)} onGenerate={generateListing} busy={busy} dirty={dirty} issues={issues} products={visibleProducts} search={search} setSearch={setSearch} onMatch={linkProduct} onCompare={()=>run(async()=>{const {data,error}=await supabase.from('products').select('*').eq('id',draft.product_id).single();if(error)throw error;setLiveComparison(data);})}/>}
         </fieldset>
         <footer className="cs-footer"><div><span className={`cs-save-dot ${dirty?'pending':''}`}/>{busy?'Saving…':published?'Published to website':dirty?'Changes waiting to save':'Saved to Decorbeats'}{dirty&&!published&&<button disabled={busy} onClick={()=>save(false)}>Save draft</button>}</div><div className="cs-footer-buttons">{published?<button className="cs-primary" onClick={exit}>Next product →</button>:<><button disabled={busy} onClick={()=>save(true)}>Save & next product</button>{step<3?<button className="cs-primary" disabled={busy} onClick={()=>run(async()=>{const next=nextCaptureStep(draft,step);await persist(draft,next);setStep(next);})}>{!draft.product_id&&step===1?'Save & add details →':'Save & continue →'}</button>:<button className="cs-primary" disabled={busy||issues.length>0} onClick={()=>setConfirm(true)}>Review & publish →</button>}</>}</div></footer>
         {confirm&&<div className="cs-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="cs-publish-title" className="cs-modal"><h2 id="cs-publish-title">Publish {d.name}?</h2><p>This sets website stock to <strong>{countTotal(d)} sellable units</strong>, changes the price to <strong>{money(d.mrp)}</strong>, and publishes the reviewed photos and details.</p><button disabled={busy} onClick={()=>setConfirm(false)}>Back to review</button><button disabled={busy} className="cs-primary" onClick={publish}>{busy?'Publishing…':'Confirm inventory & publish'}</button></section></div>}
