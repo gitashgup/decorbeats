@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { SHOTS } from './model';
+import { editedPhotoEntries } from './reviewPhotos';
 
 export default function ReviewGallery({ photos = {}, onInspect }) {
-  const slides = SHOTS.filter(shot => photos[shot.id]?.url);
+  const slides = [...SHOTS.filter(shot => photos[shot.id]?.url), ...editedPhotoEntries(photos).map(([id, photo], i) => ({id, name: photo.filename || `Edited photo ${i + 1}`}))];
   const track = useRef(null);
   const [active, setActive] = useState(0);
   const [showSample, setShowSample] = useState(false);
