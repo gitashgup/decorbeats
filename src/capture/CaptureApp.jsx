@@ -115,7 +115,6 @@ export default function CaptureApp() {
   }
   async function linkProduct(product){
     await run(async()=>{
-      if(!window.confirm(`Link these photos to ${product.name} (${product.sku})? Existing prices will be kept. Stock will not change.`))return;
       const saved=await persist();
       const {data,error}=await supabase.rpc('link_capture_product_v1',{p_id:saved.id,p_revision:saved.revision,p_product_id:product.id});
       if(error)throw error;
