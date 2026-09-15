@@ -63,7 +63,7 @@ export async function uploadVideo(draftId, file, progress) {
       v.src = objectUrl;
     });
   } finally { URL.revokeObjectURL(objectUrl); }
-  if (!Number.isFinite(duration) || duration > 60) throw new Error('Use one complete rotation, up to 60 seconds.');
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 60) throw new Error('Choose a playable product video up to 60 seconds.');
   const id = crypto.randomUUID(), ext = file.name.split('.').pop().toLowerCase();
   const type = file.type || (ext === 'mov' ? 'video/quicktime' : ext === 'webm' ? 'video/webm' : 'video/mp4');
   const original = `${draftId}/turntable-${id}.${ext}`;
