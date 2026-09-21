@@ -170,4 +170,8 @@
   .cs-btn-verify-approve{width:100%}
 }
 
+.cs-gallery-delete-row{margin-top:10px;text-align:center}
+.cs-btn-remove-photo{background:#fff1f0;border:1px solid #ffa39e;color:#cf1322;font-size:13px;font-weight:600;padding:6px 14px;border-radius:6px;cursor:pointer;transition:all .2s ease}
+.cs-btn-remove-photo:hover{background:#ffccc7;border-color:#ff4d4f}
+
 

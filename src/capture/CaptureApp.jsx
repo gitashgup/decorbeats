@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { SHOTS, STEPS, captureStepOrder, nextCaptureStep, countTotal, newDraft, readiness, snapshot } from './model';
 import { uploadPhoto, uploadVideo } from './media';
-import { enhanceStudioPhoto } from './photoEnhancer';
+import { enhanceStudioPhoto, stageRealProductLifestyle } from './photoEnhancer';
 import { editedPhotoEntries, MAX_EDITED_PHOTOS } from './reviewPhotos';
 import { productVideoEntries, MAX_PRODUCT_VIDEOS } from './reviewVideos';
 import './capture.css';
@@ -375,35 +375,47 @@ export default function CaptureApp() {
       const hero=current.data.photos?.hero||Object.values(current.data.photos||{}).find(p=>p?.url);
       if(!hero?.url)throw new Error('Capture a hero photo first to stage lifestyle scene.');
       const label=sceneType==='living_room'?'Living Room':sceneType==='festive_diwali'?'Festive Diwali':'Pooja Mandir';
-      setMessage(`AI is generating a photorealistic ${label} lifestyle scene for this piece…`);
-      const {data:{session:activeSession}}=await supabase.auth.getSession();
-      const response=await fetch('/api/stage-product-image',{
-        method:'POST',
-        headers:{'Content-Type':'application/json',Authorization:`Bearer ${activeSession?.access_token||''}`},
-        body:JSON.stringify({
-          productName:current.data.name||'Handcrafted Indian Brass Handicraft',
-          sceneType
-        })
-      });
-      const payload=await response.json();
-      if(!response.ok)throw new Error(payload.error||'Could not generate lifestyle photo');
-      const bytes=Uint8Array.from(atob(payload.image),c=>c.charCodeAt(0));
-      const file=new File([bytes],`lifestyle-${sceneType}.png`,{type:payload.mime||'image/png'});
-      setMessage('Saving lifestyle photo to Decorbeats storage…');
-      const key=`edited_lifestyle_${crypto.randomUUID()}`;
-      const staged=await uploadPhoto(current.id,key,file,setMessage);
+      setMessage(`Staging real product into ${label} lifestyle scene…`);
+
+      // Use authentic real product composite with natural shadows and room lighting
+      const stagedResult = await stageRealProductLifestyle(hero.url, sceneType);
+      const key=`edited_lifestyle_${sceneType}_${Date.now()}`;
+      const uploaded=await uploadPhoto(current.id, key, stagedResult.file, setMessage);
+
       const next={
         ...current,
         data:{
           ...current.data,
           photos:{
             ...current.data.photos,
-            [key]:{...staged,filename:`${label} Lifestyle`}
+            [key]:{...uploaded, filename:`${label} Lifestyle`}
           }
         }
       };
-      setDraft(next);setDirty(true);await persist(next,3);
-      setMessage(`${label} lifestyle photo added to gallery!`);
+      setDraft(next); setDirty(true); await persist(next, 3);
+      setMessage(`Real product staged into ${label}! Added to gallery.`);
+    });
+  }
+  async function deletePhoto(photoKey){
+    await run(async()=>{
+      const current = dirty ? await persist() : draft;
+      const updatedPhotos = { ...(current.data.photos || {}) };
+      delete updatedPhotos[photoKey];
+      for (const slot of Object.keys(updatedPhotos)) {
+        if (updatedPhotos[slot]?.cleanedPreview?.original === photoKey || updatedPhotos[slot]?.cleanedPreview?.url === current.data.photos?.[photoKey]?.url) {
+          const { cleanedPreview, ...rest } = updatedPhotos[slot];
+          updatedPhotos[slot] = rest;
+        }
+      }
+      const next = {
+        ...current,
+        data: {
+          ...current.data,
+          photos: updatedPhotos
+        }
+      };
+      setDraft(next); setDirty(true); await persist(next, 3);
+      setMessage('Photo removed from gallery.');
     });
   }
   async function enhancePhoto(photoKey, options = {}){
@@ -535,7 +547,7 @@ export default function CaptureApp() {
           {d.locationPhoto?.url&&<div className="cs-location-reference"><img src={d.locationPhoto.url} alt="Storage location reference"/><span>Storage location photo</span></div>}
           <label className="cs-check"><input type="checkbox" checked={d.allLocations} onChange={e=>change('allLocations',e.target.checked)}/>I have counted this product in all its locations.</label><label className="cs-check"><input type="checkbox" checked={d.stockConfirmed} onChange={e=>change('stockConfirmed',e.target.checked)}/>These sellable units are in Decorbeats’ control and ready for us to fulfil.</label>
         </section><section className="cs-panel"><h2>Measure once. Use everywhere.</h2><p>Use centimetres and grams. Measure the complete sellable unit.</p><div className="cs-measure-grid">{[['Product, without packaging',''],['Packed, ready to ship','packed_']].map(([label,prefix])=><div key={prefix}><h3>{label}</h3><div className="cs-fields">{[['length','Length (cm)'],['width','Width (cm)'],['height','Height (cm)'],['weight_g','Weight (g)']].map(([key,title])=><Field key={key} label={title} type="number" min="0.01" step="any" inputMode="decimal" value={d[prefix+key]} onChange={v=>change(prefix+key,v)}/>)}</div></div>)}</div></section></>}
-        {step===3&&<ProductReview draft={draft} change={change} onInspect={setAssetPreview} onPhotos={()=>setStep(1)} onUploadEdited={uploadEditedPhotos} onUploadVideos={uploadProductVideos} onGenerate={generateListing} onAutoEnrich={autoEnrichProduct} onStageLifestyle={stageLifestylePhoto} onEnhancePhoto={enhancePhoto} enrichState={enrichState} busy={busy} dirty={dirty} issues={issues} products={visibleProducts} search={search} setSearch={setSearch} onMatch={linkProduct} onCompare={()=>run(async()=>{const {data,error}=await supabase.from('products').select('*').eq('id',draft.product_id).single();if(error)throw error;setLiveComparison(data);})}/>}
+        {step===3&&<ProductReview draft={draft} change={change} onInspect={setAssetPreview} onPhotos={()=>setStep(1)} onUploadEdited={uploadEditedPhotos} onUploadVideos={uploadProductVideos} onGenerate={generateListing} onAutoEnrich={autoEnrichProduct} onStageLifestyle={stageLifestylePhoto} onEnhancePhoto={enhancePhoto} onDeletePhoto={deletePhoto} enrichState={enrichState} busy={busy} dirty={dirty} issues={issues} products={visibleProducts} search={search} setSearch={setSearch} onMatch={linkProduct} onCompare={()=>run(async()=>{const {data,error}=await supabase.from('products').select('*').eq('id',draft.product_id).single();if(error)throw error;setLiveComparison(data);})}/>}
         </fieldset>
         <footer className="cs-footer"><div><span className={`cs-save-dot ${dirty?'pending':''}`}/>{busy?'Saving…':published?'Published to website':dirty?'Changes waiting to save':'Saved to Decorbeats'}{dirty&&!published&&<button disabled={busy} onClick={()=>save(false)}>Save draft</button>}</div><div className="cs-footer-buttons">{published?<button className="cs-primary" onClick={exit}>Next product →</button>:<><button disabled={busy} onClick={()=>save(true)}>Save & next product</button>{step<3?<button className="cs-primary" disabled={busy} onClick={()=>run(async()=>{const next=nextCaptureStep(draft,step);await persist(draft,next);setStep(next);})}>{!draft.product_id&&step===1?'Save & add details →':'Save & continue →'}</button>:<button className="cs-primary" disabled={busy||issues.length>0} onClick={()=>setConfirm(true)}>Review & publish →</button>}</>}</div></footer>
         {confirm&&<div className="cs-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="cs-publish-title" className="cs-modal"><h2 id="cs-publish-title">Publish {d.name}?</h2><p>This sets website stock to <strong>{countTotal(d)} sellable units</strong>, changes the price to <strong>{money(d.mrp)}</strong>, and publishes the reviewed photos and details.</p><button disabled={busy} onClick={()=>setConfirm(false)}>Back to review</button><button disabled={busy} className="cs-primary" onClick={publish}>{busy?'Publishing…':'Confirm inventory & publish'}</button></section></div>}

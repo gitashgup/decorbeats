@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { SHOTS } from './model';
 import { editedPhotoEntries } from './reviewPhotos';
 
-export default function ReviewGallery({ photos = {}, onInspect }) {
+export default function ReviewGallery({ photos = {}, onInspect, onDelete }) {
   const slides = [...SHOTS.filter(shot => photos[shot.id]?.url), ...editedPhotoEntries(photos).map(([id, photo], i) => ({id, name: photo.filename || `Edited photo ${i + 1}`}))];
   const track = useRef(null);
   const [active, setActive] = useState(0);
@@ -30,6 +30,13 @@ export default function ReviewGallery({ photos = {}, onInspect }) {
       <button type="button" disabled={index === slides.length - 1} onClick={() => go(index + 1)} aria-label="Next photo">Next →</button>
     </div>
     <p className="cs-gallery-caption">{slides[index].name} · Swipe or tap a photo to inspect</p>
+    {slides[index]?.id?.startsWith('edited_') && onDelete && (
+      <div className="cs-gallery-delete-row">
+        <button type="button" className="cs-btn-remove-photo" onClick={() => onDelete(slides[index].id)}>
+          🗑️ Remove this photo from draft
+        </button>
+      </div>
+    )}
     {photos[slides[index].id].cleanedPreview && <div className="cs-gallery-comparison"><button type="button" aria-pressed={showSample} onClick={()=>setShowSample(!showSample)}>{showSample ? 'Show original photo' : 'Show cleaned sample'}</button><p>{showSample ? 'Cleaned sample — for approval, not selected for publishing.' : 'Original photo — current website selection.'}</p></div>}
     <div className="cs-gallery-thumbs" aria-label="Choose photograph">
       {slides.map((shot, i) => <button type="button" key={shot.id} aria-label={`Show ${shot.name}`}
