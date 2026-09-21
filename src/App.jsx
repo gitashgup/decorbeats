@@ -10,23 +10,22 @@ const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 const RAZORPAY_CHECKOUT_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
 const GOOGLE_ADS_CONTACT_CONVERSION = "AW-18084439764/kF1hCNnLiK4cENTNqq9D";
 const ANNOUNCEMENTS = [
-  "𝄞 Decorbeats — where every gift finds its rhythm",
-  "✦ Summer Sale — Up to 30% off selected items",
-  "♪ Bulk orders welcome · 50 to 400+ units",
-  "♫ Handcrafted in India · Shipped across the country",
-  "✦ WhatsApp us for custom gifting solutions",
-  "𝄞 New arrivals added weekly"
+  "🪔 Dussehra & Deepawali Festive Edit is now live",
+  "✨ Handcrafted Brass Diyas, Urlis & Sacred Mandir Accents",
+  "🎁 Festive Corporate & Bulk Gifting · Custom Boxes for 50–500+ Units",
+  "🚚 Express Dispatch Across India · Bengaluru Experience Center",
+  "✦ Pure Moradabad Brass · Heirloom Durability & Artistry",
+  "🪔 Light up your home with the sacred glow of artisanal metal"
 ];
 const TICKER_MESSAGES = [
-  { text: "𝄞  DECORBEATS — WHERE EVERY GIFT FINDS ITS RHYTHM  𝄞", action: null },
-  { text: "🚚  SAME-DAY DELIVERY ACROSS BANGALORE — ORDER BEFORE 2PM", action: "collection" },
-  { text: "✦  BRASS NEVER LIES. NEITHER DOES OUR CRAFTSMANSHIP.", action: null },
-  { text: "📦  OVERNIGHT TO MUMBAI · CHENNAI · PUNE · HYDERABAD VIA AMAZON", action: "collection" },
-  { text: "🎁  50 TO 400 UNITS — BULK GIFTING IS OUR FORTE", action: "whatsapp" },
-  { text: "✦  SAND-BLASTED. HAND-FINISHED. MADE TO BE REMEMBERED.", action: null },
-  { text: "𝄞  THE BEAT OF GOOD GIFTING — DECORBEATS STUDIO", action: null },
-  { text: "⭐  CUSTOM CORPORATE GIFTING — TELL US YOUR OCCASION", action: null },
-  { text: "✦  ARTISANAL DECOR · GIFTED WITH LOVE · SINCE INDIA BEGAN CELEBRATING", action: null }
+  { text: "🪔  DUSSEHRA & DEEPAWALI FESTIVE EDIT — BRASS DIYAS, URLIS & IDOLS  🪔", action: "collection" },
+  { text: "🚚  SAME-DAY DISPATCH IN BANGALORE · EXPRESS SHIPPING PAN-INDIA", action: "collection" },
+  { text: "✨  AUTHENTIC MORADABAD BRASS — HAND-CAST BY HERITAGE ARTISANS", action: null },
+  { text: "🎁  FESTIVE CORPORATE & BULK GIFTING — 50 TO 500+ UNITS WITH CUSTOM BOXES", action: "whatsapp" },
+  { text: "✦  BRING HOME AUSPICIOUSNESS — SHUBH LABH, DIYAS & POOJA THALIS", action: "collection" },
+  { text: "📍  VISIT OUR BENGALURU EXPERIENCE CENTER IN KODICHIKKANAHALLI", action: null },
+  { text: "⭐  CUSTOM GIFTING CONSULTATION — TALK TO MEGHA ON WHATSAPP", action: "whatsapp" },
+  { text: "✦  BRASS NEVER LIES. ROOTED IN DEVOTION. CRAFTED WITH CARE.", action: null }
 ];
 const INQUIRY_SYSTEM_PROMPT = `You are a data extraction assistant for Decorbeats, an Indian gifting and decor business. Extract structured information from this sales inquiry transcript. Return ONLY a valid JSON object, no explanation, no markdown.
 
@@ -71,45 +70,87 @@ const materialOptions = ["Brass", "Metal", "Ceramic", "Wood", "Glass", "Clay", "
 const marketingTagOptions = ["", "Featured", "New Arrival", "Best for Gifting", "Festive Pick", "Handpicked", "Limited Edition"];
 const customerOccasions = [
   {
-    label: "Festive Gifting",
+    label: "Diwali & Dussehra Diyas",
     category: "Diya",
-    note: "Diyas, urlis and pooja accents",
-    beat: "Raaga of light",
-    preferredImageProducts: ["Hanging peacock diya with chain heavy"]
+    note: "Akhand diyas, deepams & tealight accents",
+    beat: "Deepotsav of light",
+    preferredImageProducts: ["Small Brass Diya", "Small metal diya", "Hanging peacock diya with chain heavy"]
   },
-  { label: "Home Decor", category: "Decor", note: "Statement pieces for warm corners", beat: "A room with rhythm" },
-  { label: "Corporate Orders", category: "Box", note: "Bulk-ready gifts and keepsakes", beat: "Gifting in harmony" },
-  { label: "Wall Stories", category: "Wall Decor", note: "Brass details for beautiful walls", beat: "Notes for your walls" }
+  {
+    label: "Festive Living & Urlis",
+    category: "Urli",
+    note: "Floating flower urlis & festive decor",
+    beat: "Welcoming warmth",
+    preferredImageProducts: ["Metal Rose urli", "Floating flower designer metal urli bowls set of 2"]
+  },
+  {
+    label: "Festive & Bulk Gifting",
+    category: "Bowl",
+    note: "Artisanal bowls & boxed gift sets (50–500 pcs)",
+    beat: "Festive generosity",
+    preferredImageProducts: ["2 Metal Bowls in Red Gift Box", "Metal Gold Plated Basket", "Metal Jar Yellow"]
+  },
+  {
+    label: "Shubh Labh & Mandir Accents",
+    category: "Wall Decor",
+    note: "Wall hangings, brass bells & pooja plates",
+    beat: "Blessings at your door",
+    preferredImageProducts: ["Wall hanging Brass Shubh Labh", "Brass Peacock Plate 6 inch"]
+  }
 ];
 const customerBeatStories = [
-  { title: "Beat 01", text: "Hand-finished brass and metal pieces selected for celebrations." },
-  { title: "Beat 02", text: "Bulk gifting support for 50 to 400+ units with quick WhatsApp coordination." },
-  { title: "Beat 03", text: "A living catalogue that keeps new arrivals, stock and enquiries in tune." }
+  { title: "Festive Beat 01", text: "Hand-finished brass diyas, urlis and idols curated for Dussehra & Diwali." },
+  { title: "Festive Beat 02", text: "Corporate festive gifting for 50 to 500+ units with custom boxes & WhatsApp coordination." },
+  { title: "Festive Beat 03", text: "Authentic Moradabad craftsmanship backed by our Bengaluru Experience Center." }
 ];
 const defaultHeroSlides = [
   {
-    id: "default-credibility",
-    eyebrow: "Decorbeats Trust",
-    title: "See the craft|gift with confidence.",
-    body: "Bengaluru experience center, GST presence across KA, TN & MH, and bulk gifting support from 50 to 400+ units.",
-    ctaLabel: "Enquire on WhatsApp",
-    ctaAction: "whatsapp",
+    id: "festive-deepawali-dussehra",
+    eyebrow: "Dussehra & Deepawali Festive Edit · 2026",
+    title: "Light your home with|sacred brass & joy.",
+    body: "Handcrafted brass diyas, festive urlis, pooja accents & artisanal gift sets from Moradabad. Ready to illuminate your festivities.",
+    ctaLabel: "Shop Festive Edit",
+    ctaAction: "collection",
     contentPosition: "left",
-    imageUrl: "/assets/images/slider-credibility-studio.svg",
+    imageUrl: "/assets/images/festive/dussehra-diwali-brass-urli-hero.jpg",
     active: true,
     sortOrder: 1
   },
   {
-    id: "default-hero",
-    eyebrow: "Decorbeats",
-    title: "Handcrafted for every celebration.",
-    body: "Brass, metal & artisanal decor - made in India, gifted with rhythm.",
-    ctaLabel: "Shop the Collection",
-    ctaAction: "collection",
+    id: "festive-corporate-bulk-gifting",
+    eyebrow: "Festive Gifting · 50 to 500+ Units",
+    title: "Memorable festive gifts|crafted to last.",
+    body: "Curated brass gift boxes, bowls & keepsake decor for clients, teams & loved ones. Handcrafted in Pital Nagri with pan-India delivery.",
+    ctaLabel: "Enquire on WhatsApp",
+    ctaAction: "whatsapp",
     contentPosition: "left",
-    imageUrl: "",
+    imageUrl: "/assets/images/festive/festive-corporate-gifting-hero.jpg",
     active: true,
     sortOrder: 2
+  },
+  {
+    id: "festive-sacred-pooja-idols",
+    eyebrow: "Auspicious Beginnings · Mandir Accents",
+    title: "Handcrafted brass idols|& sacred festive decor.",
+    body: "Lakshmi-Ganesh pairs, pooja thalis, akhand diyas & Shubh Labh wall accents cast in pure solid brass.",
+    ctaLabel: "Explore Pooja Decor",
+    ctaAction: "collection",
+    contentPosition: "left",
+    imageUrl: "/assets/images/festive/dussehra-pooja-sacred-brass-hero.jpg",
+    active: true,
+    sortOrder: 3
+  },
+  {
+    id: "festive-craft-credibility",
+    eyebrow: "Decorbeats Atelier · Moradabad Craft",
+    title: "India’s home of|authentic brass.",
+    body: "Bengaluru experience center, GST presence across KA, TN & MH, and heirloom brass decor crafted with devotion.",
+    ctaLabel: "Explore Full Collection",
+    ctaAction: "collection",
+    contentPosition: "left",
+    imageUrl: "/assets/images/decorbeats-atelier-campaign-v2.jpg",
+    active: true,
+    sortOrder: 4
   }
 ];
 
@@ -3525,11 +3566,11 @@ function CustomerHero({ slides, featuredProduct, onShop }) {
   const heroImage = getPrimaryImage(featuredProduct);
   const preparedSlides = slides.length
     ? slides
-    : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: heroImage }));
+    : defaultHeroSlides.map((slide) => ({ ...slide, imageUrl: slide.imageUrl || heroImage }));
   const activeSlide = preparedSlides[activeIndex] ?? preparedSlides[0] ?? defaultHeroSlides[0];
   const slideImage = activeSlide.imageUrl || heroImage;
   const titleLines = getHeroTitleLines(activeSlide.title);
-  const isPosterSlide = Boolean(activeSlide.imageUrl);
+  const isPosterSlide = Boolean(activeSlide.isPoster || (activeSlide.imageUrl && !activeSlide.title));
   const heroClassName = `customer-hero desktop-reveal hero-content-${activeSlide.contentPosition || "left"}${isPosterSlide ? " hero-poster-slide" : ""}`;
 
   useEffect(() => {
@@ -3683,6 +3724,108 @@ function CustomerOccasionRail({ products, onSelectCategory, onShop }) {
   );
 }
 
+function CustomerFestiveEdit({ products, onSelectProduct, onShopCategory }) {
+  const festiveItems = useMemo(() => {
+    const preferredOrder = [
+      "Small Brass Diya",
+      "2 Metal Bowls in Red Gift Box",
+      "Tealight Holder",
+      "Metal Rose urli",
+      "Wall hanging Brass Shubh Labh",
+      "Kalpavarukha tree small",
+      "BRASS ELEPHANT set of 2",
+      "Small metal diya",
+      "Metal Gold Plated Basket"
+    ];
+
+    const matched = [];
+    preferredOrder.forEach((name) => {
+      const match = products.find(
+        (p) => p.name && p.name.toLowerCase() === name.toLowerCase() && getPrimaryImage(p)
+      );
+      if (match && !matched.some((m) => m.id === match.id)) {
+        matched.push(match);
+      }
+    });
+
+    if (matched.length < 6) {
+      products.forEach((p) => {
+        if (
+          (p.category === "Diya" || p.category === "Urli") &&
+          getPrimaryImage(p) &&
+          !matched.some((m) => m.id === p.id)
+        ) {
+          matched.push(p);
+        }
+      });
+    }
+
+    return matched.slice(0, 8);
+  }, [products]);
+
+  if (!festiveItems.length) {
+    return null;
+  }
+
+  return (
+    <section className="customer-festive-edit" aria-label="Dussehra and Deepawali festive spotlight">
+      <div className="customer-festive-head">
+        <div>
+          <p className="eyebrow festive-sparkle">✦ Dussehra & Deepawali Edit ✦</p>
+          <h2>Festive Brass Spotlight</h2>
+          <p className="customer-festive-subtitle">
+            Curated akhand diyas, floating flower urlis, pooja accents & boxed gift sets in stock and ready to ship.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="ghost-button festive-view-all-btn"
+          onClick={() => onShopCategory("Diya")}
+        >
+          View All Diyas & Festive Decor →
+        </button>
+      </div>
+      <div className="customer-festive-rail">
+        {festiveItems.map((product) => {
+          const image = getPrimaryImage(product);
+          return (
+            <button
+              key={product.id}
+              type="button"
+              className="customer-festive-card"
+              onClick={() => onSelectProduct(product)}
+            >
+              <div className="customer-festive-image-wrap">
+                <span className="festive-badge">Festive Essential</span>
+                {image ? (
+                  <img src={image} alt={product.name} loading="lazy" />
+                ) : (
+                  <div className="customer-product-fallback">
+                    <img src={brandLogo} alt="Decorbeats" className="customer-placeholder-logo" />
+                  </div>
+                )}
+                <span className="customer-festive-peek">View Details</span>
+              </div>
+              <div className="customer-festive-info">
+                <span className="customer-festive-cat">{product.category}</span>
+                <h4>{product.name}</h4>
+                <div className="customer-festive-pricing-row">
+                  {hasDisplayValue(product.pricing?.mrp) ? (
+                    <span className="customer-festive-mrp">{formatCurrency(product.pricing.mrp)}</span>
+                  ) : null}
+                  {product.quantity > 0 ? (
+                    <span className="customer-festive-stock">In Stock ({product.quantity})</span>
+                  ) : null}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function FeaturedCategoriesRow({ products, onSelectCategory, onShop }) {
   const featuredCategories = ["Bowl", "Diya", "Wall Decor", "Box"];
   const tiles = featuredCategories
@@ -3724,16 +3867,19 @@ function EditorialSection() {
   return (
     <section className="editorial-section desktop-reveal">
       <div className="editorial-media">
-        <div className="editorial-placeholder" aria-hidden="true">
-          <img src={brandLogo} alt="" className="editorial-watermark" loading="lazy" />
-        </div>
+        <img
+          src="/assets/images/decorbeats-atelier-campaign-v2.jpg"
+          alt="Decorbeats Brass Metalcraft Atelier"
+          className="editorial-image"
+          loading="lazy"
+        />
       </div>
       <div className="editorial-copy">
-        <p className="eyebrow">Decorbeats Studio</p>
-        <h2>Gifting, reimagined.</h2>
-        <p>Thoughtfully crafted brass, metal and artisanal decor pieces for celebrations, events and elevated gifting.</p>
-        <p>Designed to feel personal, finished by hand, and ready for meaningful moments across homes and occasions.</p>
-        <p>From intimate gifting to large-format corporate orders, each piece is made to carry warmth and story.</p>
+        <p className="eyebrow">Decorbeats Atelier</p>
+        <h2>Festive Metalcraft, Reimagined.</h2>
+        <p>Born from Moradabad’s timeless brass traditions, crafted for Dussehra poojas and Deepawali light.</p>
+        <p>Every urli, diya, and shubh labh accent is cast in solid metal, hand-buffed to a golden luster, and packaged in velvet-lined boxes ready for family gifting and corporate prestige.</p>
+        <p>From intimate home mandirs to 500+ unit bespoke corporate hampers with custom branding and Bengaluru Experience Center dispatch.</p>
         <a
           className="customer-whatsapp-button editorial-whatsapp"
           href={getBulkWhatsAppUrl()}
@@ -3742,7 +3888,7 @@ function EditorialSection() {
           onClick={() => trackBulkWhatsAppClick("editorial")}
         >
           <WhatsAppIcon />
-          <span>Enquire on WhatsApp</span>
+          <span>Enquire for Festive Bulk Orders</span>
         </a>
       </div>
     </section>
@@ -5349,7 +5495,19 @@ export default function App() {
         return;
       }
 
-      setHeroSlides((data ?? []).map(toHeroSlide).filter((slide) => slide.active));
+      const activeSlides = (data ?? []).map(toHeroSlide).filter((slide) => slide.active);
+      const curatedSlides = activeSlides.filter((slide) => {
+        const isStaleSlide =
+          slide.imageUrl?.includes("1778948763595") ||
+          slide.imageUrl?.includes("1778733194643") ||
+          slide.imageUrl?.includes("1778697872686") ||
+          slide.id === "8ae37c72-4a28-4dfb-b229-b8216b8161b1" ||
+          slide.id === "0f068b85-b685-4746-a12b-8fd781c7cbc2" ||
+          slide.id === "148a5dd0-94a5-485f-96ca-d3c1123331c5";
+        return !isStaleSlide;
+      });
+
+      setHeroSlides(curatedSlides);
     }
 
     async function loadShareCatalogues() {
@@ -8205,6 +8363,14 @@ export default function App() {
         }} /> : null}
         <CustomerHero slides={heroSlides} featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
         <CustomerOccasionRail products={customerCatalog} onSelectCategory={handleCustomerCategorySelect} onShop={handleScrollToCollection} />
+        <CustomerFestiveEdit
+          products={customerCatalog}
+          onSelectProduct={handleProductSelect}
+          onShopCategory={(category) => {
+            handleCustomerCategorySelect(category, "festive_edit");
+            handleScrollToCollection();
+          }}
+        />
         <CustomerBeatStories />
         <TrustStrip productCount={stats.totalProducts} />
         <section className="customer-catalog-shell" ref={productGridRef}>

@@ -5,3 +5,4 @@ exports/
 .env
 .env.local
 .env.*.local
+.env*
