@@ -32,7 +32,6 @@ export default async function handler(req, res) {
 
     const { productName = 'Indian brass handicraft', sceneType = 'pooja_mandir' } = await body(req);
     const apiKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) throw new Error('AI image service is not configured (OPENAI_API_KEY is missing)');
 
     const cleanedName = String(productName).replace(/[^a-zA-Z0-9\s,.-]/g, '').slice(0, 140);
 
@@ -48,34 +47,57 @@ export default async function handler(req, res) {
 
     const prompt = `A magazine-grade commercial lifestyle photograph featuring ${cleanedName}, crafted in authentic polished Moradabad brass. ${sceneDescription} Photorealistic, sharp 8k focus on the brass item, natural depth of field, balanced lighting, zero text, zero watermarks, zero hands, zero distorted artifacts.`;
 
-    const response = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'dall-e-3',
-        prompt,
-        n: 1,
-        size: '1024x1024',
-        quality: 'standard',
-        response_format: 'b64_json'
-      })
-    });
+    let b64 = null;
+    let mime = 'image/png';
 
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(payload?.error?.message || 'Could not generate lifestyle staging image');
+    // 1. If OpenAI API key is configured, use DALL-E 3
+    if (apiKey) {
+      try {
+        const response = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: 'dall-e-3',
+            prompt,
+            n: 1,
+            size: '1024x1024',
+            quality: 'standard',
+            response_format: 'b64_json'
+          })
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (response.ok && payload?.data?.[0]?.b64_json) {
+          b64 = payload.data[0].b64_json;
+        } else {
+          console.warn('OpenAI image generation failed, falling back to Pollinations:', payload?.error?.message);
+        }
+      } catch (openAiErr) {
+        console.warn('OpenAI error, falling back to Pollinations:', openAiErr.message);
+      }
     }
 
-    const b64 = payload?.data?.[0]?.b64_json;
+    // 2. Zero-cost fallback: Pollinations AI (High-resolution Flux / SDXL)
+    if (!b64) {
+      const pUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=1024&height=1024&nologo=true`;
+      const pRes = await fetch(pUrl);
+      if (!pRes.ok) {
+        throw new Error(`AI lifestyle image generation returned HTTP ${pRes.status}`);
+      }
+      const buf = Buffer.from(await pRes.arrayBuffer());
+      b64 = buf.toString('base64');
+      mime = 'image/jpeg';
+    }
+
     if (!b64) throw new Error('AI image generation returned no image data');
 
     return json(res, 200, {
       success: true,
       image: b64,
-      mime: 'image/png',
+      mime,
       sceneType
     });
   } catch (error) {

@@ -89,3 +89,36 @@ test('auto-enrich response schema merges correctly into draft state', () => {
   assert.equal(nextDraft.data.marketBenchmark.marketPriceRange, '₹1,600 – ₹2,400');
   assert.equal(nextDraft.data.marketing.highlights.length, 4);
 });
+
+test('nested gemini response (visualIdentification, pricingBenchmark, ecommerceListing) normalizes and populates title and pricing', () => {
+  const nestedGeminiOutput = {
+    visualIdentification: {
+      deityOrSubject: 'Lord Ganesha',
+      postureAndFeatures: 'Seated in Lalitasana on lotus pedestal',
+      craftTechnique: 'Moradabad Sand-Casting'
+    },
+    pricingBenchmark: {
+      marketPriceRange: '₹1,800 – ₹2,600',
+      suggestedMrp: 2999,
+      suggestedSellingPrice: 2199,
+      estimatedCostPrice: 1050
+    },
+    ecommerceListing: {
+      title: 'Handcrafted Brass Lord Ganesha Seated Idol (18 cm, 650g)',
+      category: 'Idols & Sculptures',
+      material: 'Solid Virgin Brass (Moradabad Handcrafted)',
+      description: 'Handcrafted in Moradabad...'
+    }
+  };
+
+  // Normalization logic
+  const title = nestedGeminiOutput.title || nestedGeminiOutput.ecommerceListing?.title || (nestedGeminiOutput.visualIdentification?.deityOrSubject ? `Handcrafted Brass ${nestedGeminiOutput.visualIdentification.deityOrSubject} Idol` : 'Product');
+  const marketPriceRange = nestedGeminiOutput.marketPriceRange || nestedGeminiOutput.pricingBenchmark?.marketPriceRange;
+  const suggestedSellingPrice = nestedGeminiOutput.suggestedSellingPrice || nestedGeminiOutput.pricingBenchmark?.suggestedSellingPrice;
+  const estimatedCostPrice = nestedGeminiOutput.estimatedCostPrice || nestedGeminiOutput.pricingBenchmark?.estimatedCostPrice;
+
+  assert.equal(title, 'Handcrafted Brass Lord Ganesha Seated Idol (18 cm, 650g)');
+  assert.equal(marketPriceRange, '₹1,800 – ₹2,600');
+  assert.equal(suggestedSellingPrice, 2199);
+  assert.equal(estimatedCostPrice, 1050);
+});

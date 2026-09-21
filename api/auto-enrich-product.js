@@ -61,6 +61,57 @@ async function admin(req) {
   return result.ok && (await result.json()) === true;
 }
 
+function normalizeEnrichment(raw) {
+  let data = raw;
+  if (Array.isArray(data)) data = data[0] || {};
+  if (typeof data !== 'object' || !data) data = {};
+
+  const visual = data.visualIdentification || data.identification || {};
+  const pricing = data.pricingBenchmark || data.pricing || {};
+  const listing = data.ecommerceListing || data.listing || data.productListing || {};
+
+  const deityOrSubject = data.deityOrSubject || visual.deityOrSubject || visual.subject || visual.deity || '';
+  const craftTechnique = data.craftTechnique || visual.craftTechnique || visual.craft || 'Moradabad Handcrafted Brass';
+  const postureAndFeatures = data.postureAndFeatures || visual.postureAndFeatures || visual.posture || '';
+
+  const marketPriceRange = pricing.marketPriceRange || data.marketPriceRange || '₹1,500 – ₹2,500';
+  const suggestedMrp = Number(pricing.suggestedMrp || data.suggestedMrp || 0) || null;
+  const suggestedSellingPrice = Number(pricing.suggestedSellingPrice || data.suggestedSellingPrice || 0) || null;
+  const estimatedCostPrice = Number(pricing.estimatedCostPrice || data.estimatedCostPrice || 0) || null;
+
+  let title = listing.title || data.title || '';
+  if (!title && deityOrSubject) {
+    title = `Handcrafted Brass ${deityOrSubject} Idol | Moradabad Metal Art`;
+  } else if (!title) {
+    title = 'Handcrafted Brass Idol | Moradabad Metal Art';
+  }
+
+  return {
+    ...data,
+    deityOrSubject,
+    craftTechnique,
+    postureAndFeatures,
+    marketPriceRange,
+    suggestedMrp,
+    suggestedSellingPrice,
+    estimatedCostPrice,
+    title,
+    category: listing.category || data.category || 'Idols & Sculptures',
+    material: listing.material || data.material || 'Solid Virgin Brass (Moradabad Handcrafted)',
+    unit: listing.unit || data.unit || '1 Handcrafted Brass Idol',
+    shortDescription: listing.shortDescription || data.shortDescription || '',
+    description: listing.description || data.description || '',
+    highlights: listing.highlights || data.highlights || [],
+    careInstructions: listing.careInstructions || data.careInstructions || 'Wipe gently with a clean dry microfiber cloth. Polish with Pitambari powder occasionally for festive shine.',
+    seoTitle: listing.seoTitle || data.seoTitle || title.slice(0, 60),
+    seoDescription: listing.seoDescription || data.seoDescription || (listing.shortDescription || title).slice(0, 155),
+    searchKeywords: listing.searchKeywords || data.searchKeywords || [],
+    visualIdentification: visual,
+    pricingBenchmark: pricing,
+    ecommerceListing: listing
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
 
@@ -162,10 +213,14 @@ export default async function handler(req, res) {
 
       const rawText = gPayload?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
       const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-      let enriched = JSON.parse(cleanJson);
-      if (Array.isArray(enriched)) {
-        enriched = enriched[0] || {};
+      let rawData = {};
+      try {
+        rawData = JSON.parse(cleanJson);
+      } catch (e) {
+        console.warn('Could not parse Gemini JSON directly, attempting recovery:', e.message);
       }
+
+      const enriched = normalizeEnrichment(rawData);
 
       return json(res, 200, {
         success: true,
@@ -206,7 +261,7 @@ export default async function handler(req, res) {
       if (!response.ok) throw new Error(payload?.error?.message || 'OpenAI service error');
 
       const rawContent = payload?.choices?.[0]?.message?.content || '{}';
-      const enriched = JSON.parse(rawContent);
+      const enriched = normalizeEnrichment(JSON.parse(rawContent));
 
       return json(res, 200, {
         success: true,
