@@ -113,20 +113,24 @@ export default async function handler(req, res) {
       }
 
       const candidateModels = [
-        'gemini-3.7-flash',
-        'gemini-3.8-flash',
-        'gemini-flash-latest',
-        'gemini-3.6-flash'
+        'gemini-3.5-flash-lite',
+        'gemini-flash-lite-latest',
+        'gemini-3.1-flash-lite',
+        'gemini-3.6-flash',
+        'gemini-3.7-flash'
       ];
 
       let gPayload = null;
       let lastError = null;
 
       for (const model of candidateModels) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
         try {
           const gResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
             body: JSON.stringify({
               contents: [{ role: 'user', parts }],
               generationConfig: {
@@ -135,6 +139,7 @@ export default async function handler(req, res) {
               }
             })
           });
+          clearTimeout(timeout);
 
           const payload = await gResponse.json().catch(() => null);
           if (gResponse.ok && payload?.candidates?.[0]?.content?.parts?.[0]?.text) {
@@ -142,11 +147,12 @@ export default async function handler(req, res) {
             break;
           } else {
             lastError = payload?.error?.message || `Model ${model} returned HTTP ${gResponse.status}`;
-            console.warn(`Model ${model} failed, trying next candidate:`, lastError);
+            console.warn(`Model ${model} failed (${gResponse.status}), trying next candidate:`, lastError);
           }
         } catch (err) {
-          lastError = err.message;
-          console.warn(`Model ${model} request error:`, err);
+          clearTimeout(timeout);
+          lastError = err.name === 'AbortError' ? `Model ${model} timed out after 12s` : err.message;
+          console.warn(`Model ${model} request error:`, lastError);
         }
       }
 
@@ -155,7 +161,11 @@ export default async function handler(req, res) {
       }
 
       const rawText = gPayload?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      const enriched = JSON.parse(rawText);
+      const cleanJson = rawText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+      let enriched = JSON.parse(cleanJson);
+      if (Array.isArray(enriched)) {
+        enriched = enriched[0] || {};
+      }
 
       return json(res, 200, {
         success: true,
