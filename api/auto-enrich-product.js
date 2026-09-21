@@ -112,21 +112,46 @@ export default async function handler(req, res) {
         }
       }
 
-      const gResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            temperature: 0.2
-          }
-        })
-      });
+      const candidateModels = [
+        'gemini-3.7-flash',
+        'gemini-3.8-flash',
+        'gemini-flash-latest',
+        'gemini-3.6-flash'
+      ];
 
-      const gPayload = await gResponse.json().catch(() => null);
-      if (!gResponse.ok) {
-        throw new Error(gPayload?.error?.message || 'Google Gemini service error');
+      let gPayload = null;
+      let lastError = null;
+
+      for (const model of candidateModels) {
+        try {
+          const gResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts }],
+              generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.2
+              }
+            })
+          });
+
+          const payload = await gResponse.json().catch(() => null);
+          if (gResponse.ok && payload?.candidates?.[0]?.content?.parts?.[0]?.text) {
+            gPayload = payload;
+            break;
+          } else {
+            lastError = payload?.error?.message || `Model ${model} returned HTTP ${gResponse.status}`;
+            console.warn(`Model ${model} failed, trying next candidate:`, lastError);
+          }
+        } catch (err) {
+          lastError = err.message;
+          console.warn(`Model ${model} request error:`, err);
+        }
+      }
+
+      if (!gPayload) {
+        throw new Error(lastError || 'Google Gemini service error across all candidate models');
       }
 
       const rawText = gPayload?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
