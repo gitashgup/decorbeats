@@ -101,3 +101,37 @@
 .cs-review-mode .cs-export-bar{padding:16px}.cs-review-mode .cs-export-bar h2{display:none}.cs-review-mode .cs-export-bar>div>p{margin:0 0 12px}
 .cs-product-photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin:16px 0}.cs-product-photo-grid button{display:flex;flex-direction:column;text-align:left;padding:10px;gap:10px;min-width:0;border:2px solid #ddd;border-radius:12px;background:white}.cs-product-photo-grid button[aria-pressed=true]{border-color:#203b38;background:#edf5ef}.cs-product-photo-grid img{width:100%;aspect-ratio:1;object-fit:contain;background:#fff;border-radius:8px}.cs-product-photo-grid span{display:flex;flex-direction:column;gap:4px;overflow-wrap:anywhere}.cs-product-photo-grid small{font-size:12px;color:#58635d}.cs-match-confirm{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:16px;margin-bottom:16px;background:#edf5ef;border-radius:12px}.cs-match-confirm span{font-size:13px}.cs-match-confirm button{margin-left:auto}@media(max-width:480px){.cs-product-photo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cs-match-confirm button{width:100%;margin:0}}
 .cs-review-video-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.cs-review-video-grid figure{margin:0;min-width:0}.cs-review-video-grid video{width:100%;max-height:320px;background:#111;border-radius:10px}.cs-review-video-grid figcaption{font-size:12px;overflow-wrap:anywhere;margin-top:6px}
+
+/* AI Studio Auto-Enrichment and Lifestyle Staging */
+.cs-auto-enrich-panel{background:linear-gradient(180deg,#fbfdfb 0%,#f5f9f6 100%);border:1px solid #c9ded0;position:relative;overflow:hidden}
+.cs-auto-enrich-header{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.cs-auto-enrich-text{max-width:760px}
+.cs-auto-enrich-text h2{font-size:22px;margin:6px 0 8px;color:var(--ink);font-weight:700}
+.cs-auto-enrich-text p{margin:0;font-size:14px;color:var(--muted);line-height:1.5}
+.cs-ai-badge{display:inline-flex;align-items:center;gap:6px;background:#e2eee4;color:#204b36;font-size:12px;font-weight:700;padding:4px 10px;border-radius:99px;letter-spacing:.04em;text-transform:uppercase}
+.cs-auto-enrich-actions{display:flex;align-items:center;gap:12px}
+.cs-btn-auto-enrich{min-height:50px;padding:12px 24px;font-size:15px;font-weight:650;box-shadow:0 3px 10px rgba(32,59,56,0.18)}
+.cs-btn-auto-enrich:hover{box-shadow:0 5px 14px rgba(32,59,56,0.25);transform:translateY(-1px);transition:all .15s ease}
+.cs-benchmark-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:20px;padding-top:18px;border-top:1px solid #d4e3d9}
+.cs-benchmark-card{background:#ffffff;border:1px solid #dbe6df;border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.cs-benchmark-card small{font-size:12px;color:var(--muted);text-transform:uppercase;font-weight:600;letter-spacing:.04em}
+.cs-benchmark-card strong{font-size:17px;color:var(--ink);line-height:1.3}
+.cs-benchmark-card span{font-size:13px;color:#556660}
+.cs-benchmark-suggested{background:#f4f9f5;border-color:#b4d6bf}
+.cs-price-row{display:flex;align-items:center;gap:10px;margin-top:2px}
+.cs-price-row strong{font-size:22px;color:#184a32}
+.cs-btn-apply-price{min-height:32px;padding:4px 10px;font-size:12px;font-weight:650;background:#204b36;color:#ffffff;border:0;border-radius:6px;cursor:pointer}
+.cs-btn-apply-price:hover{background:#133324}
+.cs-lifestyle-staging{background:#f8f9f7;border:1px solid #e1e7e3;border-radius:10px;padding:16px;margin:16px 0}
+.cs-lifestyle-heading h3{font-size:15px;margin:0 0 4px;font-weight:650;color:var(--ink)}
+.cs-lifestyle-heading p{font-size:13px;margin:0 0 12px;color:var(--muted)}
+.cs-lifestyle-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.cs-lifestyle-buttons button{font-size:13px;padding:8px 14px;background:#ffffff;border:1px solid #cedad2;border-radius:8px;font-weight:550}
+.cs-lifestyle-buttons button:hover:not(:disabled){background:#edf3ef;border-color:#9ab5a3}
+@media(max-width:680px){
+  .cs-auto-enrich-header{flex-direction:column}
+  .cs-auto-enrich-actions{width:100%}
+  .cs-btn-auto-enrich{width:100%}
+  .cs-benchmark-grid{grid-template-columns:1fr}
+}
+
