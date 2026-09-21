@@ -68,10 +68,10 @@ export default async function handler(req, res) {
     if (!(await admin(req))) return json(res, 401, { error: 'Admin authentication required' });
 
     const input = await body(req);
-    const apiKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
-    if (!apiKey) throw new Error('AI service is not configured (OPENAI_API_KEY is missing)');
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    const openAiKey = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
 
-    const { photos = {}, dimensions = {}, currentFacts = {} } = input;
+    const { photos = {}, dimensions = {}, currentFacts = {}, draftId = '' } = input;
     const photoEntries = Object.entries(photos).filter(([, p]) => /^https:\/\//.test(p?.url || ''));
 
     if (!photoEntries.length) {
@@ -87,48 +87,107 @@ export default async function handler(req, res) {
       `Current Material: ${currentFacts.material || 'Brass'}`
     ].join('\n');
 
-    const content = [
-      { type: 'text', text: `Here are the captured product specifications:\n${factsText}\n\nExamine the attached multi-angle photographs and return the complete identification and catalog listing in JSON format.` }
-    ];
+    // 1. If Google Gemini API is available (Free Tier / Ultra Key), use Google Gemini 2.5/1.5 Flash
+    if (geminiKey) {
+      const parts = [
+        { text: `${ENRICH_PROMPT}\n\nCaptured Product Facts:\n${factsText}\n\nExamine the attached multi-angle photographs and return the complete identification and catalog listing in JSON format.` }
+      ];
 
-    for (const [slot, photo] of photoEntries.slice(0, 5)) {
-      content.push({
-        type: 'text',
-        text: `Camera Angle: ${slot.toUpperCase()}`
+      for (const [slot, photo] of photoEntries.slice(0, 5)) {
+        try {
+          const imgRes = await fetch(photo.url);
+          if (imgRes.ok) {
+            const buf = Buffer.from(await imgRes.arrayBuffer());
+            const ct = (imgRes.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+            parts.push({ text: `Camera Angle: ${slot.toUpperCase()}` });
+            parts.push({
+              inlineData: {
+                mimeType: ct || 'image/jpeg',
+                data: buf.toString('base64')
+              }
+            });
+          }
+        } catch (imgErr) {
+          console.warn(`Could not load photo ${slot} for Gemini:`, imgErr);
+        }
+      }
+
+      const gResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.2
+          }
+        })
       });
-      content.push({
-        type: 'image_url',
-        image_url: { url: photo.url, detail: 'high' }
+
+      const gPayload = await gResponse.json().catch(() => null);
+      if (!gResponse.ok) {
+        throw new Error(gPayload?.error?.message || 'Google Gemini service error');
+      }
+
+      const rawText = gPayload?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+      const enriched = JSON.parse(rawText);
+
+      return json(res, 200, {
+        success: true,
+        enriched,
+        provider: 'google-gemini'
       });
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        temperature: 0.3,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: ENRICH_PROMPT },
-          { role: 'user', content }
-        ]
-      })
-    });
+    // 2. If OpenAI key is available, use OpenAI GPT-4o
+    if (openAiKey) {
+      const content = [
+        { type: 'text', text: `Here are the captured product specifications:\n${factsText}\n\nExamine the attached multi-angle photographs and return the complete identification and catalog listing in JSON format.` }
+      ];
 
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(payload?.error?.message || 'Could not enrich product');
+      for (const [slot, photo] of photoEntries.slice(0, 5)) {
+        content.push({ type: 'text', text: `Camera Angle: ${slot.toUpperCase()}` });
+        content.push({ type: 'image_url', image_url: { url: photo.url, detail: 'high' } });
+      }
 
-    const rawContent = payload?.choices?.[0]?.message?.content || '{}';
-    const enriched = JSON.parse(rawContent);
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${openAiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          temperature: 0.3,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: ENRICH_PROMPT },
+            { role: 'user', content }
+          ]
+        })
+      });
 
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error?.message || 'OpenAI service error');
+
+      const rawContent = payload?.choices?.[0]?.message?.content || '{}';
+      const enriched = JSON.parse(rawContent);
+
+      return json(res, 200, {
+        success: true,
+        enriched,
+        provider: 'openai'
+      });
+    }
+
+    // 3. If neither cloud API key is configured, queue the draft for Antigravity / local Ultra agent
     return json(res, 200, {
       success: true,
-      enriched
+      queuedForAntigravity: true,
+      draftId,
+      message: 'Draft queued for Antigravity AI enrichment with your Google Ultra plan. Antigravity will process the multi-angle photos directly.'
     });
+
   } catch (error) {
     console.error('Auto-enrich error:', error);
     return json(res, 500, { error: error.message || 'Could not auto-enrich product from photos' });

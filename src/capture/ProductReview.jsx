@@ -4,7 +4,7 @@ import ProductPicker from './ProductPicker';
 import {downloadListing,listingText} from './listingExport';
 import {productVideoEntries} from './reviewVideos';
 
-export default function ProductReview({draft,change,onInspect,onPhotos,onUploadEdited,onUploadVideos,onGenerate,onAutoEnrich,onStageLifestyle,busy,issues,onMatch,products,search,setSearch,onCompare,dirty}){
+export default function ProductReview({draft,change,onInspect,onPhotos,onUploadEdited,onUploadVideos,onGenerate,onAutoEnrich,onStageLifestyle,enrichState={active:false,percent:0,step:0,message:''},busy,issues,onMatch,products,search,setSearch,onCompare,dirty}){
  const editedInput=useRef(null);
  const videoInput=useRef(null);
  const d=draft.data;const [exporting,setExporting]=useState(false),[notice,setNotice]=useState('');
@@ -22,11 +22,63 @@ export default function ProductReview({draft,change,onInspect,onPhotos,onUploadE
      <p>Vision AI inspects all camera angles, identifies deity & craft details, benchmarks Indian marketplace pricing, and writes SEO listing copy.</p>
     </div>
     <div className="cs-auto-enrich-actions">
-     <button type="button" className="cs-primary cs-btn-auto-enrich" disabled={busy||draft.status==='published'||!hasPhotos} onClick={onAutoEnrich}>
-      {busy?'Studying photos & market…':'✨ Auto-Enrich from Photos'}
+     <button type="button" className="cs-primary cs-btn-auto-enrich" disabled={busy||draft.status==='published'||!hasPhotos||enrichState.active} onClick={onAutoEnrich}>
+      {enrichState.active?'Enriching…':busy?'Saving…':'✨ Auto-Enrich from Photos'}
      </button>
     </div>
    </div>
+
+   {enrichState.active&&(
+    <div className="cs-enrich-progress-card">
+     <div className="cs-progress-header">
+      <strong>Processing Multi-Angle Photos…</strong>
+      <span>{enrichState.percent}%</span>
+     </div>
+     <div className="cs-progress-bar-track">
+      <div className="cs-progress-bar-fill" style={{width:`${enrichState.percent}%`}}/>
+     </div>
+     <div className="cs-progress-steps-row">
+      <span className={enrichState.step>=1?'done':''}>📸 1. Angles</span>
+      <span className={enrichState.step>=2?'done':''}>🏷️ 2. Iconography</span>
+      <span className={enrichState.step>=3?'done':''}>🔍 3. Market Pricing</span>
+      <span className={enrichState.step>=4?'done':''}>✍️ 4. Story & SEO</span>
+     </div>
+     <p className="cs-progress-caption">{enrichState.message}</p>
+     <small className="cs-progress-hint">💡 You can leave this page or switch tabs anytime — your draft is preserved and you can come back to verify.</small>
+    </div>
+   )}
+
+   {d.enrichmentStatus==='queued'&&!enrichState.active&&(
+    <div className="cs-queued-banner">
+     <span className="cs-status-indicator pulse">●</span>
+     <div>
+      <strong>Queued for Antigravity AI Enrichment</strong>
+      <p>Your photos and specs are queued. Antigravity will enrich this product with your Ultra plan. You can leave this page and come back anytime to verify!</p>
+     </div>
+    </div>
+   )}
+
+   {d.aiEnriched&&(
+    <div className="cs-verification-banner">
+     <div className="cs-verification-status">
+      <span className="cs-status-indicator success">●</span>
+      <div>
+       <strong>✨ AI Enriched Listing — Ready for Verification</strong>
+       <p>Vision AI & market benchmarks have filled the listing below. Verify details and pricing before publishing.</p>
+      </div>
+     </div>
+     <div className="cs-verification-actions">
+      {d.enrichmentVerified?(
+       <span className="cs-verified-badge">✓ Verified & Approved</span>
+      ):(
+       <button type="button" className="cs-btn-verify-approve" disabled={busy||draft.status==='published'} onClick={()=>{change('enrichmentVerified',true);change('pricingApproved',true);change('imageQualityApproved',true);}}>
+        ✓ Approve & Mark Verified
+       </button>
+      )}
+     </div>
+    </div>
+   )}
+
    {(benchmark.marketPriceRange||benchmark.suggestedSellingPrice||d.aiEnriched)&&(
     <div className="cs-benchmark-grid">
      <div className="cs-benchmark-card">
