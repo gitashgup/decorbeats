@@ -144,7 +144,10 @@ function getInitialPublicScreen() {
     return "customer";
   }
 
-  return window.location.pathname === "/admin" ? "admin-auth" : "customer";
+  const isLegacy = new URLSearchParams(window.location.search).get("legacy") === "1";
+  return (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) && isLegacy
+    ? "admin-auth"
+    : "customer";
 }
 
 function humanizeSlug(slug) {
@@ -155,11 +158,15 @@ function humanizeSlug(slug) {
     .join(" ");
 }
 
-function parseLegacyPath(pathname) {
+function parseLegacyPath(pathname, search = typeof window !== "undefined" ? window.location.search : "") {
   const path = String(pathname ?? "/");
 
   if (path === "/admin" || path.startsWith("/admin/")) {
-    return { screen: "admin-auth", type: "admin", slug: "" };
+    const isLegacy = new URLSearchParams(search).get("legacy") === "1";
+    if (isLegacy) {
+      return { screen: "admin-auth", type: "admin", slug: "" };
+    }
+    return { screen: "customer", type: "home", slug: "" };
   }
 
   const catalogueMatch = path.match(/^\/(?:catalogue|catalog)\/([^/]+)\/?$/i);
@@ -8109,9 +8116,8 @@ export default function App() {
 
   function handleAdminEntry() {
     trackCustomerEvent("Admin Link Clicked");
-    setPublicScreen("admin-auth");
     if (typeof window !== "undefined") {
-      window.history.pushState({}, "", "/admin");
+      window.location.assign("/admin");
     }
   }
 
@@ -8138,6 +8144,11 @@ export default function App() {
     );
   }
 
+  const isLegacyAdmin =
+    typeof window !== "undefined" &&
+    (window.location.pathname === "/admin" || window.location.pathname.startsWith("/admin/")) &&
+    new URLSearchParams(window.location.search).get("legacy") === "1";
+
   const rootElement = publicScreen === "catalogue" ? (
     <ShareCataloguePage
       catalogue={publicCatalogue}
@@ -8146,7 +8157,7 @@ export default function App() {
       error={publicCatalogueError}
       onHome={handleCustomerHome}
     />
-  ) : !adminActive && publicScreen === "admin-auth" ? (
+  ) : isLegacyAdmin && !adminActive ? (
     <div className="app-shell">
       <div className="screen-shell">
         <ScreenHeader
@@ -8172,7 +8183,7 @@ export default function App() {
         />
       </div>
     </div>
-  ) : !adminActive || previewCustomerView ? (
+  ) : !isLegacyAdmin || previewCustomerView ? (
     <div className="customer-page">
       <AnnouncementBar />
       <CustomerHeader
@@ -8229,7 +8240,7 @@ export default function App() {
             ))}
           </section>
         </section>
-        <CustomerFooter onAdmin={handleAdminEntry} showAdminLink={!adminActive} />
+        <CustomerFooter onAdmin={handleAdminEntry} showAdminLink={true} />
       </main>
       <CustomerSheet
         product={selectedProduct}
