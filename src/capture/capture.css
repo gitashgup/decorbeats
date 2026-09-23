@@ -174,4 +174,23 @@
 .cs-btn-remove-photo{background:#fff1f0;border:1px solid #ffa39e;color:#cf1322;font-size:13px;font-weight:600;padding:6px 14px;border-radius:6px;cursor:pointer;transition:all .2s ease}
 .cs-btn-remove-photo:hover{background:#ffccc7;border-color:#ff4d4f}
 
+/* Product Dimensions & Ruler Modal */
+.cs-dim-modal{max-width:540px;width:100%;border-radius:16px;padding:26px 28px}
+.cs-dim-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.cs-dim-modal-header h2{font-size:19px;margin:0;color:#0f172a}
+.cs-btn-close-modal{background:none!important;border:0!important;font-size:18px!important;color:#64748b!important;cursor:pointer;padding:4px 8px!important;margin:0!important;min-height:unset!important;border-radius:6px}
+.cs-btn-close-modal:hover{background:#f1f5f9!important;color:#0f172a!important}
+.cs-dim-modal-desc{font-size:13.5px;color:#475569;line-height:1.5;margin:0 0 18px 0}
+.cs-dim-modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px}
+.cs-dim-inch-hint{display:block;font-size:12px;color:#0369a1;font-weight:500;margin-top:3px}
+.cs-dim-feature-list{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 16px;font-size:12.5px;line-height:1.6;color:#334155;margin-bottom:20px;display:flex;flex-direction:column;gap:4px}
+.cs-dim-modal-actions{display:flex;justify-content:flex-end;gap:10px}
+.cs-dim-modal-actions button{min-height:42px;padding:8px 16px;font-size:13.5px;font-weight:600;border-radius:8px;margin:0}
+@media(max-width:680px){
+  .cs-dim-modal-grid{grid-template-columns:1fr}
+  .cs-dim-modal-actions{flex-direction:column-reverse}
+  .cs-dim-modal-actions button{width:100%}
+}
+
+
 
