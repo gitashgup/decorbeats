@@ -1,10 +1,11 @@
-import React,{useRef,useState} from 'react';
+import React,{useRef,useState,useMemo} from 'react';
 import ReviewGallery from './ReviewGallery';
 import ProductPicker from './ProductPicker';
 import {downloadListing,listingText} from './listingExport';
 import {productVideoEntries} from './reviewVideos';
+import {findSimilarProducts} from './productMatching';
 
-export default function ProductReview({draft,change,onInspect,onPhotos,onUploadEdited,onUploadVideos,onGenerate,onAutoEnrich,onStageLifestyle,onEnhancePhoto,onAddDimensionsPhoto,onDeletePhoto,enrichState={active:false,percent:0,step:0,message:''},busy,issues,onMatch,products,search,setSearch,onCompare,dirty}){
+export default function ProductReview({draft,change,onInspect,onPhotos,onUploadEdited,onUploadVideos,onGenerate,onAutoEnrich,onStageLifestyle,onEnhancePhoto,onAddDimensionsPhoto,onDeletePhoto,enrichState={active:false,percent:0,step:0,message:''},busy,issues,onMatch,products,allProducts,search,setSearch,onCompare,dirty}){
  const editedInput=useRef(null);
  const videoInput=useRef(null);
  const d=draft.data;const [exporting,setExporting]=useState(false),[notice,setNotice]=useState('');
@@ -15,6 +16,8 @@ export default function ProductReview({draft,change,onInspect,onPhotos,onUploadE
   length: d.length || '',
   weight_g: d.weight_g || ''
  });
+ const catalogToScan = allProducts || products || [];
+ const similarMatches = useMemo(()=>findSimilarProducts(draft, catalogToScan), [draft?.data?.name, draft?.data?.category, draft?.data?.material, catalogToScan]);
  const field=(key,label,type='text')=><label className="cs-field" key={key}><span>{label}</span><input type={type} inputMode={type==='number'?'decimal':undefined} min={type==='number'?'0':undefined} step={type==='number'?'any':undefined} value={d[key]??''} onChange={e=>change(key,e.target.value)}/></label>;
  async function download(){setExporting(true);try{await downloadListing(d,setNotice);}catch(e){setNotice(e.message);}finally{setExporting(false);}}
  const hasPhotos=Object.values(d.photos||{}).some(p=>p?.url);
@@ -120,7 +123,85 @@ export default function ProductReview({draft,change,onInspect,onPhotos,onUploadE
 
   <section className="cs-panel"><div className="cs-section-heading"><h2>Product videos</h2><button type="button" disabled={busy||draft.status==='published'} onClick={()=>videoInput.current?.click()}>{busy?'Saving…':'Upload product videos ↑'}</button></div><input ref={videoInput} type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" multiple hidden onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';onUploadVideos(files);}}/><p>Up to 6 extra clips · 45 MB / 60 seconds each. MP4 (H.264) recommended. Saved for review; added to the website when you publish.</p><div className="cs-review-video-grid">{productVideoEntries(d.productVideos).map(([key,video])=><figure key={key}><video src={video.url} controls playsInline preload="none"/><figcaption>{video.filename||'Product video'}</figcaption></figure>)}</div></section>
   <section className="cs-panel"><div className="cs-section-heading"><h2>Edited website photos</h2><button type="button" disabled={busy||draft.status==='published'} onClick={()=>editedInput.current?.click()}>{busy?'Saving…':'Upload edited photos ↑'}</button></div><input ref={editedInput} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e=>{const files=Array.from(e.target.files||[]);e.target.value='';onUploadEdited(files);}}/><p>Choose multiple JPG, PNG or WebP images. Originals stay; new photos are added to the gallery below and go live when you publish.</p></section>
-  <section className="cs-panel"><h2>{draft.product_id?'✓ Matched to inventory':'Find this product in inventory'}</h2>{draft.product_id?<p>{d.name} · {d.sku}</p>:<><p>Search a keyword. Tap the matching photo.</p><ProductPicker visual busy={busy} onSelect={onMatch}/><button type="button" disabled={busy} aria-pressed={d.destination==='new'} onClick={()=>change('destination','new')}>{d.destination==='new'?'New product selected ✓':'Not in inventory? Create new product'}</button></>}</section>
+  <section className="cs-panel cs-inventory-matching-panel">
+   <div className="cs-section-heading">
+    <div>
+     <h2>{draft.product_id ? '✓ Matched to Existing Inventory' : 'Find or Match Product in Inventory'}</h2>
+     <p>{draft.product_id ? `Linked to ${d.name} (${d.sku}). Updates existing product and stock upon publishing.` : 'AI recommendations based on your photos, deity motif, and craft details.'}</p>
+    </div>
+    {draft.product_id && (
+     <button type="button" className="cs-btn-unlink" disabled={busy} onClick={()=>{change('product_id',null);change('destination','new');}}>
+      Unlink / Change Match
+     </button>
+    )}
+   </div>
+
+   {draft.product_id ? (
+    <div className="cs-matched-summary">
+     <strong>{d.name}</strong>
+     <span>SKU: {d.sku} · Category: {d.category} · Material: {d.material}</span>
+    </div>
+   ) : (
+    <div className="cs-similarity-block">
+     {similarMatches.length > 0 ? (
+      <>
+       <div className="cs-similar-heading">
+        <strong>🔍 Similar Looking Products in Inventory ({similarMatches.length} suggested)</strong>
+        <small>Click to link this draft to an existing product if it matches:</small>
+       </div>
+       <div className="cs-similar-grid">
+        {similarMatches.slice(0, 4).map(({ product: p, score, reason }) => (
+         <div key={p.id} className="cs-similar-card">
+          <div className="cs-similar-img-box">
+           <img src={p.image_url || '/assets/images/product-fallback.svg'} alt={p.name} loading="lazy" />
+           <span className={`cs-match-badge ${score >= 70 ? 'high' : 'medium'}`}>{score}% match</span>
+          </div>
+          <div className="cs-similar-body">
+           <strong>{p.name}</strong>
+           <small>{p.sku} · {p.category || 'Decor'} · {p.material || 'Brass'}</small>
+           <span className="cs-match-reason">{reason}</span>
+           <span className="cs-match-stock">{p.quantity ?? 0} in stock · ₹{p.mrp || '—'}</span>
+          </div>
+          <button type="button" className="cs-btn-link-match" disabled={busy} onClick={()=>onMatch(p)}>
+           This is it (Link) →
+          </button>
+         </div>
+        ))}
+       </div>
+      </>
+     ) : (
+      <div className="cs-similar-empty-banner">
+       <span className="cs-empty-icon">💡</span>
+       <div>
+        <strong>No similar products found in existing inventory.</strong>
+        <p>This appears to be a brand-new idol or design that Decorbeats has never listed before.</p>
+       </div>
+      </div>
+     )}
+
+     {/* Clear Option to Create New Product */}
+     <div className="cs-create-new-prompt">
+      <button
+       type="button"
+       className={`cs-btn-select-new ${d.destination === 'new' ? 'selected' : ''}`}
+       disabled={busy}
+       onClick={()=>change('destination', 'new')}
+      >
+       {d.destination === 'new' ? '✓ New Product Selected (Will create new listing & SKU)' : '✨ None of these — This is a Brand New Product'}
+      </button>
+      <span>If this physical piece has never been listed on Decorbeats before, select this to create a new live listing.</span>
+     </div>
+
+     {/* Expandable Manual Search / Barcode Scanner */}
+     <details className="cs-manual-search-details">
+      <summary>🔍 Or search entire inventory by keyword / barcode</summary>
+      <div className="cs-manual-search-wrap">
+       <ProductPicker visual busy={busy} onSelect={onMatch} />
+      </div>
+     </details>
+    </div>
+   )}
+  </section>
   <section className="cs-panel cs-export-bar"><div><h2>Product review</h2><p>Check the photos and facts. Save, export or publish.</p></div><div className="cs-row-actions"><button type="button" disabled={exporting} onClick={download}>{exporting?'Preparing…':'Download photos + details ↓'}</button><a className="cs-external-link" href="https://sellercentral.amazon.in/product-search" target="_blank" rel="noopener noreferrer">Open Seller Central ↗</a></div>{notice&&<p role="status">{notice}</p>}</section>
   <div className="cs-review-columns"><section className="cs-panel"><div className="cs-section-heading"><h2>1. Photos</h2><button type="button" onClick={onPhotos}>Replace / add</button></div><ReviewGallery key={draft.id} photos={d.photos} onInspect={onInspect} onDelete={onDeletePhoto}/><div className="cs-lifestyle-staging"><div className="cs-lifestyle-heading"><h3>✨ Studio Photo Retouching & AI Staging</h3><p>Clean raw studio captures to pure white e-commerce standards, boost brass exposure, or stage authentic Indian lifestyle scenes.</p></div><div className="cs-row-actions cs-lifestyle-buttons"><button type="button" disabled={busy||draft.status==='published'||!d.photos?.hero?.url} onClick={()=>onEnhancePhoto?.('hero',{cleanBackground:true,brighten:true,shadow:true})}>🪄 Pure White Background</button><button type="button" disabled={busy||draft.status==='published'||!d.photos?.hero?.url} onClick={()=>onEnhancePhoto?.('hero',{brightenOnly:true})}>☀️ Brighten & Boost Warmth</button><button type="button" disabled={busy||draft.status==='published'||!d.photos?.hero?.url} onClick={()=>{setDimForm({height:d.height||'',width:d.width||'',length:d.length||'',weight_g:d.weight_g||''});setDimModalOpen(true);}}>📏 Add Dimension Ruler</button><button type="button" disabled={busy||draft.status==='published'||!d.photos?.hero?.url} onClick={()=>onStageLifestyle('pooja_mandir')}>🪔 Pooja Mandir</button><button type="button" disabled={busy||draft.status==='published'||!d.photos?.hero?.url} onClick={()=>onStageLifestyle('living_room')}>🛋️ Living Room</button><button type="button" disabled={busy||draft.status==='published'||!d.photos?.hero?.url} onClick={()=>onStageLifestyle('festive_diwali')}>✨ Festive Diwali</button></div></div><p className="cs-caption">Check: sharp detail · enough light · full product · clean background.</p>{Object.entries(d.photos||{}).filter(([,p])=>p.warning).map(([key,p])=><p key={key} className="cs-warning">{key}: {p.warning}</p>)}<label className="cs-check"><input type="checkbox" checked={!!d.imageQualityApproved} onChange={e=>change('imageQualityApproved',e.target.checked)}/>Photos checked</label>{d.video?.url&&<details><summary>360° video</summary><video src={d.video.url} controls playsInline preload="none" style={{width:'100%'}}/></details>}<label className="cs-check"><input type="checkbox" checked={!!d.keepExistingPhotos} onChange={e=>change('keepExistingPhotos',e.target.checked)}/>Keep existing website photos too</label></section>
   <section className="cs-panel"><h2>2. Name & description</h2>{field('name','Product name')}<div className="cs-fields">{field('category','Category')}{field('material','Material')}{field('unit','What is included?')}</div><label className="cs-field"><span>Description</span><textarea rows="5" value={d.notes||''} onChange={e=>change('notes',e.target.value)} placeholder="Describe this exact product. You can paste reviewed Amazon or Canva copy here."/></label><label className="cs-field"><span>Highlights · one per line</span><textarea rows="3" value={(d.marketing?.highlights||[]).join('\n')} onChange={e=>change('marketing',{...d.marketing,highlights:e.target.value.split('\n')})}/></label><details><summary>Writing help & Amazon reference</summary><button type="button" disabled={busy||!Object.keys(d.photos||{}).length} onClick={onGenerate}>Draft description with AI</button><button type="button" onClick={async()=>{try{await navigator.clipboard.writeText(listingText(d));setNotice('Product details copied.');}catch{setNotice('Copy unavailable. Use Download photos + details.');}}}>Copy details for Amazon AI</button><p>Review AI text before saving. ZIP includes JPG photos, originals and details; unzip before uploading.</p>{field('asin','Existing Amazon ASIN')}{field('sellerSku','Amazon seller SKU')}</details></section></div>
