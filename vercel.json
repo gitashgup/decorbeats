@@ -28,5 +28,10 @@
       "source": "/catalog/:path*",
       "destination": "/"
     }
-  ]
+  ],
+  "functions": {
+    "api/*.js": {
+      "maxDuration": 60
+    }
+  }
 }

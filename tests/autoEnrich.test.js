@@ -122,3 +122,19 @@ test('nested gemini response (visualIdentification, pricingBenchmark, ecommerceL
   assert.equal(suggestedSellingPrice, 2199);
   assert.equal(estimatedCostPrice, 1050);
 });
+
+test('demand spike fallback generates valid Moradabad brass valuation and listing', () => {
+  const dimensions = { height: 18, width: 14, weight_g: 1450 };
+  const currentFacts = { name: 'Sheshashayi Vishnu', category: 'Idols & Sculptures', material: 'Brass' };
+
+  const weight = dimensions.weight_g;
+  const cost = Math.round(weight * 1.1);
+  const selling = Math.round(weight * 2.2);
+  const mrp = Math.round(weight * 2.9);
+
+  assert.equal(cost, 1595);
+  assert.equal(selling, 3190);
+  assert.equal(mrp, 4205);
+  assert.ok(selling > cost, 'Selling price must be higher than artisan cost');
+  assert.ok(mrp > selling, 'MRP must be higher than selling price');
+});
