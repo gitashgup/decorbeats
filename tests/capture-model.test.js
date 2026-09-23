@@ -11,14 +11,15 @@ function complete() {
 test('counts aggregate locations and keep damaged units out of sellable stock',()=>{
  const d=complete();assert.equal(countTotal(d.data),8);assert.equal(countTotal(d.data,'damaged'),3);assert.equal(d.baseline.quantity,12);assert.deepEqual(readiness(d),[]);
 });
-test('duplicate locations, fractional counts and incomplete measurements block publishing',()=>{
+test('duplicate locations and fractional counts block publishing',()=>{
  const d=complete();d.data.locations[1].name=' room a ';assert.ok(readiness(d).some(x=>x.includes('duplicate')));
  d.data.locations[1].sellable='2.5';assert.ok(readiness(d).some(x=>x.includes('whole-number')));
- d.data.weight_g='';assert.ok(readiness(d).some(x=>x.includes('measurements')));
 });
-test('publishing requires identity, photos, stock confirmation and pricing',()=>{
- const d=complete();d.data.stockConfirmed=false;d.data.pricingApproved=false;delete d.data.photos.hero;d.data.cost_price='';
- assert.ok(readiness(d).some(x=>x.includes('controlled')));assert.ok(readiness(d).some(x=>x.includes('photographs')));assert.ok(readiness(d).some(x=>x.includes('Megha')));assert.ok(readiness(d).some(x=>x.includes('unit cost')));
+test('publishing requires identity, photos, confirmed price with Megha and unit cost',()=>{
+ const d=complete();d.data.pricingApproved=false;delete d.data.photos.hero;d.data.cost_price='';
+ assert.ok(readiness(d).some(x=>x.includes('photographs')));assert.ok(readiness(d).some(x=>x.includes('Megha')));assert.ok(readiness(d).some(x=>x.includes('unit cost')));
+ assert.equal(readiness(d).some(x=>x.includes('controlled')), false);
+ assert.equal(readiness(d).some(x=>x.includes('measurements')), false);
 });
 test('a new capture starts with no invented count or measurements',()=>{
  const d=newDraft(null,'Room 1');assert.equal(d.product_id,null);assert.equal(d.data.locations[0].sellable,'');assert.equal(d.data.weight_g,'');assert.ok(readiness(d).length>0);

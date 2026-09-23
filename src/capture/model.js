@@ -38,9 +38,6 @@ export function readiness(draft) {
   const locations = d.locations || [];
   if (!locations.length || locations.some(l => !l.name.trim() || l.sellable === '' || !Number.isInteger(Number(l.sellable)) || Number(l.sellable) < 0 || !Number.isInteger(Number(l.damaged)) || Number(l.damaged) < 0)) issues.push('Complete each location and its whole-number count');
   if (new Set(locations.map(l => l.name.trim().toLowerCase())).size !== locations.length) issues.push('Combine duplicate location rows');
-  if (!d.allLocations || !d.stockConfirmed) issues.push('Confirm all locations and controlled sellable stock');
-  if (['length','width','height','weight_g','packed_length','packed_width','packed_height','packed_weight_g'].some(k => !Number.isFinite(Number(d[k])) || Number(d[k]) <= 0)) issues.push('Complete product and packed measurements');
-  if (Number(d.packed_weight_g) < Number(d.weight_g)) issues.push('Packed weight cannot be less than product weight');
   if (!Number.isFinite(Number(d.mrp)) || Number(d.mrp) <= 0 || !d.pricingApproved) issues.push('Confirm the website price with Megha');
   if (d.cost_price === '' || !Number.isFinite(Number(d.cost_price)) || Number(d.cost_price) < 0) issues.push('Enter the confirmed unit cost');
   if (d.b2b_price !== '' && d.b2b_price != null && (!Number.isFinite(Number(d.b2b_price)) || Number(d.b2b_price)<0)) issues.push('Enter a valid B2B price or leave it blank');
