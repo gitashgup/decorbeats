@@ -2,8 +2,8 @@ import React, {useEffect, useState} from 'react';
 import {supabase} from '../lib/supabase';
 import {saveInventoryPrices} from './inventoryPrices';
 
-export default function InventoryTable({products, pending, busy, onOpen, onSaved}) {
-  return <div className="cs-table-wrap"><table className="cs-inventory-table"><thead><tr>{['Product','Category','In stock','Cost ₹','Selling ₹','Status','Actions'].map(title=><th key={title}>{title}</th>)}</tr></thead><tbody>{products.map(product=><InventoryRow key={product.id} product={product} hasDraft={pending.some(d=>d.product_id===product.id)} busy={busy} onOpen={onOpen} onSaved={onSaved}/>)}</tbody></table>{!products.length&&<p className="cs-empty">No matching products.</p>}</div>;
+export default function InventoryTable({products, pending, busy, onOpen, onSaved, qtySort = 'none', onToggleQtySort}) {
+  return <div className="cs-table-wrap"><table className="cs-inventory-table"><thead><tr>{['Product','Category','In stock','Cost ₹','Selling ₹','Status','Actions'].map(title=><th key={title}>{title==='In stock'&&onToggleQtySort?<button type="button" className={`cs-th-sort ${qtySort!=='none'?'active':''}`} onClick={onToggleQtySort} title="Sort by quantity: Low to High (↑) / High to Low (↓)">In stock <span className="cs-sort-icon">{qtySort==='asc'?'↑':qtySort==='desc'?'↓':'↕'}</span></button>:title}</th>)}</tr></thead><tbody>{products.map(product=><InventoryRow key={product.id} product={product} hasDraft={pending.some(d=>d.product_id===product.id)} busy={busy} onOpen={onOpen} onSaved={onSaved}/>)}</tbody></table>{!products.length&&<p className="cs-empty">No matching products.</p>}</div>;
 }
 
 function InventoryRow({product, hasDraft, busy, onOpen, onSaved}) {

@@ -231,3 +231,51 @@
 .cs-manual-search-details summary{font-size:13.5px;font-weight:600;color:var(--muted);cursor:pointer;user-select:none}
 .cs-manual-search-details summary:hover{color:var(--ink)}
 .cs-manual-search-wrap{margin-top:14px}
+
+/* Quantity Sorting & Toolbar Controls */
+.cs-th-sort{background:none!important;border:0!important;padding:0!important;margin:0!important;min-height:unset!important;color:inherit!important;font:inherit!important;font-weight:inherit!important;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.cs-th-sort:hover{color:var(--accent)!important}
+.cs-th-sort.active{color:#143c26!important;font-weight:700!important}
+.cs-sort-icon{font-size:14px;opacity:.85}
+.cs-qty-sort-group{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* Amazon Importer Button & Modal */
+.cs-btn-amazon-import{background:#ff9900!important;color:#111!important;border:1px solid #d48000!important;border-radius:9px!important;font-weight:650!important;padding:10px 18px!important;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);transition:all .2s ease}
+.cs-btn-amazon-import:hover{background:#f08800!important;border-color:#b86e00!important}
+.cs-amazon-modal{max-width:760px;width:100%;border-radius:18px;padding:28px 32px}
+.cs-amazon-modal-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.cs-amazon-modal-header h2{font-size:21px;color:#0f172a;margin:0 0 4px}
+.cs-amazon-modal-header p{font-size:13.5px;color:#475569;margin:0}
+.cs-amazon-input-row{display:flex;gap:10px;margin-bottom:20px}
+.cs-amazon-input-row input{flex:1;min-height:46px;border:1.5px solid #cbd5e1;border-radius:8px;padding:10px 14px;font-size:14px}
+.cs-amazon-input-row input:focus{border-color:#ff9900;outline:2px solid #fed7aa}
+.cs-amazon-input-row button{white-space:nowrap;padding:10px 20px}
+.cs-amazon-preview-card{border:1px solid #e2e8f0;border-radius:14px;background:#f8fafc;padding:20px;margin-bottom:20px}
+.cs-amazon-preview-grid{display:grid;grid-template-columns:180px 1fr;gap:20px;align-items:start}
+.cs-amazon-gallery-preview{display:flex;flex-direction:column;gap:8px}
+.cs-amazon-main-thumb{width:180px;height:180px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;object-fit:contain;padding:8px}
+.cs-amazon-thumb-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.cs-amazon-thumb-strip img{width:42px;height:42px;background:#fff;border:1px solid #cbd5e1;border-radius:6px;object-fit:contain;cursor:pointer}
+.cs-amazon-thumb-strip img.active{border-color:#ff9900;box-shadow:0 0 0 2px #ff9900}
+.cs-amazon-info-col{display:flex;flex-direction:column;gap:8px}
+.cs-amazon-info-col h3{font-size:16px;color:#0f172a;line-height:1.35;margin:0}
+.cs-amazon-price-pill-row{display:flex;gap:12px;align-items:baseline;margin:4px 0}
+.cs-amazon-price{font-size:22px;font-weight:750;color:#0f172a}
+.cs-amazon-mrp{font-size:14px;color:#64748b;text-decoration:line-through}
+.cs-amazon-cost{font-size:13px;color:#059669;font-weight:600}
+.cs-amazon-specs-tags{display:flex;flex-wrap:wrap;gap:8px;font-size:12.5px;color:#334155;margin:4px 0}
+.cs-amazon-specs-tags span{background:#e2e8f0;padding:3px 9px;border-radius:6px;font-weight:550}
+.cs-amazon-matched-banner{background:#ecfdf5;border:1.5px solid #a7f3d0;border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:10px}
+.cs-amazon-matched-banner strong{font-size:14px;color:#065f46;display:block}
+.cs-amazon-matched-banner span{font-size:12.5px;color:#047857}
+.cs-amazon-actions{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;border-top:1px solid #e2e8f0;padding-top:18px}
+.cs-amazon-actions button{min-height:44px;padding:10px 18px;font-size:14px;font-weight:650;border-radius:9px}
+@media(max-width:680px){
+  .cs-amazon-preview-grid{grid-template-columns:1fr}
+  .cs-amazon-main-thumb{width:100%;height:220px}
+  .cs-amazon-input-row{flex-direction:column}
+  .cs-amazon-actions{flex-direction:column-reverse}
+  .cs-amazon-actions button{width:100%}
+  .cs-qty-sort-group{grid-template-columns:1fr}
+}
+
