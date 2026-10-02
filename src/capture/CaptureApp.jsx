@@ -13,6 +13,7 @@ import StockIntake from './StockIntake';
 import ProductReview from './ProductReview';
 import CameraCapture from './CameraCapture';
 import PhoneCapture from './PhoneCapture';
+import CatalogueStudio from './catalogue/CatalogueStudio';
 import { mergeCaptureDraft, sameValue, updateSharedDraft } from './sharedDraft';
 import { filterAndSortProducts, filterAndSortDrafts, nextQtySort } from './inventorySort';
 import AmazonImportModal from './AmazonImportModal';
@@ -30,9 +31,10 @@ function Select({ label, value, values, onChange }) {
 
 export default function CaptureApp() {
   const [session,setSession] = useState(null), [authReady,setAuthReady] = useState(false);
+  const [allowedUserId,setAllowedUserId] = useState(null);
   const [allowed,setAllowed] = useState(false), [email,setEmail] = useState(''), [password,setPassword] = useState('');
   const [products,setProducts] = useState([]), [drafts,setDrafts] = useState([]), [draft,setDraft] = useState(null);
-  const [search,setSearch] = useState(''), [queue,setQueue] = useState(()=>['pricing','review','drafts','published'].includes(new URLSearchParams(window.location.search).get('view'))?new URLSearchParams(window.location.search).get('view'):window.location.pathname.replace(/\/+$/, '')==='/admin'?'review':'capture'), [location,setLocation] = useState('');
+  const [search,setSearch] = useState(''), [queue,setQueue] = useState(()=>['catalogue','pricing','review','drafts','published'].includes(new URLSearchParams(window.location.search).get('view'))?new URLSearchParams(window.location.search).get('view'):window.location.pathname.replace(/\/+$/, '')==='/admin'?'review':'capture'), [location,setLocation] = useState('');
   const [busy,setBusy] = useState(false), [message,setMessage] = useState(''), [error,setError] = useState('');
   const [dirty,setDirty] = useState(false), [step,setStep] = useState(0), [shot,setShot] = useState('hero');
   const [pair,setPair] = useState(false), [guide,setGuide] = useState(false), [confirm,setConfirm] = useState(false);
@@ -64,12 +66,13 @@ export default function CaptureApp() {
   },[]);
 
   useEffect(()=>{
+    setAllowed(false);setAllowedUserId(null);
     if(!session){setAllowed(false);setProducts([]);setDrafts([]);setDraft(null);return;}
     let active=true;
     supabase.rpc('is_decorbeats_admin').then(async ({data,error})=>{
       if(!active)return;
       if(error||!data){setError('This account does not have Decorbeats admin access.');return;}
-      setAllowed(true);await refresh();
+      setAllowedUserId(session.user.id);setAllowed(true);await refresh();
     });
     return ()=>{active=false;};
   },[session?.user?.id]);
@@ -647,9 +650,14 @@ export default function CaptureApp() {
     setDraft(data);setDirty(false);setConfirm(false);setMessage('Published. Photos, details and reconciled stock are saved.');await refresh(false);
   });}
 
+  // Keep catalogue styling independent of legacy Capture Studio selectors.
+  if (queue === 'catalogue' && allowed && session?.user?.id && allowedUserId === session.user.id && !passwordPrompt) {
+    return <div className="dc-shell"><header className="dc-shell-header"><a className="dc-shell-brand" href="/admin/capture"><img src="/assets/brand/decorbeats-logo.svg" alt=""/><span>Decorbeats</span></a><nav aria-label="Catalogue workspace"><a href="/admin/capture">Inventory</a><button type="button" onClick={() => supabase.auth.signOut()}>Sign out</button></nav></header><CatalogueStudio key={session.user.id} ownerId={session.user.id}/></div>;
+  }
+
   return <div className={`cs ${phoneMode?'cs-phone-mode':''} ${draft&&step===3&&!phoneMode?'cs-review-mode':''}`}>
     <header className="cs-header"><a href="/admin" className="cs-brand"><img src="/assets/brand/decorbeats-logo.svg" alt=""/><span>DECORBEATS<small>Capture studio</small></span></a>
-      <div className="cs-header-actions"><button onClick={()=>setGuide(!guide)}>Setup guide</button>{allowed&&!phoneMode&&<button disabled={busy} onClick={()=>run(async()=>{if(draft&&(dirty||!draft.revision))await persist();setCameraOpen(false);setPair(!pair);})}>Connect iPhone ↗</button>}{!!draft?.revision&&!published&&!phoneMode&&<button disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();if(error)throw error;open(data);setMessage('Latest saved version loaded');})}>Refresh from phone</button>}{allowed&&!phoneMode&&<button onClick={()=>setPasswordPrompt(true)}>Set password</button>}<a href="/admin/capture">Inventory ↗</a>{!phoneMode&&<><a href="/admin">Review</a><a href="/admin?view=pricing">Megha · Prices</a><a href="/admin?legacy=1">Sales & older tools</a></>}{session&&!phoneMode&&<button onClick={()=>supabase.auth.signOut()}>Sign out</button>}</div>
+      <div className="cs-header-actions">{allowed&&<a href="/admin/capture?view=catalogue">Create catalogue</a>}<button onClick={()=>setGuide(!guide)}>Setup guide</button>{allowed&&!phoneMode&&<button disabled={busy} onClick={()=>run(async()=>{if(draft&&(dirty||!draft.revision))await persist();setCameraOpen(false);setPair(!pair);})}>Connect iPhone ↗</button>}{!!draft?.revision&&!published&&!phoneMode&&<button disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();if(error)throw error;open(data);setMessage('Latest saved version loaded');})}>Refresh from phone</button>}{allowed&&!phoneMode&&<button onClick={()=>setPasswordPrompt(true)}>Set password</button>}<a href="/admin/capture">Inventory ↗</a>{!phoneMode&&<><a href="/admin">Review</a><a href="/admin?view=pricing">Megha · Prices</a><a href="/admin?legacy=1">Sales & older tools</a></>}{session&&!phoneMode&&<button onClick={()=>supabase.auth.signOut()}>Sign out</button>}</div>
     </header>
     <main className="cs-main">
       {error&&<div role="alert" className="cs-alert">{error}<button onClick={()=>setError('')} aria-label="Dismiss error">×</button></div>}
@@ -658,7 +666,7 @@ export default function CaptureApp() {
       {guide&&<section className="cs-guide"><h2>Your photo station</h2><ol><li>Use the white lightbox backdrop. Clean the product and your camera lens.</li><li>Use the rear 1× camera. Turn off flash and filters. Tap the brass to focus; lower exposure if highlights look white.</li><li>For turntable video: 1080p, 30 fps, Most Compatible / H.264. Hold the phone still for one complete turn, ideally 10–20 seconds.</li><li>For cable import: unlock the iPhone, trust this Mac, open Image Capture, select only this product’s files and import to a folder. Choose those files here.</li><li>Or open this capture page on your iPhone and upload directly. Both devices use your Decorbeats login.</li></ol><p>A website cannot read the connected iPhone’s camera roll automatically. You choose the files to import.</p></section>}
       {pair&&<section className="cs-pair"><div><h2>Photograph on your iPhone</h2>{draft?.revision?<><p>Open this same page on your phone, tap Camera, sign in, then shoot. New photos land in this draft as you save.</p><p>Use Camera for each required shot, then return to this screen.</p><a href={pairUrl}>{pairUrl}</a><button onClick={()=>run(async()=>{await navigator.clipboard.writeText(pairUrl);setMessage('Phone camera link copied');})}>Copy phone link</button></>:<p>Choose or start a product first to link the phone to its draft.</p>}<button onClick={()=>setPair(false)}>Close</button></div></section>}
       {passwordPrompt&&<section className="cs-pair" style={{display:'flex'}}><div><h2>Set admin password</h2><p>Choose a secure password for your Decorbeats admin account.</p><form onSubmit={e=>{e.preventDefault();if(newPassword.length<8){setError('Password must be at least 8 characters');return;}run(async()=>{const {error}=await supabase.auth.updateUser({password:newPassword});if(error)throw error;setMessage('Admin password saved. You can now use this password to sign in from any device.');setPasswordPrompt(false);setNewPassword('');if(window.location.hash)history.replaceState(null,'',window.location.pathname+window.location.search);});}}><Field label="New password (min 8 characters)" value={newPassword} onChange={setNewPassword} type="password" required autoComplete="new-password"/><button className="cs-primary" disabled={busy}>{busy?'Saving…':'Save password →'}</button><button type="button" onClick={()=>setPasswordPrompt(false)}>Dismiss</button></form></div></section>}
-      {!authReady?<p>Opening capture studio…</p>:!allowed?<section className="cs-login"><p className="cs-eyebrow">Your photography station</p><h1>One product.<br/>Everything together.</h1><p>Match the inventory, capture photographs and a full turn, then count, measure and save.</p><div className="cs-login-steps">01 Match <span>→</span> 02 Capture <span>→</span> 03 Measure <span>→</span> 04 Review</div>
+      {!authReady?<p>Opening capture studio…</p>:(!allowed||!session?.user?.id||allowedUserId!==session.user.id)?<section className="cs-login"><p className="cs-eyebrow">Your photography station</p><h1>One product.<br/>Everything together.</h1><p>Match the inventory, capture photographs and a full turn, then count, measure and save.</p><div className="cs-login-steps">01 Match <span>→</span> 02 Capture <span>→</span> 03 Measure <span>→</span> 04 Review</div>
         {session?<p>Checking access for {session.user.email}…</p>:resetMode?<form onSubmit={e=>{e.preventDefault();run(async()=>{const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:`${window.location.origin}/admin`});if(error)throw error;setMessage(`Password setup email sent to ${email}. Check your inbox.`);setResetMode(false);});}}><p>Enter your email to receive a password setup link.</p><Field label="Admin email" value={email} onChange={setEmail} type="email" required autoComplete="username"/><button className="cs-primary" disabled={busy||!supabase||!email}>{busy?'Sending link…':'Send setup link →'}</button><button type="button" onClick={()=>setResetMode(false)} style={{marginTop:12,background:'none',border:'none',color:'#163c36',cursor:'pointer',textDecoration:'underline'}}>Back to sign in</button></form>:<form onSubmit={e=>{e.preventDefault();run(async()=>{const {error}=await supabase.auth.signInWithPassword({email,password});if(error)throw error;setPassword('');});}}>
           <Field label="Admin email" value={email} onChange={setEmail} type="email" required autoComplete="username"/>
           <Field label="Password" value={password} onChange={setPassword} type="password" required autoComplete="current-password"/>
