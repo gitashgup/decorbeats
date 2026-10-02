@@ -9,6 +9,7 @@ import './catalogue.css';
 import './navigation.css';
 import BatchIntake from './BatchIntake';
 import SourceReviewInbox, { SourceReviewCheck } from './SourceReview';
+import ReviewPackImport from './ReviewPackImport';
 
 function Photo({ photo, alt = '', ...props }) {
   const [url, setUrl] = useState('');
@@ -25,6 +26,8 @@ function NumberField({ label, value, onChange, error, id, disabled = false }) {
 
 export default function CatalogueStudio({ ownerId, reviewOnly = false, reviewSource = null }) {
   const localReview = import.meta.env.DEV && reviewOnly;
+  const [deviceReviewSource, setDeviceReviewSource] = useState(null), [reviewPackBusy, setReviewPackBusy] = useState(false);
+  const effectiveReviewSource = deviceReviewSource || reviewSource;
   const [state, setState] = useState(null), [status, setStatus] = useState('loading'), [error, setError] = useState(''), [saveError, setSaveError] = useState('');
   const [notice, setNotice] = useState(''), [working, setWorking] = useState(false), [photoBusy, setPhotoBusy] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false), [sourceOpen, setSourceOpen] = useState(false);
@@ -226,7 +229,8 @@ export default function CatalogueStudio({ ownerId, reviewOnly = false, reviewSou
     {notice && <p className="dc-notice" role="status">{notice}</p>}
     {(working || photoBusy) && <div className="dc-progress" role="status"><span>{photoBusy ? 'Preparing your photo…' : taskMessage}<small>You can cancel without losing your products.</small></span><button type="button" onClick={cancelPending}>Cancel</button></div>}
     <BatchIntake hidden={!batchOpen} onClose={() => setBatchOpen(false)} onImport={importBatch} maxProducts={Math.min(MAX_PRODUCTS - state.products.length, MAX_CATALOGUE_PRODUCTS - selected.length)} />
-    {sourceOpen && reviewSource && <SourceReviewInbox source={reviewSource} products={state.products} disabled={busy} onImport={importSourceDraft} onClose={() => setSourceOpen(false)}/>}
+    <ReviewPackImport owner={owner} onSource={setDeviceReviewSource} onBusy={setReviewPackBusy} hidden={batchOpen || sourceOpen || !!preview} disabled={busy}/>
+    {sourceOpen && effectiveReviewSource && <SourceReviewInbox source={effectiveReviewSource} products={state.products} disabled={busy} onImport={importSourceDraft} onClose={() => setSourceOpen(false)}/>}
     {!batchOpen && !sourceOpen && (preview ? <>
       <div className="dc-heading"><div><p className="dc-kicker">READY TO SHARE</p><h1>Your catalogue is ready</h1><p>{preview.products.length} products · {preview.pageCount} pages</p></div><button className="dc-text-button" onClick={() => { setPreview(null); setNotice(''); }}>← Back to editing</button></div>
       <div className="dc-preview-actions"><button className="dc-primary" onClick={() => { downloadCatalogue(preview.blob, preview.filename); setNotice('PDF download started. On iPhone, look in Safari downloads or choose Save to Files.'); }}>↓ Download PDF</button><button className="dc-secondary" onClick={nativeShare}>Share PDF ↗</button></div>
@@ -236,7 +240,7 @@ export default function CatalogueStudio({ ownerId, reviewOnly = false, reviewSou
     </> : <>
       <div className="dc-heading"><div><h1>Create your catalogue</h1><p>Add a photo and product name. Everything else is optional.</p></div><button className="dc-text-button" onClick={() => setShowCatalogues(v => !v)} aria-expanded={showCatalogues}>Your catalogues ({state.catalogues.length}) ↗</button></div>
       {showCatalogues && <section className="dc-drafts"><h2>Saved catalogue drafts</h2>{state.catalogues.map((c, index) => <button key={c.id} disabled={busy} aria-current={c.id === catalogue.id ? 'true' : undefined} onClick={() => { update(s => ({ ...s, activeCatalogueId: c.id, editingId: null })); setShowCatalogues(false); setShowLibrary(true); }}>{c.title || `Untitled catalogue ${index + 1}`}<span>{c.productIds.length} products {c.id === catalogue.id ? '· Open' : '→'}</span></button>)}<button className="dc-secondary" disabled={busy} onClick={createCatalogue}>+ Start a new catalogue</button></section>}
-      {reviewSource && <section className="dc-source-entry"><div><strong>Products from your WhatsApp groups</strong><p>{reviewSource.products.length} review candidates, with source photos and details to check.</p></div><button className="dc-primary" disabled={busy} onClick={() => { setSourceOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Review WhatsApp products</button></section>}
+      {effectiveReviewSource && <section className="dc-source-entry"><div><strong>Products from your WhatsApp groups</strong><p>{effectiveReviewSource.products.length} review candidates, with source photos and details to check.</p></div><button className="dc-primary" disabled={busy || reviewPackBusy} onClick={() => { setSourceOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Review WhatsApp products</button></section>}
       <section className="dc-batch-entry"><div><strong>Have a batch of products?</strong><p>Add up to 20 photos together, group extra views, then fill in one card at a time.</p></div><button disabled={busy || selected.length >= MAX_CATALOGUE_PRODUCTS || state.products.length >= MAX_PRODUCTS} onClick={() => { setBatchOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Add photos together</button></section>
       <label className="dc-field dc-title-field"><span>CATALOGUE NAME <small>optional</small></span><input value={catalogue.title} maxLength={100} placeholder="e.g. The festive edit" disabled={busy} onChange={e => update(s => ({ ...s, catalogues: s.catalogues.map(c => c.id === catalogue.id ? { ...c, title: e.target.value } : c) }))} /></label>
       {selected.length >= MAX_CATALOGUE_PRODUCTS && <p className="dc-notice" role="status">This catalogue has 50 products. Any new products will save to your library; start another catalogue to include them.</p>}

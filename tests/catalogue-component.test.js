@@ -124,3 +124,41 @@ test('failed source photo and cancellation keep existing products unchanged and 
     fireEvent.click(screen.getByRole('button',{name:'Add without photo'}));await waitFor(()=>assert.equal(screen.getByLabelText(/Product name/).value,'Source diya'));await saved();const state=await loadWorkspace('review:source-failure');assert.equal(state.products.length,1);assert.equal(state.products[0].photo,null);assert.equal(state.products[0].sourceReview.status,'pending');
   } finally {globalThis.fetch=originalFetch;}
 });
+
+test('device review pack imports and resumes locally while preserving product drafts',async()=>{
+  globalThis.indexedDB=new IDBFactory();const originalWorker=globalThis.Worker,originalFetch=globalThis.fetch;
+  const source={datasetId:'wa-local',title:'Review pack',products:[{id:'C1',working_name:'Local collage candidate',name_status:'working label',category:'collage_candidate',facts:[],review_flags:['Needs individual photo'],source_message_ids:['test-message'],media:[{asset_path:'assets/local.jpg',role:'collage_reference'}]}],assets:{'assets/local.jpg':new Blob(['local photo'],{type:'image/jpeg'})}};
+  globalThis.Worker=class{terminate(){}postMessage(){queueMicrotask(()=>this.onmessage({data:{type:'complete',result:source}}));}};
+  globalThis.fetch=()=>{throw Error('Local pack must not fetch data');};
+  try {
+    render(React.createElement(CatalogueStudio,{ownerId:'pack-local',reviewOnly:true}));await screen.findByLabelText(/Product name/);fireEvent.change(screen.getByLabelText(/Product name/),{target:{value:'Keep my draft'}});await saved();
+    await waitFor(()=>assert.equal(screen.getByRole('button',{name:'Import review ZIP'}).disabled,false));
+    fireEvent.change(document.querySelector('.dc-pack-import input[type=file]'),{target:{files:[new File([new Uint8Array(32)],'review.zip',{type:'application/zip'})]}});
+    await screen.findByText('1 review candidates · saved on this device');fireEvent.click(screen.getByRole('button',{name:'Review WhatsApp products'}));
+    await waitFor(()=>assert.match(document.querySelector('.dc-source-card img').getAttribute('src'),/^blob:/));
+    assert.equal((await loadWorkspace('review:pack-local')).products[0].name,'Keep my draft');
+    cleanup();render(React.createElement(CatalogueStudio,{ownerId:'pack-local',reviewOnly:true}));await screen.findByText('1 review candidates · saved on this device');assert.equal(screen.getByLabelText(/Product name/).value,'Keep my draft');assert.ok(screen.getByRole('button',{name:'Review WhatsApp products'}));
+  } finally {cleanup();globalThis.Worker=originalWorker;globalThis.fetch=originalFetch;}
+});
+
+test('review ZIP validation error keeps the existing workspace and allows retry',async()=>{
+  globalThis.indexedDB=new IDBFactory();const originalWorker=globalThis.Worker;
+  globalThis.Worker=class{terminate(){}postMessage(){queueMicrotask(()=>this.onmessage({data:{type:'error',message:'This review pack has an invalid photo hash.'}}));}};
+  try {
+    render(React.createElement(CatalogueStudio,{ownerId:'pack-invalid',reviewOnly:true}));await screen.findByLabelText(/Product name/);fireEvent.change(screen.getByLabelText(/Product name/),{target:{value:'Do not lose'}});await saved();await screen.findByRole('button',{name:'Import review ZIP'});
+    fireEvent.change(document.querySelector('.dc-pack-import input[type=file]'),{target:{files:[new File([new Uint8Array(32)],'review.zip',{type:'application/zip'})]}});
+    await waitFor(()=>assert.match(screen.getByRole('alert').textContent,/invalid photo hash/));assert.equal(screen.getByRole('button',{name:'Import review ZIP'}).disabled,false);assert.equal((await loadWorkspace('review:pack-invalid')).products[0].name,'Do not lose');
+  } finally {cleanup();globalThis.Worker=originalWorker;}
+});
+
+test('leaving during review-pack import terminates parsing and cannot save a late result',async()=>{
+  globalThis.indexedDB=new IDBFactory();const originalWorker=globalThis.Worker;let worker,terminated=0;
+  globalThis.Worker=class{constructor(){worker=this;}terminate(){terminated++;}postMessage(){}};
+  try {
+    render(React.createElement(CatalogueStudio,{ownerId:'pack-unmount',reviewOnly:true}));await screen.findByLabelText(/Product name/);await saved();await screen.findByRole('button',{name:'Import review ZIP'});
+    fireEvent.change(document.querySelector('.dc-pack-import input[type=file]'),{target:{files:[new File([new Uint8Array(32)],'review.zip',{type:'application/zip'})]}});
+    await waitFor(()=>assert.ok(worker));cleanup();assert.equal(terminated,1);
+    worker.onmessage({data:{type:'complete',result:{datasetId:'late',title:'Late pack',products:[],assets:{}}}});
+    await new Promise(resolve=>setTimeout(resolve,20));const {loadReviewPack}=await import('../src/capture/catalogue/reviewPackStorage.js');assert.equal(await loadReviewPack('review:pack-unmount'),null);
+  } finally {cleanup();globalThis.Worker=originalWorker;}
+});
