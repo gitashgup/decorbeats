@@ -1,5 +1,6 @@
-export const MAX_PRODUCTS = 100;
-export const MAX_CATALOGUE_PRODUCTS = 50;
+export const MAX_PRODUCTS = 200;
+export const MAX_CATALOGUE_PRODUCTS = 200;
+export const MAX_EXPORT_PRODUCTS = 50;
 export const uid = () => crypto.randomUUID();
 export const newProduct = () => ({ id: uid(), name: '', length: '', width: '', height: '', dimensionUnit: 'cm', weight: '', weightUnit: 'g', price: '', photo: null });
 export const newCatalogue = () => ({ id: uid(), title: '', productIds: [] });
@@ -37,11 +38,35 @@ export function selectedProducts(state) {
   const byId = new Map(state.products.map(p => [p.id, p]));
   return [...new Set(activeCatalogue(state)?.productIds || [])].map(id => byId.get(id)).filter(Boolean);
 }
+export function exportProducts(state) {
+  const excluded = new Set(activeCatalogue(state)?.exportExcludedIds || []);
+  return selectedProducts(state).filter(p => !excluded.has(p.id));
+}
+export function setPdfSelection(state, includedIds) {
+  const catalogue = activeCatalogue(state), included = new Set(includedIds);
+  if (!catalogue) return state;
+  const excluded = catalogue.productIds.filter(id => !included.has(id));
+  if (JSON.stringify(excluded) === JSON.stringify(catalogue.exportExcludedIds || [])) return state;
+  return { ...state, catalogues: state.catalogues.map(c => c.id !== catalogue.id ? c : { ...c, exportExcludedIds: excluded }) };
+}
+export function setProductIncluded(state, id, included) {
+  const ids = exportProducts(state).map(p => p.id);
+  return setPdfSelection(state, included ? [...ids, id] : ids.filter(value => value !== id));
+}
+export function reviewSummary(products) {
+  return {
+    total: products.length,
+    incomplete: products.filter(p => Object.keys(productErrors(p, true)).length).length,
+    missingPhoto: products.filter(p => !p.photo?.blob).length,
+    pendingReview: products.filter(p => (p.sourceReview || p.id?.startsWith('source-review:')) && p.sourceReview?.status !== 'confirmed').length,
+    unconfirmedPrice: products.filter(p => isBlank(p.price) && p.sourceReview?.facts?.some(f => f.field === 'catalogue_price_quote')).length,
+  };
+}
 export function exportErrors(state) {
-  const selected = selectedProducts(state);
-  if (!selected.length) return ['Choose at least one product'];
-  if (selected.length > MAX_CATALOGUE_PRODUCTS) return [`Choose up to ${MAX_CATALOGUE_PRODUCTS} products per catalogue`];
-  return selected.flatMap((p, i) => Object.values(productErrors(p, true)).map(error => `Product ${i + 1}: ${error}`));
+  const selected = exportProducts(state), errors = [];
+  if (!selected.length) return ['Choose at least one product for the PDF'];
+  if (selected.length > MAX_EXPORT_PRODUCTS) errors.push(`Choose up to ${MAX_EXPORT_PRODUCTS} products for one PDF. All products can stay in your draft`);
+  return [...errors, ...selected.flatMap((p, i) => Object.values(productErrors(p, true)).map(error => `Product ${i + 1} (${p.name || 'Untitled'}): ${error}`))];
 }
 export function moveProduct(ids, id, direction) {
   const unique = [...new Set(ids)];

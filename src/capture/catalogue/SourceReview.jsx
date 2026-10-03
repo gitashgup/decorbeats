@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { buildReviewDraft, formatReviewFact, getReviewAssets, isCollageCandidate, reviewDraftId } from './sourceReview.js';
 import { prepareCataloguePhoto } from './photos';
 import { waitForTask } from './tasks';
-import { numericError } from './model';
+import { numericError, MAX_PRODUCTS, MAX_CATALOGUE_PRODUCTS } from './model';
+import { prepareAllReviewDrafts } from './bulkSourceReview';
 import './sourceReview.css';
 
 function assetUrl(base, path) {
@@ -13,7 +14,7 @@ function assetUrl(base, path) {
 export function SourceFacts({ facts = [] }) {
   return facts.length ? <ul className="dc-source-facts">{facts.map((fact, i) => <li key={i}>{formatReviewFact(fact)}</li>)}</ul> : <p>No product specifications were confirmed in the reviewed messages.</p>;
 }
-export function SourceReviewCheck({ product, disabled, onChange, onQuote }) {
+export function SourceReviewCheck({ product, disabled, onChange, onQuote, onViewSource }) {
   const source = product.sourceReview;
   if (!source) return null;
   const quote = source.facts.find(f => f.field === 'catalogue_price_quote' && !numericError(f.value, { zero: true, decimals: 2 }) && String(f.value).trim());
@@ -21,6 +22,7 @@ export function SourceReviewCheck({ product, disabled, onChange, onQuote }) {
   return <section className="dc-source-check" aria-label="WhatsApp source review">
     <div className="dc-section-heading"><h3>Check before sharing</h3><span>{source.status === 'confirmed' ? 'Confirmed by you' : 'Review required'}</span></div>
     <p>This started as WhatsApp candidate {source.candidateId}. Names may be working labels. Only fields you confirm belong in the customer catalogue.</p>
+    {onViewSource && <button type="button" disabled={disabled} onClick={onViewSource}>View original source photos</button>}
     <details><summary>View source details and questions</summary><p><strong>Source name:</strong> {source.workingName} · {source.nameStatus}</p><SourceFacts facts={source.facts}/><ul>{source.reviewFlags.map((flag, i) => <li key={i}>{flag}</li>)}</ul><small>Source references: {source.sourceMessageIds.join(', ')}</small></details>
     {quote && <div className="dc-quote-confirm"><p>Source quote: <strong>{quote.value}</strong> · {quote.currency || 'currency to confirm'} · {quote.basis || 'price basis to confirm'}</p><button type="button" disabled={disabled} onClick={() => onQuote(String(quote.value))}>Confirm {quote.value} as the INR selling price</button><small>Tap only if this is the final INR price for exactly the product or set shown. Check tax and delivery treatment first. Otherwise enter a different price below or leave it blank.</small></div>}
     {!ready && <p>Add an individual product photo and check the name before confirming. A collage reference is not used as an individual product photo.</p>}
@@ -29,9 +31,9 @@ export function SourceReviewCheck({ product, disabled, onChange, onQuote }) {
   </section>;
 }
 
-export default function SourceReviewInbox({ source, products, disabled, onImport, onClose }) {
-  const [query, setQuery] = useState(''), [filter, setFilter] = useState('all'), [limit, setLimit] = useState(20), [selectedId, setSelectedId] = useState(null), [photoIndex, setPhotoIndex] = useState(0);
-  const [working, setWorking] = useState(false), [error, setError] = useState('');
+export default function SourceReviewInbox({ source, products, disabled, onImport, onImportAll, catalogueProductIds = [], initialCandidateId = null, onClose }) {
+  const [query, setQuery] = useState(''), [filter, setFilter] = useState('all'), [limit, setLimit] = useState(20), [selectedId, setSelectedId] = useState(initialCandidateId), [photoIndex, setPhotoIndex] = useState(0);
+  const [working, setWorking] = useState(false), [error, setError] = useState(''), [bulkProgress, setBulkProgress] = useState('');
   const task = useRef(null), mounted = useRef(true);
   const [localUrls, setLocalUrls] = useState({ assets: null, urls: {} });
   useEffect(() => {
@@ -50,6 +52,20 @@ export default function SourceReviewInbox({ source, products, disabled, onImport
   const selected = rows.find(row => row.id === selectedId), assets = selected ? getReviewAssets(selected) : [], asset = assets[photoIndex] || assets[0];
   const collage = selected && isCollageCandidate(selected);
   const existing = selected && products.find(p => p.id === reviewDraftId(selected, source.datasetId));
+  const existingIds = new Set(products.map(p => p.id)), catalogueIds = new Set(catalogueProductIds);
+  const sourceIds = rows.map(row => reviewDraftId(row, source.datasetId));
+  const bulkTooLarge = products.length + sourceIds.filter(id => !existingIds.has(id)).length > MAX_PRODUCTS || catalogueIds.size + sourceIds.filter(id => !catalogueIds.has(id)).length > MAX_CATALOGUE_PRODUCTS;
+  async function addAll() {
+    if (disabled || task.current || !source.assets || bulkTooLarge || !onImportAll) return;
+    const controller = new AbortController(); task.current = controller; setWorking(true); setError(''); setBulkProgress(`Preparing 0 of ${rows.length} products…`);
+    try {
+      const prepared = await prepareAllReviewDrafts(source, products, { signal: controller.signal, onProgress: progress => { if (mounted.current && task.current === controller) setBulkProgress(progress.message); } });
+      controller.signal.throwIfAborted();
+      if (!mounted.current || task.current !== controller) return;
+      await onImportAll(prepared);
+    } catch (e) { if (mounted.current) setError(e.name === 'AbortError' ? 'Bulk add cancelled. Your existing catalogue and edits are unchanged.' : e.message || 'Could not prepare all drafts. Your existing catalogue is unchanged.'); }
+    finally { controller.abort(); if (task.current === controller) task.current = null; if (mounted.current) { setWorking(false); setBulkProgress(''); } }
+  }
   async function add(withPhoto) {
     if (disabled || task.current || !selected) return;
     const controller = new AbortController(); task.current = controller; setWorking(true); setError('');
@@ -75,13 +91,15 @@ export default function SourceReviewInbox({ source, products, disabled, onImport
     <div className="dc-heading"><div><p className="dc-kicker">FROM YOUR WHATSAPP EXPORTS</p><h1>Review your products</h1><p>{rows.length} candidates · 13 September–2 October 2026</p></div><button disabled={working} onClick={onClose}>← Back to catalogue</button></div>
     <p className="dc-source-intro">Start with the photos, then check the name and details. These are review candidates, not current stock or final offers. Nothing is added to your catalogue until you choose it. Your reviews save only on this device.</p>
     <p className="dc-muted">Marketing history ends on 29 September in the supplied export. Quotes with no currency or selling basis remain unconfirmed. Costs, orders and raw chat are excluded.</p>
+    {onImportAll && <section className="dc-source-bulk"><div><strong>Review the whole collection together</strong><p>Add all {rows.length} candidates to this draft. Existing edits stay as they are. Missing photos and unconfirmed details remain flagged.</p>{!source.assets && <small>Import the review ZIP on this device to enable bulk add.</small>}{bulkTooLarge && <small>This device or draft would exceed {MAX_CATALOGUE_PRODUCTS} products. Use a smaller selection.</small>}</div><button className="dc-primary" disabled={disabled || working || !source.assets || bulkTooLarge || !rows.length} onClick={addAll}>Add all {rows.length} to draft catalogue</button></section>}
+    {bulkProgress && <div className="dc-progress" role="status"><span>{bulkProgress}<small>Preparing photos one at a time. Nothing is marked reviewed.</small></span><button onClick={() => task.current?.abort()}>Cancel bulk add</button></div>}
+    {error && <p className="dc-alert" role="alert">{error}</p>}
     <div className="dc-source-tools"><label className="dc-field"><span>Find a product</span><input value={query} onChange={e => { setQuery(e.target.value); setLimit(20); }} placeholder="Search name or reference"/></label><label className="dc-field"><span>Show</span><select value={filter} onChange={e => { setFilter(e.target.value); setLimit(20); }}><option value="all">All candidates</option><option value="new">Not added on this device</option><option value="imported">Added on this device</option><option value="collage">Collage references</option></select></label></div>
     {selected && <article className="dc-source-detail"><div className="dc-section-heading"><h2>{selected.working_name}</h2><button disabled={working} onClick={() => setSelectedId(null)}>Close details</button></div><p>{selected.id} · {selected.name_status}</p>
       {asset ? <><img className="dc-source-large" src={urlFor(asset.asset_path)} alt={collage ? 'Full source collage, reference only' : selected.working_name}/><p className="dc-muted">{collage ? `Full collage reference. Candidate position: row ${asset.tile_position?.row || '?'}, column ${asset.tile_position?.column || '?'}. An individual product photo is needed.` : `${(asset.role || 'Source photo').replaceAll('_', ' ')}${asset.date ? ` · ${asset.date.slice(0, 10)}` : ''}`}</p></> : <p>No individual product photo was supplied for this candidate.</p>}
       {assets.length > 1 && <div className="dc-source-thumbs">{assets.map((media, i) => <button key={media.asset_path} disabled={working} aria-pressed={i === photoIndex} onClick={() => setPhotoIndex(i)}><img src={urlFor(media.asset_path)} alt={`Source view ${i + 1}`}/><span>View {i + 1}</span></button>)}</div>}
       <SourceFacts facts={selected.facts}/><details><summary>Questions to check ({selected.review_flags?.length || 0})</summary><ul>{selected.review_flags?.map((flag, i) => <li key={i}>{flag}</li>)}</ul><small>Source references: {selected.source_message_ids?.join(', ')}</small></details>
       <p className="dc-muted">Add this as a draft, then confirm its photo, name and any optional details in the editor. Source quotes and dimensions are not guessed into fields.</p>
-      {error && <p className="dc-alert" role="alert">{error}</p>}
       <div className="dc-source-actions"><button className="dc-primary" disabled={disabled || working} onClick={() => add(!!asset && !collage)}>{working ? 'Preparing review draft…' : existing ? 'Open your existing draft' : collage || !asset ? 'Add draft · photo needed' : 'Add draft with this photo'}</button>{!existing && asset && !collage && <button disabled={disabled || working} onClick={() => add(false)}>Add without photo</button>}{working && <button onClick={() => task.current?.abort()}>Cancel</button>}</div>
     </article>}
     <p className="dc-muted">{visible.length} candidates · {imported.size} added on this device</p>

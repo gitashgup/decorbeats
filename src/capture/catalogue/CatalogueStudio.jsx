@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { activeCatalogue, exportErrors, formatDetails, formatPrice, MAX_PRODUCTS, MAX_CATALOGUE_PRODUCTS, moveProduct, newCatalogue, newProduct, newWorkspace, productErrors, selectedProducts, toggleProduct } from './model';
+import { activeCatalogue, exportErrors, exportProducts, reviewSummary, setProductIncluded, setPdfSelection, MAX_EXPORT_PRODUCTS, formatDetails, formatPrice, MAX_PRODUCTS, MAX_CATALOGUE_PRODUCTS, moveProduct, newCatalogue, newProduct, newWorkspace, productErrors, selectedProducts, toggleProduct } from './model';
 import { loadWorkspace, saveWorkspace, storageMessage } from './storage';
 import { prepareCataloguePhoto } from './photos';
 import { downloadCatalogue, shareCatalogue } from './share';
@@ -10,6 +10,7 @@ import './navigation.css';
 import BatchIntake from './BatchIntake';
 import SourceReviewInbox, { SourceReviewCheck } from './SourceReview';
 import ReviewPackImport from './ReviewPackImport';
+import { mergeBulkReviewDrafts } from './bulkSourceReview';
 
 function Photo({ photo, alt = '', ...props }) {
   const [url, setUrl] = useState('');
@@ -29,8 +30,9 @@ export default function CatalogueStudio({ ownerId, reviewOnly = false, reviewSou
   const [deviceReviewSource, setDeviceReviewSource] = useState(null), [reviewPackBusy, setReviewPackBusy] = useState(false);
   const effectiveReviewSource = deviceReviewSource || reviewSource;
   const [state, setState] = useState(null), [status, setStatus] = useState('loading'), [error, setError] = useState(''), [saveError, setSaveError] = useState('');
+  const [productFilter, setProductFilter] = useState('all');
   const [notice, setNotice] = useState(''), [working, setWorking] = useState(false), [photoBusy, setPhotoBusy] = useState(false);
-  const [batchOpen, setBatchOpen] = useState(false), [sourceOpen, setSourceOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false), [sourceOpen, setSourceOpen] = useState(false), [sourceCandidateId, setSourceCandidateId] = useState(null);
   const touchStart = useRef(null);
   const [showLibrary, setShowLibrary] = useState(false), [showCatalogues, setShowCatalogues] = useState(false);
   const [taskMessage, setTaskMessage] = useState('');
@@ -139,6 +141,13 @@ export default function CatalogueStudio({ ownerId, reviewOnly = false, reviewSou
     commit(); setSourceOpen(false); setNotice(existing ? 'Opened your existing draft. Your edits are unchanged.' : 'Review draft added. Check its photo, name and details, then confirm it before exporting.');
     window.scrollTo({ top: 0, behavior: 'smooth' }); return true;
   }
+  async function importAllSourceDrafts(products) {
+    if (blocked.current || actionLock.current || photoBusy) throw new Error('Finish the current action or reload the saved workspace before adding all products.');
+    const next = mergeBulkReviewDrafts(latest.current, products);
+    update(next); commit(); setSourceOpen(false); setProductFilter('all');
+    setNotice(`All ${products.length} candidates are in this draft. Existing edits are kept. Review the cards and choose which products belong in the PDF.`);
+    window.scrollTo({ top: 0, behavior: 'smooth' }); return true;
+  }
   function confirmSourceReview(confirmed) {
     const product = latest.current.products.find(p => p.id === latest.current.editingId);
     if (!product?.sourceReview) return;
@@ -181,8 +190,8 @@ export default function CatalogueStudio({ ownerId, reviewOnly = false, reviewSou
   async function openPreview() {
     if (actionLock.current || photoBusy) return;
     const problems = exportErrors(latest.current);
-    if (problems.length) { setError(`Before exporting: ${problems.slice(0, 4).join('. ')}${problems.length > 4 ? `. Plus ${problems.length - 4} more fields to check.` : '.'}`); setShowLibrary(true); return; }
-    const snapshot = latest.current, catalogue = activeCatalogue(snapshot), products = selectedProducts(snapshot);
+    if (problems.length) { setError(`Before exporting: ${problems.slice(0, 4).join('. ')}${problems.length > 4 ? `. Plus ${problems.length - 4} more checks to complete.` : '.'}`); setShowLibrary(true); return; }
+    const snapshot = latest.current, catalogue = activeCatalogue(snapshot), products = exportProducts(snapshot);
     const controller = beginTask('Loading the PDF tools…');
     // Export the visible snapshot even if the device save is slow or unavailable.
     // Autosave continues independently; its status/error stays visible.
@@ -217,6 +226,8 @@ export default function CatalogueStudio({ ownerId, reviewOnly = false, reviewSou
 
   if (!state) return <section className="dc"><p role={error ? 'alert' : 'status'}>{error || 'Opening your saved catalogues…'}</p>{error && <button onClick={() => window.location.reload()}>Retry opening workspace</button>}</section>;
   const catalogue = activeCatalogue(state), product = state.products.find(p => p.id === state.editingId), selected = selectedProducts(state), issues = product ? productErrors(product) : {};
+  const pdfProducts = exportProducts(state), pdfIds = new Set(pdfProducts.map(p => p.id)), summary = reviewSummary(selected);
+  const filteredRows = selected.map((p, i) => ({ p, i })).filter(({ p }) => productFilter === 'all' || (productFilter === 'attention' ? Object.keys(productErrors(p, true)).length > 0 : Object.keys(productErrors(p, true)).length === 0));
   const busy = working || photoBusy || blocked.current;
   const editingIndex = selected.findIndex(p => p.id === product?.id);
   const views = product?.photos?.length ? product.photos : product?.photo ? [product.photo] : [];
@@ -230,7 +241,7 @@ export default function CatalogueStudio({ ownerId, reviewOnly = false, reviewSou
     {(working || photoBusy) && <div className="dc-progress" role="status"><span>{photoBusy ? 'Preparing your photo…' : taskMessage}<small>You can cancel without losing your products.</small></span><button type="button" onClick={cancelPending}>Cancel</button></div>}
     <BatchIntake hidden={!batchOpen} onClose={() => setBatchOpen(false)} onImport={importBatch} maxProducts={Math.min(MAX_PRODUCTS - state.products.length, MAX_CATALOGUE_PRODUCTS - selected.length)} />
     <ReviewPackImport owner={owner} onSource={setDeviceReviewSource} onBusy={setReviewPackBusy} hidden={batchOpen || sourceOpen || !!preview} disabled={busy}/>
-    {sourceOpen && effectiveReviewSource && <SourceReviewInbox source={effectiveReviewSource} products={state.products} disabled={busy} onImport={importSourceDraft} onClose={() => setSourceOpen(false)}/>}
+    {sourceOpen && effectiveReviewSource && <SourceReviewInbox source={effectiveReviewSource} products={state.products} disabled={busy} onImport={importSourceDraft} onImportAll={importAllSourceDrafts} catalogueProductIds={catalogue.productIds} initialCandidateId={sourceCandidateId} onClose={() => setSourceOpen(false)}/>}
     {!batchOpen && !sourceOpen && (preview ? <>
       <div className="dc-heading"><div><p className="dc-kicker">READY TO SHARE</p><h1>Your catalogue is ready</h1><p>{preview.products.length} products · {preview.pageCount} pages</p></div><button className="dc-text-button" onClick={() => { setPreview(null); setNotice(''); }}>← Back to editing</button></div>
       <div className="dc-preview-actions"><button className="dc-primary" onClick={() => { downloadCatalogue(preview.blob, preview.filename); setNotice('PDF download started. On iPhone, look in Safari downloads or choose Save to Files.'); }}>↓ Download PDF</button><button className="dc-secondary" onClick={nativeShare}>Share PDF ↗</button></div>
@@ -240,10 +251,10 @@ export default function CatalogueStudio({ ownerId, reviewOnly = false, reviewSou
     </> : <>
       <div className="dc-heading"><div><h1>Create your catalogue</h1><p>Add a photo and product name. Everything else is optional.</p></div><button className="dc-text-button" onClick={() => setShowCatalogues(v => !v)} aria-expanded={showCatalogues}>Your catalogues ({state.catalogues.length}) ↗</button></div>
       {showCatalogues && <section className="dc-drafts"><h2>Saved catalogue drafts</h2>{state.catalogues.map((c, index) => <button key={c.id} disabled={busy} aria-current={c.id === catalogue.id ? 'true' : undefined} onClick={() => { update(s => ({ ...s, activeCatalogueId: c.id, editingId: null })); setShowCatalogues(false); setShowLibrary(true); }}>{c.title || `Untitled catalogue ${index + 1}`}<span>{c.productIds.length} products {c.id === catalogue.id ? '· Open' : '→'}</span></button>)}<button className="dc-secondary" disabled={busy} onClick={createCatalogue}>+ Start a new catalogue</button></section>}
-      {effectiveReviewSource && <section className="dc-source-entry"><div><strong>Products from your WhatsApp groups</strong><p>{effectiveReviewSource.products.length} review candidates, with source photos and details to check.</p></div><button className="dc-primary" disabled={busy || reviewPackBusy} onClick={() => { setSourceOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Review WhatsApp products</button></section>}
+      {effectiveReviewSource && <section className="dc-source-entry"><div><strong>Products from your WhatsApp groups</strong><p>{effectiveReviewSource.products.length} review candidates, with source photos and details to check.</p></div><button className="dc-primary" disabled={busy || reviewPackBusy} onClick={() => { setSourceCandidateId(null); setSourceOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Review WhatsApp products</button></section>}
       <section className="dc-batch-entry"><div><strong>Have a batch of products?</strong><p>Add up to 20 photos together, group extra views, then fill in one card at a time.</p></div><button disabled={busy || selected.length >= MAX_CATALOGUE_PRODUCTS || state.products.length >= MAX_PRODUCTS} onClick={() => { setBatchOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Add photos together</button></section>
       <label className="dc-field dc-title-field"><span>CATALOGUE NAME <small>optional</small></span><input value={catalogue.title} maxLength={100} placeholder="e.g. The festive edit" disabled={busy} onChange={e => update(s => ({ ...s, catalogues: s.catalogues.map(c => c.id === catalogue.id ? { ...c, title: e.target.value } : c) }))} /></label>
-      {selected.length >= MAX_CATALOGUE_PRODUCTS && <p className="dc-notice" role="status">This catalogue has 50 products. Any new products will save to your library; start another catalogue to include them.</p>}
+      {selected.length >= MAX_CATALOGUE_PRODUCTS && <p className="dc-notice" role="status">This draft has {MAX_CATALOGUE_PRODUCTS} products. Start another catalogue to arrange a different selection of your saved products.</p>}
       <div className="dc-workspace"><section className="dc-editor dc-swipe-card" aria-label="Product template" onTouchStart={startSwipe} onTouchEnd={finishSwipe}>
         {editingIndex >= 0 && selected.length > 1 && <nav className="dc-card-nav" aria-label="Product cards"><button disabled={busy || editingIndex === 0} onClick={() => goToProduct(-1)}>← Back</button><span>Product {editingIndex + 1} of {selected.length}<br/>Swipe or use Next</span><button disabled={busy || editingIndex === selected.length - 1} onClick={() => goToProduct(1)}>Next →</button></nav>}
         <div className="dc-section-heading"><h2>{product ? 'Your product' : 'Add a product'}</h2><span>{product ? `Product ${state.products.findIndex(p => p.id === product.id) + 1}` : 'New product'}</span></div>
@@ -256,7 +267,7 @@ export default function CatalogueStudio({ ownerId, reviewOnly = false, reviewSou
         {views.length > 1 && <section className="dc-photo-views" aria-label="Product views"><p>{views.length} views of this product · choose the cover for your PDF</p><div>{views.map((photo, i) => <button key={photo.assetId || i} disabled={busy} aria-label={`Use view ${i + 1} as cover`} aria-pressed={photo.assetId === product.photo?.assetId} onClick={() => chooseCover(photo)}><Photo photo={photo} alt={`Product view ${i + 1}`}/><span>{photo.assetId === product.photo?.assetId ? 'Cover' : `View ${i + 1}`}</span></button>)}</div></section>}
         {product?.photo?.warning && <p className="dc-photo-warning">{product.photo.warning}</p>}
         <label className="dc-field"><span>Product name <small>needed for PDF</small></span><input ref={nameInput} disabled={busy} value={product?.name || ''} maxLength={160} placeholder="e.g. Lotus diya" onChange={e => editField('name', e.target.value)} autoComplete="off" /></label>
-        {product?.sourceReview && <SourceReviewCheck product={product} disabled={busy} onChange={confirmSourceReview} onQuote={value => editField('price', value)}/>}
+        {product?.sourceReview && <SourceReviewCheck product={product} disabled={busy} onChange={confirmSourceReview} onQuote={value => editField('price', value)} onViewSource={effectiveReviewSource?.datasetId === product.sourceReview.datasetId ? () => { setSourceCandidateId(product.sourceReview.candidateId); setSourceOpen(true); window.scrollTo({ top: 0, behavior: 'smooth' }); } : undefined}/>}
         <p className="dc-dictation-hint">On iPhone, tap the keyboard microphone to dictate into the selected field. Check names and numbers before sharing.</p>
         <div className="dc-optional-heading"><span>Product details</span><small>All optional. Blank fields stay out of the PDF.</small></div>
         <fieldset disabled={busy} className="dc-dimensions"><legend>Dimensions</legend><div><NumberField id="catalogue-length" label="Length" value={product?.length} error={issues.length} onChange={v => editField('length', v)}/><NumberField id="catalogue-width" label="Width" value={product?.width} error={issues.width} onChange={v => editField('width', v)}/><NumberField id="catalogue-height" label="Height" value={product?.height} error={issues.height} onChange={v => editField('height', v)}/><label className="dc-field"><span>Unit</span><select aria-label="Dimension unit" value={product?.dimensionUnit || 'cm'} onChange={e => editField('dimensionUnit', e.target.value)}><option value="cm">cm</option><option value="in">in</option><option value="mm">mm</option></select></label></div></fieldset>
@@ -264,9 +275,22 @@ export default function CatalogueStudio({ ownerId, reviewOnly = false, reviewSou
         <div className="dc-main-actions"><button className="dc-primary" disabled={busy || !product} onClick={saveAndAnother}>{working ? taskMessage.startsWith('Saving') ? 'Saving…' : 'Preparing PDF…' : editingIndex >= 0 && editingIndex < selected.length - 1 ? 'Save & next  →' : 'Save & add another  + '}</button><button className="dc-secondary" disabled={busy || !selected.length} onClick={openPreview}>{working ? taskMessage.startsWith('Saving') ? 'Saving…' : 'Preparing PDF…' : `Preview catalogue  →`}</button></div>
         <p className="dc-muted">Incomplete products are saved too. Add a name and photo before exporting.</p>
       </section>
-      <aside className="dc-selection"><div className="dc-section-heading"><h2>In this catalogue</h2><span>{selected.length} / {MAX_CATALOGUE_PRODUCTS}</span></div><p className="dc-muted">Choose the products and arrange their order.</p>
+      <aside className="dc-selection"><div className="dc-section-heading"><h2>Review this draft</h2><span>{selected.length} / {MAX_CATALOGUE_PRODUCTS}</span></div>
+        {!!selected.length && <section className="dc-review-summary" aria-label="Draft review summary"><strong>{summary.total} products · {summary.incomplete} need attention</strong><p>{summary.missingPhoto} need a photo · {summary.pendingReview} await review · {summary.unconfirmedPrice} have an unconfirmed source price</p><p>Blank prices remain optional and stay out of the PDF.</p><label className="dc-field"><span>Show draft products</span><select value={productFilter} onChange={e => setProductFilter(e.target.value)}><option value="all">All products</option><option value="attention">Need attention</option><option value="ready">Ready for PDF</option></select></label><div className="dc-pdf-selection"><strong>{pdfProducts.length} included in PDF</strong><p>A PDF can contain up to {MAX_EXPORT_PRODUCTS} products. Excluding a product keeps it here for review.</p><button disabled={busy} onClick={() => update(s => setPdfSelection(s, selectedProducts(s).filter(p => !Object.keys(productErrors(p, true)).length).slice(0, MAX_EXPORT_PRODUCTS).map(p => p.id)))}>Include first {MAX_EXPORT_PRODUCTS} ready products</button><button disabled={busy} onClick={() => update(s => setPdfSelection(s, selectedProducts(s).map(p => p.id)))}>Include all in PDF</button></div></section>}
+        <p className="dc-muted">Edit each card, arrange the order and choose what to include in the PDF.</p>
         {!selected.length && <div className="dc-empty">Your first product will appear here.<br />Already saved one? Choose it below.</div>}
-        <ol className="dc-products">{selected.map((p, i) => <li key={p.id}><div className="dc-list-image"><Photo photo={p.photo} alt=""/>{!p.photo && <span>PHOTO</span>}</div><div className="dc-list-copy"><span className="dc-product-number">{String(i + 1).padStart(2, '0')}</span><button className="dc-product-name" disabled={busy} onClick={() => { update(s => ({ ...s, editingId: p.id })); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>{p.name || 'Untitled product'}</button><button className="dc-edit-product" disabled={busy} aria-label={`Edit ${p.name || 'untitled product'}`} onClick={() => { update(s => ({ ...s, editingId: p.id })); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Edit product</button><small>{Object.keys(productErrors(p, true)).length ? 'Draft · needs a little more' : formatPrice(p.price) || 'Ready for PDF'}</small></div><div className="dc-order"><button disabled={busy || i === 0} aria-label={`Move ${p.name || 'untitled product'} up`} onClick={() => update(s => ({ ...s, catalogues: s.catalogues.map(c => c.id !== catalogue.id ? c : { ...c, productIds: moveProduct(c.productIds, p.id, -1) }) }))}>↑</button><button disabled={busy || i === selected.length - 1} aria-label={`Move ${p.name || 'untitled product'} down`} onClick={() => update(s => ({ ...s, catalogues: s.catalogues.map(c => c.id !== catalogue.id ? c : { ...c, productIds: moveProduct(c.productIds, p.id, 1) }) }))}>↓</button><button disabled={busy} aria-label={`Remove ${p.name || 'untitled product'} from catalogue`} onClick={() => update(s => toggleProduct(s, p.id))}>×</button></div></li>)}</ol>
+        <ol className="dc-products">{filteredRows.map(({ p, i }) => <li key={p.id}>
+          <div className="dc-list-image"><Photo photo={p.photo} alt="" loading="lazy"/>{!p.photo && <span>PHOTO NEEDED</span>}</div>
+          <div className="dc-list-copy"><span className="dc-product-number">{String(i + 1).padStart(2, '0')}</span>
+            <button className="dc-product-name" disabled={busy} onClick={() => { update(s => ({ ...s, editingId: p.id })); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>{p.name || 'Untitled product'}</button>
+            <button className="dc-edit-product" disabled={busy} aria-label={`Edit ${p.name || 'untitled product'}`} onClick={() => { update(s => ({ ...s, editingId: p.id })); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Edit product</button>
+            <small>{Object.values(productErrors(p, true)).join(' · ') || formatPrice(p.price) || 'Ready for PDF'}</small>
+            {p.sourceReview?.facts?.some(f => f.field === 'catalogue_price_quote') && !String(p.price || '').trim() && <small>Source price unconfirmed · omitted from PDF</small>}
+            <label className="dc-pdf-include"><input type="checkbox" aria-label={`Include ${p.name || 'untitled product'} in PDF`} disabled={busy} checked={pdfIds.has(p.id)} onChange={e => update(s => setProductIncluded(s, p.id, e.target.checked))}/><span>Include in PDF</span></label>
+          </div>
+          <div className="dc-order"><button disabled={busy || i === 0} aria-label={`Move ${p.name || 'untitled product'} up`} onClick={() => update(s => ({ ...s, catalogues: s.catalogues.map(c => c.id !== catalogue.id ? c : { ...c, productIds: moveProduct(c.productIds, p.id, -1) }) }))}>↑</button><button disabled={busy || i === selected.length - 1} aria-label={`Move ${p.name || 'untitled product'} down`} onClick={() => update(s => ({ ...s, catalogues: s.catalogues.map(c => c.id !== catalogue.id ? c : { ...c, productIds: moveProduct(c.productIds, p.id, 1) }) }))}>↓</button><button disabled={busy} aria-label={`Remove ${p.name || 'untitled product'} from catalogue`} onClick={() => update(s => toggleProduct(s, p.id))}>×</button></div>
+        </li>)}</ol>
+        {!!selected.length && !filteredRows.length && <p className="dc-muted">No products match this review filter.</p>}
         <button className="dc-library-toggle" disabled={busy} aria-expanded={showLibrary} onClick={() => setShowLibrary(v => !v)}>+ Choose saved products ({state.products.length})</button>
         {showLibrary && <section className="dc-library"><h3>Your saved products</h3><p>Saved on this device. Edits update the product wherever it is reused.</p>{!state.products.length && <p>No saved products yet.</p>}{state.products.map(p => <label key={p.id}><input type="checkbox" disabled={busy || (!catalogue.productIds.includes(p.id) && selected.length >= MAX_CATALOGUE_PRODUCTS)} checked={catalogue.productIds.includes(p.id)} onChange={() => update(s => toggleProduct(s, p.id))}/><span>{p.name || 'Untitled product'}</span></label>)}</section>}
         <div className="dc-device-note"><span aria-hidden="true">◉</span><div><strong>Yours, on this device</strong><p>Photos and drafts stay in this browser. They won’t sync to another phone or computer. Clearing browser data can remove them. Download your finished PDF to keep a copy.</p></div></div>

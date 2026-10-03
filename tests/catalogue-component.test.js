@@ -42,7 +42,7 @@ test('invalid file fails visibly and does not add or replace a product',async()=
 });
 
 test('product capacity leaves saved status unchanged instead of hanging on Saving',async()=>{
-  globalThis.indexedDB=new IDBFactory();const {newWorkspace,newProduct}=await import('../src/capture/catalogue/model.js');const state=newWorkspace();state.products=Array.from({length:100},()=>newProduct());await saveWorkspace('review:full',state,0);render(React.createElement(CatalogueStudio,{ownerId:'full',reviewOnly:true}));await screen.findByLabelText(/Product name/);fireEvent.change(screen.getByLabelText(/Product name/),{target:{value:'One too many'}});assert.match(screen.getByRole('alert').textContent,/100 products/);assert.ok(screen.getByText('Saved on this device',{exact:true}));assert.equal((await loadWorkspace('review:full')).products.length,100);
+  globalThis.indexedDB=new IDBFactory();const {newWorkspace,newProduct}=await import('../src/capture/catalogue/model.js');const state=newWorkspace();state.products=Array.from({length:200},()=>newProduct());await saveWorkspace('review:full',state,0);render(React.createElement(CatalogueStudio,{ownerId:'full',reviewOnly:true}));await screen.findByLabelText(/Product name/);fireEvent.change(screen.getByLabelText(/Product name/),{target:{value:'One too many'}});assert.match(screen.getByRole('alert').textContent,/200 products/);assert.ok(screen.getByText('Saved on this device',{exact:true}));assert.equal((await loadWorkspace('review:full')).products.length,200);
 });
 
 test('a valid photo and name can preview without waiting for a stuck device autosave',async()=>{
@@ -161,4 +161,52 @@ test('leaving during review-pack import terminates parsing and cannot save a lat
     worker.onmessage({data:{type:'complete',result:{datasetId:'late',title:'Late pack',products:[],assets:{}}}});
     await new Promise(resolve=>setTimeout(resolve,20));const {loadReviewPack}=await import('../src/capture/catalogue/reviewPackStorage.js');assert.equal(await loadReviewPack('review:pack-unmount'),null);
   } finally {cleanup();globalThis.Worker=originalWorker;}
+});
+
+test('bulk adds all 97 review candidates to one draft, keeps edits and PDF exclusions, and resumes',async()=>{
+  globalThis.indexedDB=new IDBFactory();const {newWorkspace,newProduct,exportProducts}=await import('../src/capture/catalogue/model.js');
+  const source={datasetId:'wa-bulk',title:'Whole review',assets:{},products:Array.from({length:97},(_,i)=>({id:`C${i+1}`,working_name:`Candidate ${i+1}`,name_status:'working label',category:i<34?'collage_candidate':'text_only_candidate',facts:i===0?[{field:'catalogue_price_quote',value:750,currency:null}]:[],review_flags:[],source_message_ids:[],media:[]}))};
+  const state=newWorkspace(),existing={...newProduct(),id:'source-review:wa-bulk:C1',name:'My edited name',price:'900',photo:{blob:new Blob(['photo']),width:1000,height:1000},sourceReview:{status:'confirmed',datasetId:'wa-bulk',candidateId:'C1',workingName:'Candidate 1',nameStatus:'working label',facts:[],reviewFlags:[],sourceMessageIds:[]}};
+  state.products=[existing];state.catalogues[0].title='Keep my title';state.catalogues[0].productIds=[existing.id];state.catalogues[0].exportExcludedIds=[existing.id];state.editingId=existing.id;await saveWorkspace('review:bulk-dom',state,0);
+  render(React.createElement(CatalogueStudio,{ownerId:'bulk-dom',reviewOnly:true,reviewSource:source}));await screen.findByLabelText(/Product name/);await waitFor(()=>assert.equal(screen.getByRole('button',{name:'Review WhatsApp products'}).disabled,false));
+  fireEvent.click(screen.getByRole('button',{name:'Review WhatsApp products'}));const button=screen.getByRole('button',{name:'Add all 97 to draft catalogue'});fireEvent.click(button);fireEvent.click(button);
+  await waitFor(()=>assert.ok(screen.getByText('97 products · 96 need attention')));await saved();let restored=await loadWorkspace('review:bulk-dom');assert.equal(restored.products.length,97);assert.equal(restored.catalogues[0].productIds.length,97);assert.equal(restored.catalogues[0].title,'Keep my title');assert.equal(restored.products[0].name,'My edited name');assert.equal(restored.products[0].price,'900');assert.equal(restored.products[0].sourceReview.status,'confirmed');assert.equal(exportProducts(restored).length,96);assert.equal(restored.products[1].photo,null);assert.equal(restored.products[1].price,'');
+  fireEvent.click(screen.getByRole('button',{name:/Preview catalogue/}));assert.match(screen.getByRole('alert').textContent,/50 products/);assert.match(screen.getByRole('alert').textContent,/Confirm this WhatsApp draft/);
+  fireEvent.click(screen.getByRole('button',{name:'Review WhatsApp products'}));fireEvent.click(screen.getByRole('button',{name:'Add all 97 to draft catalogue'}));await screen.findByText('97 products · 96 need attention');await saved();assert.equal((await loadWorkspace('review:bulk-dom')).products.length,97);
+  fireEvent.click(screen.getByRole('checkbox',{name:'Include Candidate 2 in PDF'}));await saved();restored=await loadWorkspace('review:bulk-dom');assert.equal(restored.products.length,97);assert.equal(restored.catalogues[0].productIds.length,97);assert.equal(exportProducts(restored).length,95);
+  cleanup();render(React.createElement(CatalogueStudio,{ownerId:'bulk-dom',reviewOnly:true,reviewSource:source}));await screen.findByText('97 products · 96 need attention');assert.equal(screen.getByRole('checkbox',{name:'Include Candidate 2 in PDF'}).checked,false);
+});
+
+test('PDF generation receives only included ready products while excluded drafts stay available',async()=>{
+  globalThis.indexedDB=new IDBFactory();const originalWorker=globalThis.Worker;let sent;
+  globalThis.Worker=class{terminate(){}postMessage(input){sent=input;queueMicrotask(()=>this.onmessage({data:{type:'complete',result:{blob:new Blob(['%PDF-test']),filename:'chosen.pdf',pageCount:1}}}));}};
+  try{
+    const {newWorkspace,newProduct}=await import('../src/capture/catalogue/model.js');const state=newWorkspace(),ready={...newProduct(),name:'Ready choice',photo:{blob:new Blob(['photo']),width:1000,height:1000}},incomplete={...newProduct(),name:'Keep for later'};state.products=[ready,incomplete];state.catalogues[0].productIds=[ready.id,incomplete.id];state.catalogues[0].exportExcludedIds=[incomplete.id];state.editingId=ready.id;await saveWorkspace('review:pdf-choice',state,0);
+    render(React.createElement(CatalogueStudio,{ownerId:'pdf-choice',reviewOnly:true}));await screen.findByLabelText(/Product name/);fireEvent.click(screen.getByRole('button',{name:/Preview catalogue/}));await screen.findByRole('button',{name:/Download PDF/});assert.deepEqual(sent.products.map(p=>p.name),['Ready choice']);assert.equal((await loadWorkspace('review:pdf-choice')).products.length,2);
+  }finally{globalThis.Worker=originalWorker;}
+});
+
+function deferredBulkPhoto() {
+  const originalImage=globalThis.Image,proto=window.HTMLCanvasElement.prototype,originalContext=proto.getContext,originalToBlob=proto.toBlob,resume=[];
+  globalThis.Image=class{naturalWidth=800;naturalHeight=800;decode(){return new Promise(resolve=>resume.push(resolve));}};
+  proto.getContext=()=>({fillRect(){},drawImage(){}});proto.toBlob=callback=>callback(new Blob(['prepared photo'],{type:'image/jpeg'}));
+  return {resume,restore(){globalThis.Image=originalImage;proto.getContext=originalContext;proto.toBlob=originalToBlob;}};
+}
+function oneBulkSource(){return {datasetId:'wa-deferred',title:'Deferred review',assets:{'assets/source.jpg':new Blob(['photo'],{type:'image/jpeg'})},products:[{id:'P1',working_name:'Deferred candidate',name_status:'working label',category:'product_draft',facts:[],review_flags:[],source_message_ids:[],media:[{asset_path:'assets/source.jpg',role:'product_photo'}]}]};}
+
+test('bulk cancel and leaving the inbox cannot merge a late photo preparation',async()=>{
+  globalThis.indexedDB=new IDBFactory();const photo=deferredBulkPhoto();
+  try{
+    render(React.createElement(CatalogueStudio,{ownerId:'bulk-cancel',reviewOnly:true,reviewSource:oneBulkSource()}));await screen.findByLabelText(/Product name/);await saved();await waitFor(()=>assert.equal(screen.getByRole('button',{name:'Review WhatsApp products'}).disabled,false));fireEvent.click(screen.getByRole('button',{name:'Review WhatsApp products'}));fireEvent.click(screen.getByRole('button',{name:'Add all 1 to draft catalogue'}));await waitFor(()=>assert.equal(photo.resume.length,1));fireEvent.click(screen.getByRole('button',{name:'Cancel bulk add'}));await waitFor(()=>assert.match(screen.getByRole('alert').textContent,/Bulk add cancelled/));photo.resume[0]();assert.equal((await loadWorkspace('review:bulk-cancel')).products.length,0);
+    fireEvent.click(screen.getByRole('button',{name:'Add all 1 to draft catalogue'}));await waitFor(()=>assert.equal(photo.resume.length,2));cleanup();photo.resume[1]();await new Promise(resolve=>setTimeout(resolve,25));assert.equal((await loadWorkspace('review:bulk-cancel')).products.length,0);
+  }finally{cleanup();photo.restore();}
+});
+
+test('save conflict during bulk preparation prevents the later merge and preserves the other tab',async()=>{
+  globalThis.indexedDB=new IDBFactory();const photo=deferredBulkPhoto();
+  try{
+    render(React.createElement(CatalogueStudio,{ownerId:'bulk-conflict',reviewOnly:true,reviewSource:oneBulkSource()}));await screen.findByLabelText(/Product name/);fireEvent.change(screen.getByLabelText(/Product name/),{target:{value:'Original product'}});await saved();const other=await loadWorkspace('review:bulk-conflict');
+    fireEvent.change(screen.getByLabelText(/Product name/),{target:{value:'Local pending edit'}});fireEvent.click(screen.getByRole('button',{name:'Review WhatsApp products'}));fireEvent.click(screen.getByRole('button',{name:'Add all 1 to draft catalogue'}));await waitFor(()=>assert.equal(photo.resume.length,1));other.products[0].name='Newer other tab';await saveWorkspace('review:bulk-conflict',other,other.revision);await waitFor(()=>assert.ok(screen.getAllByRole('alert').some(el=>el.textContent.includes('another tab'))));
+    photo.resume[0]();await waitFor(()=>assert.ok(screen.getAllByRole('alert').some(el=>el.textContent.includes('reload the saved workspace'))));const persisted=await loadWorkspace('review:bulk-conflict');assert.equal(persisted.products.length,1);assert.equal(persisted.products[0].name,'Newer other tab');assert.ok(screen.getByText('Changes not saved'));
+  }finally{cleanup();photo.restore();}
 });

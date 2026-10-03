@@ -90,3 +90,15 @@ test('source-review IDs with damaged metadata remain blocked from customer expor
   p.sourceReview=null;assert.match(exportErrors(state).join(' '),/Confirm this WhatsApp draft/);
   p.sourceReview={status:'confirmed'};assert.deepEqual(exportErrors(state),[]);
 });
+
+test('large draft and PDF selections are independent, persistent and reversible',async()=>{
+  const {exportProducts,setProductIncluded,setPdfSelection,reviewSummary,MAX_PRODUCTS,MAX_CATALOGUE_PRODUCTS,MAX_EXPORT_PRODUCTS}=await import('../src/capture/catalogue/model.js');
+  assert.equal(MAX_PRODUCTS,200);assert.equal(MAX_CATALOGUE_PRODUCTS,200);assert.equal(MAX_EXPORT_PRODUCTS,50);
+  let state=newWorkspace();state.products=Array.from({length:97},(_,i)=>({...newProduct(),name:`Candidate ${i+1}`,sourceReview:{status:'pending',facts:i===0?[{field:'catalogue_price_quote',value:100,currency:null}]:[]}}));state.catalogues[0].productIds=state.products.map(p=>p.id);
+  assert.equal(selectedProducts(state).length,97);assert.equal(exportProducts(state).length,97);const errors=exportErrors(state);assert.match(errors[0],/50/);assert.ok(errors.some(e=>e.includes('Confirm this WhatsApp draft')));assert.ok(errors.some(e=>e.includes('Add a product photo')));
+  assert.deepEqual(reviewSummary(selectedProducts(state)),{total:97,incomplete:97,missingPhoto:97,pendingReview:97,unconfirmedPrice:1});
+  state=setPdfSelection(state,[state.products[0].id]);assert.equal(exportProducts(state).length,1);assert.equal(selectedProducts(state).length,97);assert.ok(!exportErrors(state)[0].includes('up to 50'));
+  const factory=new IDBFactory();await saveWorkspace('large',state,0,factory);state=await loadWorkspace('large',factory);assert.equal(exportProducts(state)[0].id,state.products[0].id);assert.equal(selectedProducts(state).length,97);
+  state=setProductIncluded(state,state.products[1].id,true);assert.equal(exportProducts(state).length,2);assert.equal(selectedProducts(state).length,97);
+  state=setProductIncluded(state,state.products[0].id,false);assert.deepEqual(exportProducts(state).map(p=>p.id),[state.products[1].id]);assert.equal(state.products.length,97);
+});
