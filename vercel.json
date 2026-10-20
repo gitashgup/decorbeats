@@ -27,6 +27,14 @@
     {
       "source": "/catalog/:path*",
       "destination": "/"
+    },
+    {
+      "source": "/diwali-stock",
+      "destination": "/"
+    },
+    {
+      "source": "/diwali-stock/:path*",
+      "destination": "/"
     }
   ],
   "functions": {

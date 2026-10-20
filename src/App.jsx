@@ -8361,6 +8361,82 @@ export default function App() {
           setPreviewCustomerView(false);
           setActiveTab("products");
         }} /> : null}
+        <section
+          style={{
+            background: "linear-gradient(90deg, #161311 0%, #13332D 50%, #161311 100%)",
+            borderBottom: "2px solid #C59B43",
+            padding: "12px 16px",
+            color: "#FAF6EE"
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 1200,
+              margin: "0 auto",
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span
+                style={{
+                  background: "#C59B43",
+                  color: "#161311",
+                  fontWeight: 800,
+                  fontSize: 11,
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  letterSpacing: "0.05em"
+                }}
+              >
+                LIVE WAREHOUSE STOCK · OCT 2026
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "#FFFFFF" }}>
+                🪔 54 Verified Moradabad Brass &amp; Festive Designs (2,002 Ready Units) — Studio Weighed &amp; Measured
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <a
+                href="/diwali-stock"
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.history.pushState({}, "", "/diwali-stock");
+                  window.dispatchEvent(new Event("decorbeats:navigate"));
+                }}
+                style={{
+                  background: "#C59B43",
+                  color: "#161311",
+                  padding: "7px 15px",
+                  borderRadius: 999,
+                  fontSize: 13,
+                  fontWeight: 800,
+                  textDecoration: "none"
+                }}
+              >
+                Open Interactive Lookbook &amp; Shortlist →
+              </a>
+              <a
+                href="/catalogues/Decorbeats-Diwali-Available-Stock-2026.pdf"
+                download="Decorbeats-Diwali-Available-Stock-2026.pdf"
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  color: "#E5C878",
+                  border: "1px solid #C59B43",
+                  padding: "7px 14px",
+                  borderRadius: 999,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  textDecoration: "none"
+                }}
+              >
+                ⬇ Download 54-Item PDF
+              </a>
+            </div>
+          </div>
+        </section>
         <CustomerHero slides={heroSlides} featuredProduct={featuredCustomerProduct} onShop={handleScrollToCollection} />
         <CustomerOccasionRail products={customerCatalog} onSelectCategory={handleCustomerCategorySelect} onShop={handleScrollToCollection} />
         <CustomerFestiveEdit
