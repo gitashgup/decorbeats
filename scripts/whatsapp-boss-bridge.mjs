@@ -27,11 +27,20 @@ const WHATSAPP_SHARED_DIR =
 const WHATSAPP_DB_PATH = path.join(WHATSAPP_SHARED_DIR, 'ChatStorage.sqlite');
 const MARKETING_CHAT_SESSION = 895;
 const EXPERIENCE_CENTER_CHAT_SESSION = 940;
-const MONITORED_CHAT_SESSIONS = [MARKETING_CHAT_SESSION, EXPERIENCE_CENTER_CHAT_SESSION];
+const VENDOR_CHAT_SESSIONS = [1366, 1367, 1368, 1369];
+const MONITORED_CHAT_SESSIONS = [
+  MARKETING_CHAT_SESSION,
+  EXPERIENCE_CENTER_CHAT_SESSION,
+  ...VENDOR_CHAT_SESSIONS
+];
 
 const CHAT_NAMES = {
   [MARKETING_CHAT_SESSION]: 'DecorBeats Marketing',
-  [EXPERIENCE_CENTER_CHAT_SESSION]: 'Experience Center Db'
+  [EXPERIENCE_CENTER_CHAT_SESSION]: 'Experience Center Db',
+  1366: 'Vendor: Value Packaging Industries (+91 98862 72675)',
+  1367: 'Vendor: S V Pack Peenya (+91 95907 18099)',
+  1368: 'Vendor: Marudhar Packaging Peenya (+91 98860 73170)',
+  1369: 'Vendor: Sun Pack System (+91 99725 54071)'
 };
 
 function loadState() {
@@ -119,14 +128,21 @@ export function checkNewMessages(markAsRead = false) {
       if (Number(r.msg_type) === 66 && !t && !r.media_path) {
         return false;
       }
+      if (VENDOR_CHAT_SESSIONS.includes(Number(r.chat_id)) && Number(r.is_from_me) === 1) {
+        return false;
+      }
+      if (VENDOR_CHAT_SESSIONS.includes(Number(r.chat_id)) && Number(r.msg_type) === 10) {
+        return false;
+      }
       return true;
     })
     .map((r) => {
       const chatId = Number(r.chat_id);
       const chatName = CHAT_NAMES[chatId] || `Chat ${chatId}`;
       const combinedText = `${r.text || ''} ${r.media_caption || ''}`.trim();
-      const mentionsDibi = /\bdibi\b/i.test(combinedText);
-      const isExperienceCenter = chatId === EXPERIENCE_CENTER_CHAT_SESSION;
+      const isVendorReply = VENDOR_CHAT_SESSIONS.includes(chatId) && Number(r.is_from_me) === 0;
+      const mentionsDibi = /\bdibi\b/i.test(combinedText) || isVendorReply;
+      const isExperienceCenter = chatId === EXPERIENCE_CENTER_CHAT_SESSION || isVendorReply;
       const isInventoryUpdate =
         isExperienceCenter &&
         /\b(sold|sold\s*out|out\s*of\s*stock|booked|left|remaining|qty|quantity|stock|remove|minus|unit|units|pcs|pieces|set|sets|bika|bik\s*gaya|khatam)\b/i.test(
@@ -136,6 +152,7 @@ export function checkNewMessages(markAsRead = false) {
         ...r,
         chat_id: chatId,
         chat_name: chatName,
+        replyGroupFlag: isExperienceCenter ? '--group exp' : '--group marketing',
         mentionsDibi,
         isInventoryUpdate
       };
@@ -152,6 +169,7 @@ export function checkNewMessages(markAsRead = false) {
         pk: m.pk,
         chat_id: m.chat_id,
         chat_name: m.chat_name,
+        replyGroupFlag: m.replyGroupFlag,
         time: m.msg_time,
         sender: m.is_from_me ? 'Boss (Ashwarya)' : m.member_jid,
         type: m.msg_type,
@@ -177,7 +195,7 @@ export function checkNewMessages(markAsRead = false) {
     lastProcessedPk: state.lastProcessedPk,
     rawCount: rows.length,
     incomingCount: incoming.length,
-    shouldRespond: mentionsDibiMessages.length > 0 || inventoryUpdateMessages.length > 0,
+    shouldRespond: mentionsDibiMessages.length > 0,
     mentionsDibiCount: mentionsDibiMessages.length,
     inventoryUpdateCount: inventoryUpdateMessages.length,
     incoming,

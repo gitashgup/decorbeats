@@ -1014,6 +1014,516 @@ const CURATED_ALBUM_OVERRIDES = {
     ],
     description:
       'Heirloom 66 g solid Moradabad brass pooja oil diya (2.5" W x 1" H / 6.4 x 2.5 cm) crafted with a deep polished reservoir, embossed beaded border, and scalloped petal rim.'
+  },
+  97462: {
+    sku: 'DB-DW26-55',
+    name: 'Royal Peacock Plume Pedestal Solid Brass Standing Diya (4.5")',
+    category: 'Diyas & Pooja Lamps',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Standing Peacock Diya (4.5")',
+    weightOverride: 100,
+    heightOverride: 11.4,
+    widthOverride: 6.4,
+    lengthOverride: 6.4,
+    heroMediaSubpath: 'a911d3fb-9fa5-4005-802a-a71c967db609.jpg',
+    galleryOrderSubpaths: [
+      'a911d3fb-9fa5-4005-802a-a71c967db609.jpg',
+      'c029b71f-4a27-4971-a7ec-ec3bd06fd64d.jpg',
+      '88b41122-0d2b-42b3-b352-186ca75c4aa3.jpg',
+      '8eac9018-6d3d-4df2-a9be-164ecedff843.jpg'
+    ],
+    description:
+      'Artisanal 100 g solid Moradabad brass standing peacock pooja diya (4.5" H x 2.5" W / 11.4 x 6.4 cm) featuring an ornate carved peacock perched on a lotus dome pedestal supporting an embossed oil lamp cup atop its flowing tail plume.'
+  },
+  97467: {
+    sku: 'DB-DW26-56',
+    name: 'Royal Peacock Finial Carved Solid Brass Pooja Arti Bell (6.5")',
+    category: 'Brass Pooja Bells & Ghantis',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Peacock Pooja Bell (6.5")',
+    weightOverride: 217,
+    heightOverride: 16.5,
+    widthOverride: 6.4,
+    lengthOverride: 6.4,
+    quantityOverride: 1,
+    heroMediaSubpath: '871704b0-0cda-44ae-b1bd-e60fe6867839.jpg',
+    galleryOrderSubpaths: [
+      '871704b0-0cda-44ae-b1bd-e60fe6867839.jpg',
+      '139462a6-c9bd-48eb-a15c-b22104276c7a.jpg',
+      '479c49e1-06f5-4127-83f6-21ac1e20222b.jpg'
+    ],
+    description:
+      'Heirloom 217 g solid Moradabad brass pooja arti bell (6.5" H x 2.5" W / 16.5 x 6.4 cm) crowned with a finely sculpted royal peacock finial over a cross-hatched pillar handle and floral-embossed resonant bell dome.'
+  },
+  97472: {
+    sku: 'DB-DW26-57',
+    name: 'Sacred Garuda Finial Carved Solid Brass Pooja Arti Bell (7")',
+    category: 'Brass Pooja Bells & Ghantis',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Garuda Pooja Bell (7")',
+    weightOverride: 200,
+    heightOverride: 17.8,
+    widthOverride: 6.4,
+    lengthOverride: 6.4,
+    quantityOverride: 2,
+    heroMediaSubpath: '90fc787b-3a6d-46cf-a16b-4472afc42150.jpg',
+    galleryOrderSubpaths: [
+      '90fc787b-3a6d-46cf-a16b-4472afc42150.jpg',
+      '327a8271-c436-482b-9ad8-37886e6d9898.jpg',
+      '24dd6059-59aa-4dd8-86d5-196e7dd2ead4.jpg'
+    ],
+    description:
+      'Traditional 200 g solid Moradabad brass temple pooja arti bell (7" H x 2.5" W / 17.8 x 6.4 cm) crowned with a kneeling winged Garuda in Anjali Mudra atop a fluted pillar handle and floral scroll-embossed bell dome.'
+  },
+  97477: {
+    sku: 'DB-DW26-58',
+    name: 'Sacred Garuda Finial Carved Solid Brass Pooja Arti Bell (4.5")',
+    category: 'Brass Pooja Bells & Ghantis',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Garuda Pooja Bell (4.5")',
+    weightOverride: 90,
+    heightOverride: 11.4,
+    widthOverride: 5.1,
+    lengthOverride: 5.1,
+    quantityOverride: 1,
+    heroMediaSubpath: '0e049154-70f3-46de-ad95-ce21534a1b98.jpg',
+    galleryOrderSubpaths: [
+      '0e049154-70f3-46de-ad95-ce21534a1b98.jpg',
+      '9bcd1464-49de-4018-8c97-3668ac4653ff.jpg',
+      '52865a63-b2fd-4474-b464-25ac3570e2aa.jpg'
+    ],
+    description:
+      'Compact 90 g solid Moradabad brass pooja arti bell (4.5" H x 2" W / 11.4 x 5.1 cm) featuring a kneeling winged Garuda finial in Anjali Mudra over a fluted pillar shaft and scroll-carved resonant bell base.'
+  },
+  97481: {
+    sku: 'DB-DW26-59',
+    name: 'Kneeling Bhakta Hanuman Finial Solid Brass Pooja Arti Bell (5")',
+    category: 'Brass Pooja Bells & Ghantis',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Hanuman Pooja Bell (5")',
+    weightOverride: 171,
+    heightOverride: 12.7,
+    widthOverride: 6.4,
+    lengthOverride: 6.4,
+    quantityOverride: 1,
+    heroMediaSubpath: '9d32d62f-1018-48e6-8e22-b692232c6040.jpg',
+    galleryOrderSubpaths: [
+      '9d32d62f-1018-48e6-8e22-b692232c6040.jpg',
+      '080fe8b4-53b8-4b7a-badc-58dbee1707ae.jpg',
+      '09af1348-84c1-4625-a463-4470ac6b7e8c.jpg'
+    ],
+    description:
+      'Sacred 171 g solid Moradabad brass pooja arti bell (5" H x 2.5" W / 12.7 x 6.4 cm) crowned with a kneeling Bhakta Hanuman in Anjali Mudra over a lattice-carved pillar handle and floral-embossed bell dome.'
+  },
+  97485: {
+    sku: 'DB-DW26-60',
+    name: 'Sacred Nandi Bull Finial Carved Solid Brass Pooja Arti Bell (4.5")',
+    category: 'Brass Pooja Bells & Ghantis',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Nandi Pooja Bell (4.5")',
+    weightOverride: 110,
+    heightOverride: 11.4,
+    widthOverride: 5.1,
+    lengthOverride: 5.1,
+    quantityOverride: 1,
+    heroMediaSubpath: 'aae82d5e-3de0-416f-b5bc-5082b7891bb2.jpg',
+    galleryOrderSubpaths: [
+      'aae82d5e-3de0-416f-b5bc-5082b7891bb2.jpg',
+      '8a6beb5e-27c1-473a-9574-9f8107a24804.jpg',
+      'f99aa6a0-9e4e-4f8a-9b00-95d9d18a9233.jpg'
+    ],
+    description:
+      'Auspicious 110 g solid Moradabad brass pooja arti bell (4.5" H x 2" W / 11.4 x 5.1 cm) crowned with a seated sacred Nandi bull finial over a lattice-carved pillar handle and floral-embossed bell dome.'
+  },
+  97490: {
+    sku: 'DB-DW26-61',
+    name: 'Kalash Sphere Finial Lattice-Carved Solid Brass Pooja Bell (4.5")',
+    category: 'Brass Pooja Bells & Ghantis',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Kalash Finial Pooja Bell (4.5")',
+    weightOverride: 118,
+    heightOverride: 11.4,
+    widthOverride: 5.1,
+    lengthOverride: 5.1,
+    quantityOverride: 1,
+    heroMediaSubpath: '87d4ae1b-d3c2-4e77-9176-4dfccf6530c5.jpg',
+    galleryOrderSubpaths: [
+      '87d4ae1b-d3c2-4e77-9176-4dfccf6530c5.jpg',
+      '742a2a52-b24c-408a-870e-ac15c109524d.jpg',
+      '5bf896e2-66fb-440b-887d-e3adc8c51864.jpg'
+    ],
+    description:
+      'Traditional 118 g solid Moradabad brass pooja arti bell (4.5" H x 2" W / 11.4 x 5.1 cm) topped with a classic spherical Kalash finial over a diamond-lattice pillar handle and floral-embossed bell dome.'
+  },
+  97494: {
+    sku: 'DB-DW26-62',
+    name: 'Meditating Lord Shiva & Trishul Finial Solid Brass Pooja Bell (5")',
+    category: 'Brass Pooja Bells & Ghantis',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Shiva Pooja Bell (5")',
+    weightOverride: 120,
+    heightOverride: 12.7,
+    widthOverride: 3.8,
+    lengthOverride: 3.8,
+    quantityOverride: 1,
+    heroMediaSubpath: '85656d40-6612-4bca-bd8e-53544c87a3cd.jpg',
+    galleryOrderSubpaths: [
+      '85656d40-6612-4bca-bd8e-53544c87a3cd.jpg',
+      '95df73df-623e-438f-bffc-cf59d1b7dfd6.jpg',
+      'ffc1efbd-06a0-4da4-a934-d47e04ac5835.jpg'
+    ],
+    description:
+      'Sacred 120 g solid Moradabad brass pooja arti bell (5" H x 1.5" W / 12.7 x 3.8 cm) crowned with a meditating Lord Shiva and sacred Trishul finial over a lattice-carved pillar handle and floral-embossed bell dome.'
+  },
+  97498: {
+    sku: 'DB-DW26-63',
+    name: 'Royal Cascading Feather-Train Peacock Solid Brass Figurine (5")',
+    category: 'Brass Idols & Figurines',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Peacock Figurine (5")',
+    weightOverride: 168,
+    heightOverride: 7.6,
+    widthOverride: 12.7,
+    lengthOverride: 12.7,
+    quantityOverride: 1,
+    heroMediaSubpath: 'e4d63267-8323-4af8-8da5-09b61aa95642.jpg',
+    galleryOrderSubpaths: [
+      'e4d63267-8323-4af8-8da5-09b61aa95642.jpg',
+      '8f346e26-9ce0-436d-ae32-2ffa7365420d.jpg',
+      '22d89a30-986e-4cb9-b574-873e8a5e94e3.jpg'
+    ],
+    description:
+      'Regal 168 g solid Moradabad brass royal peacock figurine (3" H x 5" L / 7.6 x 12.7 cm) perched on a floral-embossed dome pedestal with an intricately pierced cascading tail-feather train.'
+  },
+  97506: {
+    sku: 'DB-DW26-64',
+    name: 'Compact Cascading Feather-Train Peacock Solid Brass Figurine (3")',
+    category: 'Brass Idols & Figurines',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Peacock Figurine (3")',
+    weightOverride: 73,
+    heightOverride: 6.4,
+    widthOverride: 7.6,
+    lengthOverride: 7.6,
+    quantityOverride: 1,
+    heroMediaSubpath: '68e7f63c-57f2-4fd7-a90f-5ad36ecd5b1b.jpg',
+    galleryOrderSubpaths: [
+      '68e7f63c-57f2-4fd7-a90f-5ad36ecd5b1b.jpg',
+      'd9e4df7a-52df-42ab-bbd8-fa9284426308.jpg',
+      'a84a6c2d-2643-4a8b-a1f8-c53abaff1f3e.jpg'
+    ],
+    description:
+      'Artisanal 73 g solid Moradabad brass peacock figurine (2.5" H x 3" W / 6.4 x 7.6 cm) standing on a floral-embossed dome base with a finely detailed cascading tail-feather train.'
+  },
+  97510: {
+    sku: 'DB-DW26-65',
+    name: 'Standing Royal Peacock with Trailing Plume Solid Brass Figurine (5")',
+    category: 'Brass Idols & Figurines',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Standing Peacock Figurine (5")',
+    weightOverride: 100,
+    heightOverride: 7.6,
+    widthOverride: 12.7,
+    lengthOverride: 12.7,
+    quantityOverride: 1,
+    heroMediaSubpath: 'e0eaa722-244d-4c80-8d4a-36a3ee6c00e3.jpg',
+    galleryOrderSubpaths: [
+      'e0eaa722-244d-4c80-8d4a-36a3ee6c00e3.jpg',
+      '062aaeae-3428-4305-9252-abc6347286bd.jpg',
+      '93a952c4-ecc4-46ae-8623-212dcf95fe11.jpg',
+      'dfe2dcae-efe4-4be9-9cb9-37608d3d7aa4.jpg'
+    ],
+    description:
+      'Sculptural 100 g solid Moradabad brass standing royal peacock figurine (3" H x 5" W / 7.6 x 12.7 cm) crafted with embossed eye-spot plumage, crested head, and a sweeping trailing tail train.'
+  },
+  97514: {
+    sku: 'DB-DW26-66',
+    name: 'Royal Floral-Saddled Standing Stallion Solid Brass Figurine (4.5")',
+    category: 'Brass Idols & Figurines',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Royal Horse Figurine (4.5")',
+    weightOverride: 123,
+    heightOverride: 8.9,
+    widthOverride: 11.4,
+    lengthOverride: 11.4,
+    quantityOverride: 1,
+    heroMediaSubpath: 'afd91369-529b-45ba-a88c-d26250ac848d.jpg',
+    galleryOrderSubpaths: [
+      'afd91369-529b-45ba-a88c-d26250ac848d.jpg',
+      '7d70e410-4b01-4fd8-9a14-fcf52b216c37.jpg',
+      '47c27120-ff1d-402c-b225-5d79611e493f.jpg'
+    ],
+    description:
+      'Regal 123 g solid Moradabad brass royal horse figurine (3.5" H x 4.5" W / 8.9 x 11.4 cm) adorned with an embossed floral-scroll ceremonial saddle blanket and beaded bridle.'
+  },
+  97518: {
+    sku: 'DB-DW26-67',
+    name: 'Dancing Peacock Halo on Kurma Tortoise Base Brass Diya (2.5")',
+    category: 'Diyas & Pooja Lamps',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Peacock & Tortoise Diya (2.5")',
+    weightOverride: 45,
+    heightOverride: 6.4,
+    widthOverride: 5.1,
+    lengthOverride: 5.1,
+    quantityOverride: 1,
+    heroMediaSubpath: 'abf2bd5c-927d-46b8-bc35-60df9d7aecb9.jpg',
+    galleryOrderSubpaths: [
+      'abf2bd5c-927d-46b8-bc35-60df9d7aecb9.jpg',
+      '71789442-efec-4a9f-ba2c-0b55fcbed08c.jpg',
+      'b3d1b0a9-539f-4e6e-b493-82dea0fe20a6.jpg'
+    ],
+    description:
+      'Auspicious 45 g solid Moradabad brass pooja oil diya (2.5" H x 2" W / 6.4 x 5.1 cm) resting on a sacred Kurma tortoise pedestal and crowned with a fanned dancing peacock plume halo.'
+  },
+  97522: {
+    sku: 'DB-DW26-68',
+    name: 'Eight-Armed Sherawali Mata Durga Riding Lion Solid Brass Idol (3.5")',
+    category: 'Brass Idols & Figurines',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Durga Idol (3.5")',
+    weightOverride: 108,
+    heightOverride: 8.9,
+    widthOverride: 7.6,
+    lengthOverride: 7.6,
+    quantityOverride: 1,
+    heroMediaSubpath: '354ef73e-2b8c-4092-b218-71f826ba58e9.jpg',
+    galleryOrderSubpaths: [
+      '354ef73e-2b8c-4092-b218-71f826ba58e9.jpg',
+      '03932675-415d-48f8-bb69-3f4be37bb869.jpg',
+      '4be69fa9-30f0-4d22-8a00-91fa089720f7.jpg'
+    ],
+    description:
+      'Auspicious 108 g solid Moradabad brass Eight-Armed Sherawali Mata Durga idol (3.5" H x 3" W / 8.9 x 7.6 cm) seated upon her roaring lion Simha Vahana with sacred weapons.'
+  },
+  97527: {
+    sku: 'DB-DW26-69',
+    name: 'Divine Flute-Playing Radha Krishna on Oval Pedestal Brass Idol (6")',
+    category: 'Brass Idols & Figurines',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Radha Krishna Idol (6")',
+    weightOverride: 390,
+    heightOverride: 15.2,
+    widthOverride: 12.7,
+    lengthOverride: 12.7,
+    quantityOverride: 3,
+    heroMediaSubpath: '49dc2150-4241-4503-b3a0-655b1765e55e.jpg',
+    galleryOrderSubpaths: [
+      '49dc2150-4241-4503-b3a0-655b1765e55e.jpg',
+      '7c6d6c6e-e52b-4005-b850-dfe39e6c8478.jpg',
+      '1b0484e3-0f5d-4a88-bc16-997acc8e6d16.jpg'
+    ],
+    description:
+      'Substantial 390 g solid Moradabad brass Radha Krishna idol (6" H x 5" W / 15.2 x 12.7 cm) depicting flute-playing Lord Krishna and Goddess Radha standing on an ornate peacock-carved oval pedestal.'
+  },
+  97531: {
+    sku: 'DB-DW26-70',
+    name: 'Sacred Shiv Parivar Seated on Mount Kailash Solid Brass Idol (4")',
+    category: 'Brass Idols & Figurines',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Shiv Parivar Idol (4")',
+    weightOverride: 300,
+    heightOverride: 10.2,
+    widthOverride: 7.6,
+    lengthOverride: 7.6,
+    quantityOverride: 1,
+    heroMediaSubpath: '1a62c8f1-5c9f-4832-8a97-bd3ea1bfa0f5.jpg',
+    galleryOrderSubpaths: [
+      '1a62c8f1-5c9f-4832-8a97-bd3ea1bfa0f5.jpg',
+      'bec4427c-1425-4045-9f04-d137ca936fe3.jpg',
+      '36cad98d-4a0b-4dd3-9cc9-5d539c6cf89c.jpg'
+    ],
+    description:
+      'Substantial 300 g solid Moradabad brass Shiv Parivar idol (4" H x 3" W / 10.2 x 7.6 cm) depicting Lord Shiva with Trishul, Goddess Parvati, Lord Ganesha, Lord Kartikeya, Nandi, and Shiva Lingam on Mount Kailash.'
+  },
+  97535: {
+    sku: 'DB-DW26-71',
+    name: 'Royal Peacock Filigree Pillar Multi-Wick Solid Brass Standing Diya (8")',
+    category: 'Diyas & Pooja Lamps',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Peacock Pillar Diya (8")',
+    weightOverride: 310,
+    heightOverride: 20.3,
+    widthOverride: 7.6,
+    lengthOverride: 7.6,
+    quantityOverride: 1,
+    heroMediaSubpath: '132e093f-09bd-44c7-89bd-c2f5cbba933c.jpg',
+    galleryOrderSubpaths: [
+      '132e093f-09bd-44c7-89bd-c2f5cbba933c.jpg',
+      '4523cbec-2a14-48e1-92a2-c369b16eca50.jpg',
+      '08378f69-7764-4b59-8691-2b773f49ca7d.jpg'
+    ],
+    description:
+      'Ornate 310 g solid Moradabad brass standing peacock diya (8" H x 3" W / 20.3 x 7.6 cm) crafted with a sweeping filigree-carved peacock plume column, multi-wick floral oil bowl, and miniature peacock finial.'
+  },
+  97539: {
+    sku: 'DB-DW26-72',
+    name: 'Sacred Vastu Kurma Tortoise with Pearl Crown Solid Brass Figurine (2")',
+    category: 'Brass Idols & Figurines',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Vastu Tortoise (2")',
+    weightOverride: 40,
+    heightOverride: 2.5,
+    widthOverride: 5.1,
+    lengthOverride: 5.1,
+    quantityOverride: 19,
+    heroMediaSubpath: 'a05fadc4-b9b9-4fe9-990f-c6b6ef565ccc.jpg',
+    galleryOrderSubpaths: [
+      'a05fadc4-b9b9-4fe9-990f-c6b6ef565ccc.jpg',
+      'cd513b4f-b3a7-4967-bc87-e8d68c53fd61.jpg',
+      'b24ac308-f77e-44ce-92b6-9109f9b8c6e9.jpg',
+      'efd6bc8a-e363-49e1-b038-12a7fcffea66.jpg'
+    ],
+    description:
+      'Auspicious 40 g solid Moradabad brass Vastu Kurma tortoise figurine (1" H x 2" W / 2.5 x 5.1 cm) featuring an intricately pierced filigree shell crowned with a lustrous white pearl cabochon.'
+  },
+  97544: {
+    sku: 'DB-DW26-73',
+    name: 'Sacred Vastu Kuber Yantra Kurma Tortoise Solid Brass Figurine (2.5")',
+    category: 'Brass Idols & Figurines',
+    material: '100% Solid Moradabad Brass',
+    unit: '1 Solid Brass Vastu Yantra Tortoise (2.5")',
+    weightOverride: 50,
+    heightOverride: 2.5,
+    widthOverride: 6.4,
+    lengthOverride: 6.4,
+    quantityOverride: 47,
+    heroMediaSubpath: '45e53d74-c840-4560-8272-bb18c1c6f4e8.jpg',
+    galleryOrderSubpaths: [
+      '45e53d74-c840-4560-8272-bb18c1c6f4e8.jpg',
+      '1f0380a2-2019-4153-a01a-8b4c66d75cb9.jpg',
+      'ec2d6db1-047c-449d-b355-6a54d56996b0.jpg',
+      '67764c54-ecbe-4c2d-b430-6c47d6cbbaad.jpg'
+    ],
+    description:
+      'Auspicious 50 g solid Moradabad brass Vastu Kurma tortoise figurine (1" H x 2.5" W / 2.5 x 6.4 cm) crafted with a hexagonal floral-textured carapace and an embossed 9-grid Vastu Kuber Yantra underneath.'
+  },
+  97549: {
+    sku: 'DB-DW26-74',
+    name: 'Heavy Seated Goddess Saraswati with Veena on Lotus Pedestal Brass Idol (7.5")',
+    category: 'Brass Idols & Figurines',
+    material: 'Heavy Cast Solid Brass',
+    unit: '1 Heavy Brass Saraswati Idol (7.5")',
+    weightOverride: 1810,
+    heightOverride: 19.1,
+    widthOverride: 14.0,
+    lengthOverride: 14.0,
+    quantityOverride: 12,
+    heroMediaSubpath: 'b567bf5c-ab1b-4868-8b25-0e2d703dbe29.jpg',
+    galleryOrderSubpaths: [
+      'b567bf5c-ab1b-4868-8b25-0e2d703dbe29.jpg',
+      '72e3060f-4b3a-4572-81f4-80e3cdbcd811.jpg',
+      'c111a485-4c98-4b9c-b922-872f882eb9d1.jpg'
+    ],
+    description:
+      'Heirloom 1,810 g (1.81 kg) heavy-cast solid Moradabad brass Goddess Saraswati idol (7.5" H x 5.5" W / 19.1 x 14.0 cm) seated in Padmasana on an engraved lotus pedestal playing the sacred Veena.'
+  },
+  97553: {
+    sku: 'DB-DW26-75',
+    name: 'Sacred Blooming Kamal Lotus with Scroll Stem Solid Brass Wall Hanging (5")',
+    category: 'Wall Hangings & Temple Art',
+    material: 'Heavy Cast Solid Brass',
+    unit: '1 Solid Brass Lotus Wall Hanging (5")',
+    weightOverride: 515,
+    heightOverride: 12.7,
+    widthOverride: 11.4,
+    lengthOverride: 11.4,
+    quantityOverride: 15,
+    heroMediaSubpath: 'baa883b2-4161-47ff-9019-5b8d84d5e71e.jpg',
+    galleryOrderSubpaths: [
+      'baa883b2-4161-47ff-9019-5b8d84d5e71e.jpg',
+      '7b335670-c1e8-4e76-982d-97a4d31358fa.jpg',
+      '352ad320-6532-4a53-80c0-5949eb24f0c4.jpg'
+    ],
+    description:
+      'Substantial 515 g heavy-cast Moradabad solid brass blooming Kamal (lotus) wall hanging (5" H x 4.5" W / 12.7 x 11.4 cm) sculpted with stamen-engraved petals, twin floral-scroll stem base, and rear keyhole wall slot.'
+  },
+  97557: {
+    sku: 'DB-DW26-76',
+    name: 'Royal Meenakari Gaja Elephant Pedestal Solid Brass Ghungroo Urli (9")',
+    category: 'Urlis & Floating Vessels',
+    material: 'Heavy Cast Solid Brass & Meenakari Enamel',
+    unit: '1 Heavy Brass Elephant Urli (9")',
+    weightOverride: 3100,
+    heightOverride: 22.9,
+    widthOverride: 15.2,
+    lengthOverride: 15.2,
+    quantityOverride: 12,
+    heroMediaSubpath: '109765d1-1aed-4b50-9ecb-d09f7c8a5d98.jpg',
+    galleryOrderSubpaths: [
+      '109765d1-1aed-4b50-9ecb-d09f7c8a5d98.jpg',
+      '88a29d89-5617-42bb-9b2a-2fcad73ca7ea.jpg',
+      '421e253a-6d6a-467e-9b1a-a88a051258c1.jpg',
+      '454934b7-009a-4ef8-9a33-c96958515682.jpg',
+      '9e33c5f9-aaa5-43e2-b014-f7143aa6e1f4.jpg'
+    ],
+    description:
+      'Heirloom 3,100 g (3.10 kg) heavy-cast Moradabad solid brass royal Gaja elephant pedestal urli (9" H x 6" W / 22.9 x 15.2 cm) adorned with emerald and crimson Meenakari inlay and a rim of dangling brass ghungroo bells.'
+  },
+  97564: {
+    sku: 'DB-DW26-77',
+    name: 'Twin Royal Gaja Elephant & Swan Base Peacock Finial Brass Standing Diya (9")',
+    category: 'Diyas & Pooja Lamps',
+    material: 'Heavy Cast Solid Brass',
+    unit: '1 Solid Brass Twin-Elephant Standing Diya (9")',
+    weightOverride: 690,
+    heightOverride: 22.9,
+    widthOverride: 6.4,
+    lengthOverride: 6.4,
+    quantityOverride: 2,
+    heroMediaSubpath: 'a51202e3-6deb-4e91-9a36-980b4f50c54f.jpg',
+    galleryOrderSubpaths: [
+      'a51202e3-6deb-4e91-9a36-980b4f50c54f.jpg',
+      '559a7984-1699-44ae-9986-d7210a33d874.jpg',
+      'b36dffed-f79b-4e42-b48c-965a9bb80c56.jpg',
+      'f6b2bdda-774d-4236-b969-baf13aad29df.jpg',
+      '7dcfa8e0-c278-437b-9cea-3396d87aa44a.jpg'
+    ],
+    description:
+      'Grand 690 g heavy-cast Moradabad solid brass standing temple diya (9" H x 2.5" W / 22.9 x 6.4 cm) sculpted with twin facing royal Gaja elephants, a Hamsa swan-carved bell pedestal, multi-wick floral bowl, and peacock finial.'
+  },
+  97571: {
+    sku: 'DB-DW26-78',
+    name: 'Twin Gaja-Mayura Elephant & Peacock Pillar Brass Standing Diya (9")',
+    category: 'Diyas & Pooja Lamps',
+    material: 'Heavy Cast Solid Brass',
+    unit: '1 Solid Brass Gaja-Mayura Standing Diya (9")',
+    weightOverride: 745,
+    heightOverride: 22.9,
+    widthOverride: 6.4,
+    lengthOverride: 6.4,
+    quantityOverride: 1,
+    heroMediaSubpath: '7e8aace8-65ae-4a93-8fb4-b229ac3df0a9.jpg',
+    galleryOrderSubpaths: [
+      '7e8aace8-65ae-4a93-8fb4-b229ac3df0a9.jpg',
+      '26c197f8-788e-4f1b-97bc-d0b6f4efebf6.jpg',
+      'c9960e15-e77a-42c8-833e-cd20c2bc7b00.jpg',
+      '6205d6a2-0ca4-4756-89ee-0fb5a5ba7b89.jpg',
+      'a9922430-28a2-41c9-a9b1-e9d1166e3c53.jpg'
+    ],
+    description:
+      'Heirloom 745 g heavy-cast Moradabad solid brass standing temple diya (9" H x 2.5" W / 22.9 x 6.4 cm) featuring twin royal Gaja elephants surmounted by cascading-plume peacocks, a swan-carved base, 5-wick bowl, and peacock finial.'
+  },
+  97577: {
+    sku: 'DB-DW26-79',
+    name: 'Sacred Tirupati Balaji Tilak Kalash & Peacock Finial Brass Standing Diya (8")',
+    category: 'Diyas & Pooja Lamps',
+    material: 'Heavy Cast Solid Brass',
+    unit: '1 Solid Brass Balaji Tilak Standing Diya (8")',
+    weightOverride: 530,
+    heightOverride: 20.3,
+    widthOverride: 7.6,
+    lengthOverride: 7.6,
+    quantityOverride: 2,
+    heroMediaSubpath: 'b47231d0-d4da-469d-a0dd-cb9ce18b6a06.jpg',
+    galleryOrderSubpaths: [
+      'b47231d0-d4da-469d-a0dd-cb9ce18b6a06.jpg',
+      '9de9a7c2-6bf9-4592-ad9d-d6cb48ffb5f4.jpg',
+      '824e76e1-4cc2-4528-ab46-0f5e1f00695c.jpg',
+      'bf684589-8648-4040-8805-ccf46f42c96f.jpg'
+    ],
+    description:
+      'Auspicious 530 g heavy-cast Moradabad solid brass standing temple diya (8" H x 3" W / 20.3 x 7.6 cm) sculpted with a sacred Tirupati Balaji Namam (Tilak) beaded Kalash pillar, tiered lotus base, 5-wick bowl, and peacock finial.'
   }
 };
 
@@ -1174,10 +1684,10 @@ export function syncWhatsAppGroupCaptures({ sinceDate = '2026-10-17 00:00:00' } 
            REPLACE(REPLACE(COALESCE(med.ZTITLE, ''), char(10), ' '), '|', '/') AS media_title
     FROM ZWAMESSAGE m
     LEFT JOIN ZWAMEDIAITEM med ON med.ZMESSAGE = m.Z_PK
-    WHERE m.ZCHATSESSION = ${MARKETING_CHAT_SESSION}
+    WHERE (m.ZCHATSESSION = ${MARKETING_CHAT_SESSION} OR (m.ZCHATSESSION = 940 AND m.Z_PK >= 97564))
       AND datetime(m.ZMESSAGEDATE + 978307200, 'unixepoch', 'localtime') >= '${sinceDate}'
       AND m.ZMESSAGETYPE IN (0, 1)
-      AND (m.ZMESSAGETYPE = 0 OR m.ZISFROMME = 1)
+      AND (m.ZMESSAGETYPE = 0 OR m.ZISFROMME = 1 OR m.Z_PK > 97458)
     ORDER BY m.ZMESSAGEDATE ASC, m.Z_PK ASC;
   `;
 
@@ -1204,35 +1714,69 @@ export function syncWhatsAppGroupCaptures({ sinceDate = '2026-10-17 00:00:00' } 
     });
 
   // Group image rows (type === 1) into albums:
-  // A new album starts whenever an image has a non-empty `mediaTitle` (caption).
-  // If photos arrive 1 second before the captioned photo (as in Item 01: pk 96363, 96371 -> 96372),
-  // attach buffered uncaptioned photos to that album.
+  // Batch 1 (Oct 17 shoot): pk 96363..96715
+  // Batch 2 (Oct 20+ additions): pk > 97458
   const albums = [];
   let currentAlbum = null;
   let preCaptionBuffer = [];
 
   for (const row of rows) {
-    if (row.type === 1 && row.mediaPath) {
-      // Ignore pre-shoot discussions before the first lightbox product (pk >= 96363)
-      if (row.pk < 96363) continue;
+    if (row.pk < 96363) continue;
+    // Skip non-product discussion & sample card replies between Batch 1 and Batch 2
+    if (row.pk > 96715 && row.pk <= 97458) {
+      currentAlbum = null;
+      preCaptionBuffer = [];
+      continue;
+    }
 
+    if (row.type === 1 && row.mediaPath) {
       if (row.mediaTitle) {
         currentAlbum = {
           firstPk: row.pk,
           timestamp: row.ts,
+          lastPhotoTs: row.ts,
           caption: row.mediaTitle,
-          mediaPaths: [...preCaptionBuffer, row.mediaPath],
+          mediaPaths: [...preCaptionBuffer.map((b) => b.mediaPath), row.mediaPath],
           followUpNotes: []
         };
         preCaptionBuffer = [];
         albums.push(currentAlbum);
-      } else if (currentAlbum) {
+      } else if (
+        currentAlbum &&
+        (row.pk <= 96715 ||
+          (!currentAlbum.closedByText &&
+            Math.abs(new Date(row.ts) - new Date(currentAlbum.lastPhotoTs || currentAlbum.timestamp)) <= 15000))
+      ) {
         currentAlbum.mediaPaths.push(row.mediaPath);
+        currentAlbum.lastPhotoTs = row.ts;
       } else {
-        preCaptionBuffer.push(row.mediaPath);
+        preCaptionBuffer.push({ pk: row.pk, ts: row.ts, mediaPath: row.mediaPath });
       }
-    } else if (row.type === 0 && row.text && currentAlbum && row.pk >= 96363) {
-      currentAlbum.followUpNotes.push(row.text);
+    } else if (row.type === 0 && row.text) {
+      if (
+        row.text.startsWith('🫡') ||
+        row.text.startsWith('✅') ||
+        row.text.startsWith('Hi Boss') ||
+        row.text.startsWith('Yes Boss') ||
+        row.text.startsWith('Done Megha')
+      ) {
+        continue;
+      }
+      if (row.pk > 97458 && preCaptionBuffer.length > 0) {
+        currentAlbum = {
+          firstPk: preCaptionBuffer[0].pk,
+          timestamp: preCaptionBuffer[0].ts,
+          caption: row.text,
+          mediaPaths: preCaptionBuffer.map((b) => b.mediaPath),
+          followUpNotes: [],
+          closedByText: true
+        };
+        preCaptionBuffer = [];
+        albums.push(currentAlbum);
+      } else if (currentAlbum) {
+        currentAlbum.followUpNotes.push(row.text);
+        if (row.pk > 97458) currentAlbum.closedByText = true;
+      }
     }
   }
 
