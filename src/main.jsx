@@ -5,6 +5,7 @@ import App from "./App";
 import "./styles.css";
 import { useCaptureAdmin } from './adminRoute';
 
+const CatalogueStudio = lazy(() => import("./capture/catalogue/CatalogueStudio"));
 const CaptureApp = lazy(() => import("./capture/CaptureApp"));
 const PublicDiwaliLookbook = lazy(() => import("./capture/PublicDiwaliLookbook"));
 document.documentElement.classList.add("js");
@@ -54,9 +55,15 @@ function Root() {
   const isCaptureRoute = useCaptureAdmin(route.pathname, route.search, route.hash);
   const isDiwaliLookbook = isDiwaliLookbookRoute(route.pathname, route.search, route.hash);
 
+  // Isolated local review only. Vite removes this branch from production builds.
+  const catalogueReview = import.meta.env.DEV && route.pathname === '/admin/capture' && new URLSearchParams(route.search).get('catalogue-preview') === '1';
   return (
     <React.StrictMode>
-      {isCaptureRoute ? (
+      {catalogueReview ? (
+        <Suspense fallback={<div>Opening catalogue review…</div>}>
+          <div className="dc-shell"><header className="dc-shell-header"><div className="dc-shell-brand"><img src="/assets/brand/decorbeats-logo.svg" alt=""/><span>Decorbeats</span></div></header><CatalogueStudio ownerId="local-review" reviewOnly /></div>
+        </Suspense>
+      ) : isCaptureRoute ? (
         <Suspense fallback={<div style={{ padding: 24, fontFamily: "sans-serif" }}>Opening capture studio…</div>}>
           <CaptureApp />
         </Suspense>

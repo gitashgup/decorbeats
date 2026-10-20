@@ -7,3 +7,8 @@ exports/
 .env.*.local
 .env*
 .vercel
+
+# Local catalogue verification artifacts
+.catalogue-test-build/
+test-results/
+playwright-report/
