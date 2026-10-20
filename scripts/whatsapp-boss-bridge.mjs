@@ -226,11 +226,41 @@ clickAt(x: targetX, y: targetY)
 Thread.sleep(forTimeInterval: 0.4)
 `;
 
-export function sendFileToMarketingGroup(filePath) {
-  const absPath = path.resolve(filePath);
-  if (!fs.existsSync(absPath)) {
-    throw new Error(`File not found: ${absPath}`);
-  }
+const CLICK_FIRST_SEARCH_RESULT_SWIFT = `
+import Cocoa
+import CoreGraphics
+
+func clickAt(x: Double, y: Double) {
+    let pt = CGPoint(x: x, y: y)
+    let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: pt, mouseButton: .left)
+    let down = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: pt, mouseButton: .left)
+    let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: pt, mouseButton: .left)
+    move?.post(tap: .cghidEventTap)
+    Thread.sleep(forTimeInterval: 0.06)
+    down?.post(tap: .cghidEventTap)
+    Thread.sleep(forTimeInterval: 0.06)
+    up?.post(tap: .cghidEventTap)
+}
+
+if let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] {
+    for win in windowList {
+        let owner = win[kCGWindowOwnerName as String] as? String ?? ""
+        let layer = win[kCGWindowLayer as String] as? Int ?? -1
+        if owner.contains("WhatsApp") && layer == 0,
+           let bounds = win[kCGWindowBounds as String] as? [String: Double],
+           let wx = bounds["X"], let wy = bounds["Y"],
+           let ww = bounds["Width"], let wh = bounds["Height"],
+           ww > 400 && wh > 400 {
+            clickAt(x: wx + 250.0, y: wy + 170.0)
+            Thread.sleep(forTimeInterval: 0.5)
+            break
+        }
+    }
+}
+`;
+
+export function selectWhatsAppChat(chatName = 'DecorBeats Marketing') {
+  spawnSync('pbcopy', [], { input: chatName, encoding: 'utf8' });
 
   execFileSync(
     'osascript',
@@ -238,14 +268,39 @@ export function sendFileToMarketingGroup(filePath) {
       '-e',
       'tell application "/Applications/WhatsApp.localized/WhatsApp.app" to activate',
       '-e',
-      'delay 0.8',
+      'delay 0.6',
       '-e',
-      'tell application "System Events" to tell process "WhatsApp" to set frontmost to true',
+      'tell application "System Events" to tell process "WhatsApp"',
       '-e',
-      'delay 0.4'
+      'set frontmost to true',
+      '-e',
+      'click menu item 3 of menu 1 of menu bar item 3 of menu bar 1',
+      '-e',
+      'delay 0.35',
+      '-e',
+      'click menu item "Select All" of menu 1 of menu bar item 4 of menu bar 1',
+      '-e',
+      'delay 0.15',
+      '-e',
+      'click menu item "Paste" of menu 1 of menu bar item 4 of menu bar 1',
+      '-e',
+      'delay 0.7',
+      '-e',
+      'end tell'
     ],
     { stdio: 'inherit' }
   );
+
+  execFileSync('swift', ['-e', CLICK_FIRST_SEARCH_RESULT_SWIFT], { stdio: 'inherit' });
+}
+
+export function sendFileToMarketingGroup(filePath, targetChatName = 'DecorBeats Marketing') {
+  const absPath = path.resolve(filePath);
+  if (!fs.existsSync(absPath)) {
+    throw new Error(`File not found: ${absPath}`);
+  }
+
+  selectWhatsAppChat(targetChatName);
 
   const swiftCode = `
 import Cocoa
@@ -293,26 +348,14 @@ pb.writeObjects([fileUrl as NSURL])
     updatedAt: new Date().toISOString()
   });
 
-  return { sentFile: absPath, latestPk: maxPk };
+  return { sentFile: absPath, targetChatName, latestPk: maxPk };
 }
 
-export function sendToMarketingGroup(messageText) {
-  spawnSync('pbcopy', [], { input: messageText, encoding: 'utf8' });
+export function sendToMarketingGroup(messageText, targetChatName = 'DecorBeats Marketing') {
+  const normalizedText = String(messageText).replace(/\\n/g, '\n');
+  selectWhatsAppChat(targetChatName);
 
-  execFileSync(
-    'osascript',
-    [
-      '-e',
-      'tell application "/Applications/WhatsApp.localized/WhatsApp.app" to activate',
-      '-e',
-      'delay 0.8',
-      '-e',
-      'tell application "System Events" to tell process "WhatsApp" to set frontmost to true',
-      '-e',
-      'delay 0.4'
-    ],
-    { stdio: 'inherit' }
-  );
+  spawnSync('pbcopy', [], { input: normalizedText, encoding: 'utf8' });
 
   execFileSync('swift', ['-e', CLICK_COMPOSE_SWIFT], { stdio: 'inherit' });
 
@@ -351,7 +394,18 @@ export function sendToMarketingGroup(messageText) {
     updatedAt: new Date().toISOString()
   });
 
-  return { sent: true, latestPk: maxPk };
+  return { sent: true, targetChatName, latestPk: maxPk };
+}
+
+function parseGroupArg(args) {
+  const idx = args.indexOf('--group');
+  if (idx !== -1 && args[idx + 1]) {
+    const val = args[idx + 1].toLowerCase();
+    const cleaned = [...args.slice(0, idx), ...args.slice(idx + 2)];
+    const targetChatName = val.includes('exp') ? 'Experience Center Db' : 'DecorBeats Marketing';
+    return { targetChatName, cleanedArgs: cleaned };
+  }
+  return { targetChatName: 'DecorBeats Marketing', cleanedArgs: args };
 }
 
 const cmd = process.argv[2] || 'check';
@@ -365,17 +419,19 @@ if (cmd === 'check') {
 } else if (cmd === 'history') {
   console.log(JSON.stringify(loadState(), null, 2));
 } else if (cmd === 'send') {
-  const msg = process.argv.slice(3).join(' ').trim();
+  const { targetChatName, cleanedArgs } = parseGroupArg(process.argv.slice(3));
+  const msg = cleanedArgs.join(' ').trim();
   if (!msg) {
-    console.error('Usage: node scripts/whatsapp-boss-bridge.mjs send "<message>"');
+    console.error('Usage: node scripts/whatsapp-boss-bridge.mjs send [--group exp|marketing] "<message>"');
     process.exit(1);
   }
-  console.log(JSON.stringify(sendToMarketingGroup(msg), null, 2));
+  console.log(JSON.stringify(sendToMarketingGroup(msg, targetChatName), null, 2));
 } else if (cmd === 'send-file') {
-  const filePath = process.argv[3];
+  const { targetChatName, cleanedArgs } = parseGroupArg(process.argv.slice(3));
+  const filePath = cleanedArgs[0];
   if (!filePath) {
-    console.error('Usage: node scripts/whatsapp-boss-bridge.mjs send-file "<filepath>"');
+    console.error('Usage: node scripts/whatsapp-boss-bridge.mjs send-file [--group exp|marketing] "<filepath>"');
     process.exit(1);
   }
-  console.log(JSON.stringify(sendFileToMarketingGroup(filePath), null, 2));
+  console.log(JSON.stringify(sendFileToMarketingGroup(filePath, targetChatName), null, 2));
 }

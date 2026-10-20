@@ -13,12 +13,11 @@ import StockIntake from './StockIntake';
 import ProductReview from './ProductReview';
 import CameraCapture from './CameraCapture';
 import PhoneCapture from './PhoneCapture';
-import CatalogueStudio from './catalogue/CatalogueStudio';
+import CatalogueStudio from './CatalogueStudio';
 import { mergeCaptureDraft, sameValue, updateSharedDraft } from './sharedDraft';
 import { filterAndSortProducts, filterAndSortDrafts, nextQtySort } from './inventorySort';
 import AmazonImportModal from './AmazonImportModal';
 import { updateCatalogListing } from './amazonImporter';
-import CatalogueStudio from './CatalogueStudio';
 
 const categories = ['Bell','Bowl','Box','Decor','Diya','Idol','Jars','Misc','Planter','Plate','Tree','Urli','Wall Decor'];
 const materials = ['Brass','Metal','Ceramic','Wood','Glass','Clay','Mixed','Other'];

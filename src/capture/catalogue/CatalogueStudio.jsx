@@ -8,7 +8,7 @@ import { waitForTask } from './tasks';
 import './catalogue.css';
 import './navigation.css';
 import BatchIntake from './BatchIntake';
-import SourceReviewInbox, { SourceReviewCheck } from './SourceReview';
+import SourceReviewInbox, { SourceReviewCheck } from './SourceReview.jsx';
 import ReviewPackImport from './ReviewPackImport';
 import { mergeBulkReviewDrafts } from './bulkSourceReview';
 

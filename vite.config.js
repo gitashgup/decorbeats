@@ -129,6 +129,9 @@ function localWarehouseLightboxPlugin() {
 
 export default defineConfig({
   plugins: [localWarehouseLightboxPlugin()],
+  worker: {
+    format: "es"
+  },
   server: {
     host: true,
     port: 4173
