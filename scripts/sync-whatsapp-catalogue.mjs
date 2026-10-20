@@ -1241,7 +1241,10 @@ export function syncWhatsAppGroupCaptures({ sinceDate = '2026-10-17 00:00:00' } 
 
   const syncedDrafts = [];
 
-  const EXCLUDED_ALBUM_PKS = new Set([96546]); // Removed Ganesha Bell (DB-DW26-26) per Megha's instruction
+  // Excluded sold-out / removed items:
+  // - 96546: DB-DW26-26 (Lord Ganesha on Lotus Finial Solid Brass Pooja Arti Bell 5")
+  // - 96560: DB-DW26-28 (Royal Stag Antler Solid Brass Candle Stand 4" — Sold Out in Experience Center Db pk=97435)
+  const EXCLUDED_ALBUM_PKS = new Set([96546, 96560]);
 
   for (let i = 0; i < albums.length; i++) {
     const album = albums[i];

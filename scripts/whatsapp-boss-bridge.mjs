@@ -26,6 +26,13 @@ const WHATSAPP_SHARED_DIR =
   '/Users/k0d3/Library/Group Containers/group.net.whatsapp.WhatsApp.shared';
 const WHATSAPP_DB_PATH = path.join(WHATSAPP_SHARED_DIR, 'ChatStorage.sqlite');
 const MARKETING_CHAT_SESSION = 895;
+const EXPERIENCE_CENTER_CHAT_SESSION = 940;
+const MONITORED_CHAT_SESSIONS = [MARKETING_CHAT_SESSION, EXPERIENCE_CENTER_CHAT_SESSION];
+
+const CHAT_NAMES = {
+  [MARKETING_CHAT_SESSION]: 'DecorBeats Marketing',
+  [EXPERIENCE_CENTER_CHAT_SESSION]: 'Experience Center Db'
+};
 
 function loadState() {
   if (fs.existsSync(STATE_PATH)) {
@@ -70,6 +77,7 @@ export function checkNewMessages(markAsRead = false) {
   const sql = `
     SELECT
       m.Z_PK as pk,
+      m.ZCHATSESSION as chat_id,
       datetime(m.ZMESSAGEDATE + 978307200, 'unixepoch', 'localtime') as msg_time,
       m.ZISFROMME as is_from_me,
       m.ZMESSAGETYPE as msg_type,
@@ -82,7 +90,7 @@ export function checkNewMessages(markAsRead = false) {
     LEFT JOIN ZWAMEDIAITEM mi ON m.ZMEDIAITEM = mi.Z_PK
     LEFT JOIN ZWAGROUPMEMBER gm ON m.ZGROUPMEMBER = gm.Z_PK
     LEFT JOIN ZWAPROFILEPUSHNAME pn ON pn.ZJID = gm.ZMEMBERJID
-    WHERE m.ZCHATSESSION = ${MARKETING_CHAT_SESSION}
+    WHERE m.ZCHATSESSION IN (${MONITORED_CHAT_SESSIONS.join(', ')})
       AND m.Z_PK > ${Number(state.lastProcessedPk) || 96744}
     ORDER BY m.Z_PK ASC;
   `;
@@ -114,15 +122,27 @@ export function checkNewMessages(markAsRead = false) {
       return true;
     })
     .map((r) => {
+      const chatId = Number(r.chat_id);
+      const chatName = CHAT_NAMES[chatId] || `Chat ${chatId}`;
       const combinedText = `${r.text || ''} ${r.media_caption || ''}`.trim();
       const mentionsDibi = /\bdibi\b/i.test(combinedText);
+      const isExperienceCenter = chatId === EXPERIENCE_CENTER_CHAT_SESSION;
+      const isInventoryUpdate =
+        isExperienceCenter &&
+        /\b(sold|sold\s*out|out\s*of\s*stock|booked|left|remaining|qty|quantity|stock|remove|minus|unit|units|pcs|pieces|set|sets|bika|bik\s*gaya|khatam)\b/i.test(
+          combinedText
+        );
       return {
         ...r,
-        mentionsDibi
+        chat_id: chatId,
+        chat_name: chatName,
+        mentionsDibi,
+        isInventoryUpdate
       };
     });
 
   const mentionsDibiMessages = incoming.filter((m) => m.mentionsDibi);
+  const inventoryUpdateMessages = incoming.filter((m) => m.isInventoryUpdate);
 
   if (markAsRead && rows.length > 0) {
     const maxPk = Math.max(...rows.map((r) => Number(r.pk)));
@@ -130,15 +150,18 @@ export function checkNewMessages(markAsRead = false) {
       ...(state.conversationHistory || []),
       ...incoming.map((m) => ({
         pk: m.pk,
+        chat_id: m.chat_id,
+        chat_name: m.chat_name,
         time: m.msg_time,
         sender: m.is_from_me ? 'Boss (Ashwarya)' : m.member_jid,
         type: m.msg_type,
         text: m.text,
         media_path: m.media_path,
         media_caption: m.media_caption,
-        mentionsDibi: m.mentionsDibi
+        mentionsDibi: m.mentionsDibi,
+        isInventoryUpdate: m.isInventoryUpdate
       }))
-    ].slice(-200); // Keep rolling 200 messages of context
+    ].slice(-250); // Keep rolling 250 messages of context
 
     saveState({
       botName: 'Dibi',
@@ -150,13 +173,16 @@ export function checkNewMessages(markAsRead = false) {
 
   return {
     botName: 'Dibi',
+    monitoredGroups: Object.values(CHAT_NAMES),
     lastProcessedPk: state.lastProcessedPk,
     rawCount: rows.length,
     incomingCount: incoming.length,
-    shouldRespond: mentionsDibiMessages.length > 0,
+    shouldRespond: mentionsDibiMessages.length > 0 || inventoryUpdateMessages.length > 0,
     mentionsDibiCount: mentionsDibiMessages.length,
+    inventoryUpdateCount: inventoryUpdateMessages.length,
     incoming,
     mentionsDibiMessages,
+    inventoryUpdateMessages,
     recentConversationCount: (state.conversationHistory || []).length + incoming.length
   };
 }
@@ -256,7 +282,7 @@ pb.writeObjects([fileUrl as NSURL])
     'sqlite3',
     [
       WHATSAPP_DB_PATH,
-      `SELECT MAX(Z_PK) FROM ZWAMESSAGE WHERE ZCHATSESSION = ${MARKETING_CHAT_SESSION};`
+      `SELECT MAX(Z_PK) FROM ZWAMESSAGE WHERE ZCHATSESSION IN (${MONITORED_CHAT_SESSIONS.join(', ')});`
     ],
     { encoding: 'utf8' }
   ).trim();
@@ -314,7 +340,7 @@ export function sendToMarketingGroup(messageText) {
     'sqlite3',
     [
       WHATSAPP_DB_PATH,
-      `SELECT MAX(Z_PK) FROM ZWAMESSAGE WHERE ZCHATSESSION = ${MARKETING_CHAT_SESSION};`
+      `SELECT MAX(Z_PK) FROM ZWAMESSAGE WHERE ZCHATSESSION IN (${MONITORED_CHAT_SESSIONS.join(', ')});`
     ],
     { encoding: 'utf8' }
   ).trim();
@@ -334,7 +360,8 @@ if (cmd === 'check') {
   if (!fs.existsSync(STATE_PATH)) {
     saveState(loadState());
   }
-  console.log(JSON.stringify(checkNewMessages(mark), null, 2));
+  const result = checkNewMessages(mark);
+  console.log(JSON.stringify(result, null, 2));
 } else if (cmd === 'history') {
   console.log(JSON.stringify(loadState(), null, 2));
 } else if (cmd === 'send') {
