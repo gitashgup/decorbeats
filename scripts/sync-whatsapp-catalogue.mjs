@@ -276,7 +276,7 @@ const CURATED_ALBUM_OVERRIDES = {
     name: 'Antique Silver Kamdhenu Cow & Calf Idol on Pedestal (with Brass Bell)',
     category: 'Sacred Idols & Figurines',
     material: 'Antique Silver Aluminium & Brass Bell',
-    unit: 'Set of 2 (117 g) / Single',
+    unit: '1 Single Cow & Calf Idol',
     quantityOverride: 100,
     stockNote: '41 Right-Facing · 59 Left-Facing (100 Pcs)',
     heroMediaSubpath: 'd5aa9445-ab7c-4602-8f45-56920adfb4a2.jpg',
@@ -287,7 +287,7 @@ const CURATED_ALBUM_OVERRIDES = {
       '5f40cb33-0984-433e-897c-e99ba5d24bfa.jpg'
     ],
     description:
-      'Auspicious 4 inch (10.2 cm) oxidized antique-silver finish Kamdhenu cow and suckling calf idol on an ornate scalloped pedestal with a hanging golden brass bell (117 g per set of 2).'
+      'Auspicious 4 inch (10.2 cm) oxidized antique-silver finish Kamdhenu cow and suckling calf idol on an ornate scalloped pedestal with a hanging golden brass bell.'
   },
   96504: {
     sku: 'DB-DW26-18',
@@ -1241,8 +1241,11 @@ export function syncWhatsAppGroupCaptures({ sinceDate = '2026-10-17 00:00:00' } 
 
   const syncedDrafts = [];
 
+  const EXCLUDED_ALBUM_PKS = new Set([96546]); // Removed Ganesha Bell (DB-DW26-26) per Megha's instruction
+
   for (let i = 0; i < albums.length; i++) {
     const album = albums[i];
+    if (EXCLUDED_ALBUM_PKS.has(album.firstPk)) continue;
     const indexNum = i + 1;
     const indexPad = String(indexNum).padStart(2, '0');
     const parsed = parseWhatsAppCaption(album.caption);

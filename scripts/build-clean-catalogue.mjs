@@ -149,10 +149,9 @@ export async function renderCleanProductJpeg(item, index, totalCount) {
   const hasMultiAngles = extraGalleryUrls.length > 0;
 
   const stockQty = Number(item.quantity ?? item.qty ?? 0);
-  const isSetOrPair =
-    /pair|set/i.test(String(item.unit || '')) || /pair|set/i.test(String(item.name || ''));
-  const qtyText = stockQty > 0 ? `${stockQty} ${isSetOrPair ? 'sets' : 'pcs'}` : 'In Stock';
-  const qtySub = isSetOrPair ? 'Ready Sets in Stock' : 'Ready Pieces in Stock';
+  const isBoxSet = item.sku === 'DB-DW26-25' || /boxes/i.test(String(item.unit || ''));
+  const qtyText = stockQty > 0 ? `${stockQty} ${isBoxSet ? 'boxes' : 'pcs'}` : 'In Stock';
+  const qtySub = isBoxSet ? 'Set of 2 Jars / Box' : 'Ready Pieces in Stock';
   const wBoxX = 68;
   const wBoxW = 265;
   const sBoxX = 355;

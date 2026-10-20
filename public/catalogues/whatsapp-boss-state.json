@@ -1,7 +1,7 @@
 {
   "botName": "Dibi",
-  "lastProcessedPk": 97325,
-  "updatedAt": "2026-10-20T06:24:02.312Z",
+  "lastProcessedPk": 97336,
+  "updatedAt": "2026-10-20T06:31:24.058Z",
   "conversationHistory": [
     {
       "pk": 96761,
@@ -119,6 +119,26 @@
       "sender": "Megha Goel",
       "type": 0,
       "text": "Add available qty as well",
+      "media_path": "",
+      "media_caption": "",
+      "mentionsDibi": false
+    },
+    {
+      "pk": 97327,
+      "time": "2026-10-20 11:56:25",
+      "sender": "Megha Goel",
+      "type": 1,
+      "text": "",
+      "media_path": "Media/120363400403211823@g.us/d/6/d6dc652e-7d7f-4428-9e33-08a536ff3bfe.jpg",
+      "media_caption": "This is 10 pcs not set",
+      "mentionsDibi": false
+    },
+    {
+      "pk": 97328,
+      "time": "2026-10-20 11:56:42",
+      "sender": "Megha Goel",
+      "type": 0,
+      "text": "And remove Ganesha bell",
       "media_path": "",
       "media_caption": "",
       "mentionsDibi": false
