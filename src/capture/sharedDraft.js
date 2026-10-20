@@ -30,6 +30,27 @@ export function mergeCaptureDraft(local, base, remote) {
 }
 
 export async function updateSharedDraft(client, id, update) {
+  if (typeof window !== 'undefined' && window.__DECORBEATS_LOCAL_WAREHOUSE_MODE__) {
+    const res = await fetch('/__local_capture/drafts');
+    const payload = await res.json();
+    const list = payload.drafts || [];
+    const existing = list.find((d) => d.id === id) || {
+      id,
+      revision: 1,
+      status: 'draft',
+      data: {}
+    };
+    const next = update(existing);
+    const saveRes = await fetch('/__local_capture/save-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draft: next })
+    });
+    const savedPayload = await saveRes.json();
+    if (!saveRes.ok) throw new Error(savedPayload.error || 'Could not save local draft');
+    return savedPayload.draft;
+  }
+
   for (let attempt=0;attempt<4;attempt++) {
     const {data:latest,error:readError}=await client.from('capture_drafts').select('*').eq('id',id).single();
     if(readError)throw readError;

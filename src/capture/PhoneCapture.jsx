@@ -4,6 +4,8 @@ import { SHOTS, countTotal } from './model';
 import { uploadPhoto } from './media';
 import { updateSharedDraft } from './sharedDraft';
 import CameraCapture from './CameraCapture';
+import { cmToInches, enhanceStudioPhoto } from './photoEnhancer';
+import { describeWeightBadge } from './catalogueGenerator';
 
 const requiredShots=SHOTS.slice(0,4);
 const steps=['photos','category','material','name','count','location','locationPhoto','height','width','depth','weight','done'];
@@ -48,12 +50,36 @@ function nameSuggestions(data){
   return (common[data.category]||[`${material} ${data.category}`]).map(x=>x.replace(/^\s+|\s+/g,' ').trim()).filter(Boolean);
 }
 
-export default function PhoneCapture({ initial }) {
+export default function PhoneCapture({ initial, onStartNew, onOpenCatalogue }) {
+  const [expressMode, setExpressMode] = useState(() => {
+    const param = new URLSearchParams(window.location.search).get('mode');
+    return param !== 'hindi';
+  });
   const [draft,setDraft]=useState(initial), [stage,setStage]=useState(()=>initial.data.reviewStatus==='submitted'?'submitted':startingStep(initial.data));
   const [shot,setShot]=useState(requiredShots.find(s=>!initial.data.photos?.[s.id])?.id||'hero');
-  const [camera,setCamera]=useState(()=>initial.data.reviewStatus!=='submitted'&&startingStep(initial.data)==='photos'?'product':''), [value,setValue]=useState(null);
-  const [status,setStatus]=useState('जुड़ रहा है…'), [error,setError]=useState(''), [busy,setBusy]=useState(false);
+  const [camera,setCamera]=useState(()=>!expressMode&&initial.data.reviewStatus!=='submitted'&&startingStep(initial.data)==='photos'?'product':''), [value,setValue]=useState(null);
+  const [status,setStatus]=useState('Ready · Lightbox Sync'), [error,setError]=useState(''), [busy,setBusy]=useState(false);
   const active=useRef(true), working=useRef(false), pending=useRef(null), heartbeatJob=useRef(null);
+  const nativeCameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
+
+  // Express single-screen form state synced with draft.data
+  const [expressForm, setExpressForm] = useState(() => ({
+    name: initial.data.name || '',
+    category: initial.data.category || 'Diya',
+    material: initial.data.material || 'Brass',
+    unit: initial.data.unit || '1 Unit / Set',
+    sellable: initial.data.locations?.[0]?.sellable ?? '',
+    locationName: initial.data.locations?.[0]?.name || 'Lightbox Stock',
+    weight_g: initial.data.weight_g || '',
+    height: initial.data.height || '',
+    width: initial.data.width || '',
+    length: initial.data.length || '',
+    mrp: initial.data.mrp || '',
+    b2b_price: initial.data.b2b_price || '',
+    notes: initial.data.notes || ''
+  }));
+
   const stepNumber=Math.max(1,steps.indexOf(stage)+1);
   const progress=Math.round((stepNumber/steps.length)*100);
   const currentShot=requiredShots.find(s=>s.id===shot)||requiredShots[0];
@@ -65,7 +91,7 @@ export default function PhoneCapture({ initial }) {
       working.current=true;
       try {
         const saved=await updateSharedDraft(supabase,initial.id,latest=>({...latest,data:{...latest.data,phoneLastSeenAt:new Date().toISOString()}}));
-        if(active.current){setDraft(saved);setStatus('जुड़ा है');setError('');}
+        if(active.current){setDraft(saved);setStatus(expressMode?'Synced ✓':'जुड़ा है');setError('');}
       } catch(e){if(active.current)setError(`Connection paused: ${e.message}`);}
       finally{working.current=false;}
     }
@@ -73,7 +99,7 @@ export default function PhoneCapture({ initial }) {
     const warn=e=>{if(working.current&&pending.current){e.preventDefault();e.returnValue='';}};
     check();const timer=setInterval(check,15000);window.addEventListener('beforeunload',warn);
     return()=>{active.current=false;clearInterval(timer);window.removeEventListener('beforeunload',warn);};
-  },[initial.id]);
+  },[initial.id, expressMode]);
 
   async function updateData(makeData,next,message='सेव हो गया ✓'){
     if(pending.current)return false;
@@ -85,19 +111,163 @@ export default function PhoneCapture({ initial }) {
     }catch(e){setError(e.message);return false;}finally{working.current=false;pending.current=null;setBusy(false);}
   }
 
-  async function savePhoto(file) {
-    await heartbeatJob.current;working.current=true;setError('');
+  async function savePhoto(file, targetShot = shot) {
+    if (!file) return false;
+    await heartbeatJob.current;working.current=true;setBusy(true);setError('');
     try {
       let asset;
       if(pending.current?.file===file)asset=pending.current.asset;
-      else {asset=await uploadPhoto(initial.id,shot,file,setStatus);pending.current={file,asset,shot};}
+      else {asset=await uploadPhoto(initial.id,targetShot,file,setStatus);pending.current={file,asset,shot:targetShot};}
       const job=pending.current;
       const saved=await updateSharedDraft(supabase,initial.id,latest=>({...latest,data:{...latest.data,phoneLastSeenAt:new Date().toISOString(),lastPhonePhotoAt:new Date().toISOString(),photos:{...latest.data.photos,[job.shot]:job.asset}}}));
-      setDraft(saved);pending.current=null;setStatus('फोटो सेव हो गई ✓');
+      setDraft(saved);pending.current=null;setStatus(expressMode?'Photo saved ✓':'फोटो सेव हो गई ✓');
       const next=requiredShots.find(s=>!saved.data.photos?.[s.id]);
-      if(next)setShot(next.id);else{setCamera('');setStage('category');}
+      if(next)setShot(next.id);else if(!expressMode){setCamera('');setStage('category');}
       return true;
-    } catch(e){setError(e.message);throw e;}finally{working.current=false;}
+    } catch(e){setError(e.message);throw e;}finally{working.current=false;setBusy(false);}
+  }
+
+  async function handleCleanHeroBackground() {
+    const heroUrl = draft.data.photos?.hero?.url || Object.values(draft.data.photos || {})[0]?.url;
+    if (!heroUrl) {
+      setError('Take or upload a photo first.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setStatus('Cleaning lightbox background & boosting brass luster…');
+    try {
+      const enhanced = await enhanceStudioPhoto(heroUrl, {
+        cleanBackground: true,
+        brighten: true,
+        shadow: true
+      });
+      const uploaded = await uploadPhoto(initial.id, 'studio-clean-hero', enhanced.file, setStatus);
+      const saved = await updateSharedDraft(supabase, initial.id, (latest) => ({
+        ...latest,
+        data: {
+          ...latest.data,
+          photos: {
+            ...latest.data.photos,
+            hero: {
+              ...(latest.data.photos?.hero || uploaded),
+              cleanedPreview: uploaded
+            }
+          }
+        }
+      }));
+      setDraft(saved);
+      setStatus('Pure white studio photo ready ✓');
+    } catch (e) {
+      setError(e.message || 'Could not enhance photo.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleExpressAutoEnrich() {
+    const hasPhoto = Object.values(draft.data.photos || {}).some((p) => p?.url);
+    if (!hasPhoto) {
+      setError('Snap at least 1 product photo first so AI can inspect it.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setStatus('AI inspecting brass craft, weight & writing description…');
+    try {
+      const { data: { session: activeSession } } = await supabase.auth.getSession();
+      const response = await fetch('/api/auto-enrich-product', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${activeSession?.access_token || ''}`
+        },
+        body: JSON.stringify({
+          photos: draft.data.photos,
+          dimensions: {
+            length: expressForm.length,
+            width: expressForm.width,
+            height: expressForm.height,
+            weight_g: expressForm.weight_g
+          },
+          currentFacts: {
+            name: expressForm.name,
+            category: expressForm.category,
+            material: expressForm.material,
+            unit: expressForm.unit
+          },
+          draftId: initial.id
+        })
+      });
+      const payload = await response.json();
+      const enriched = payload?.enriched || {};
+      const nextName =
+        enriched.title ||
+        enriched.ecommerceListing?.title ||
+        expressForm.name ||
+        `Handcrafted Brass ${expressForm.category}`;
+      const nextNotes = enriched.description || expressForm.notes || '';
+      const nextMrp =
+        expressForm.mrp ||
+        String(enriched.suggestedSellingPrice || enriched.pricingBenchmark?.suggestedSellingPrice || '');
+
+      const nextForm = {
+        ...expressForm,
+        name: nextName,
+        category: enriched.category || expressForm.category,
+        material: enriched.material || expressForm.material,
+        unit: enriched.unit || expressForm.unit,
+        notes: nextNotes,
+        mrp: nextMrp
+      };
+      setExpressForm(nextForm);
+      await saveExpressForm(nextForm, false, 'AI Enriched & Saved ✓');
+    } catch (e) {
+      setError(e.message || 'AI enrichment unavailable right now; save your manual specs below.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveExpressForm(formToSave = expressForm, startNextAfter = false, customMsg = 'Saved to Catalogue ✓') {
+    const ok = await updateData(
+      (d) => ({
+        ...d,
+        name: (formToSave.name || d.name || `Handcrafted ${formToSave.material || 'Brass'} ${formToSave.category || 'Decor'}`).trim(),
+        category: formToSave.category || d.category || 'Decor',
+        categoryConfirmed: true,
+        material: formToSave.material || d.material || 'Brass',
+        materialConfirmed: true,
+        unit: formToSave.unit || d.unit || '1 Unit / Set',
+        weight_g: String(formToSave.weight_g ?? '').trim(),
+        height: String(formToSave.height ?? '').trim(),
+        width: String(formToSave.width ?? '').trim(),
+        length: String(formToSave.length ?? '').trim(),
+        mrp: String(formToSave.mrp ?? '').trim(),
+        b2b_price: String(formToSave.b2b_price ?? '').trim(),
+        notes: formToSave.notes || d.notes || '',
+        locations: [
+          {
+            name: (formToSave.locationName || 'Lightbox Stock').trim(),
+            sellable: String(formToSave.sellable ?? '1').trim(),
+            damaged: d.locations?.[0]?.damaged ?? '0'
+          },
+          ...(d.locations || []).slice(1)
+        ],
+        reviewStatus: 'submitted',
+        submittedAt: new Date().toISOString()
+      }),
+      null,
+      customMsg
+    );
+    if (ok && startNextAfter) {
+      if (onStartNew) {
+        onStartNew(null);
+      } else {
+        window.location.href = '/admin/capture?phone=1';
+      }
+    }
+    return ok;
   }
 
   async function saveLocationPhoto(file){
@@ -108,6 +278,11 @@ export default function PhoneCapture({ initial }) {
       setDraft(saved);setCamera('');setStatus('Location saved ✓');setStage('height');return true;
     }catch(e){setError(e.message);throw e;}finally{working.current=false;}
   }
+
+  const weightBadge = useMemo(
+    () => describeWeightBadge(expressForm.weight_g),
+    [expressForm.weight_g]
+  );
 
   const body=useMemo(()=>{
     if(stage==='submitted')return <div className="cs-mobile-done"><span>✓</span><h1>जाँच के लिए भेज दिया</h1><p>अब Ashwarya जाँचकर वेबसाइट पर डालेंगे।</p><dl><dt>सामान</dt><dd>{draft.data.name||'नया सामान'}</dd><dt>फोटो</dt><dd>{Object.keys(draft.data.photos||{}).length}</dd><dt>गिनती</dt><dd>{countTotal(draft.data)}</dd><dt>जगह</dt><dd>{draft.data.locations?.[0]?.name||'—'}</dd></dl><a className="cs-primary cs-mobile-link" href="/admin/capture?phone=1">अगला सामान →</a></div>;
@@ -126,12 +301,360 @@ export default function PhoneCapture({ initial }) {
   },[stage,shot,value,draft,currentShot,initial.id]);
 
   return <section className="cs-phone-panel">
-    <header><span className="cs-phone-connected"><i/> {busy?'सेव हो रहा है…':status}</span><span>{stage==='photos'?`फोटो ${requiredShots.findIndex(s=>s.id===shot)+1} / 4`:stage==='submitted'?'पूरा हुआ':`${stepNumber} / ${steps.length}`}</span></header>
-    <div className="cs-phone-progress"><span style={{width:`${progress}%`}}/></div>
-    {error&&<p role="alert" className="cs-phone-error">{error}</p>}
-    <fieldset className="cs-phone-body" disabled={busy}>{body}</fieldset>
-    {stage!=='submitted'&&<button className="cs-phone-back" disabled={busy} onClick={()=>{setValue(null);setError('');if(stage==='photos'){const index=requiredShots.findIndex(s=>s.id===shot);if(index>0)setShot(requiredShots[index-1].id);else window.location.href='/admin/capture?phone=1';}else setStage(steps[Math.max(0,steps.indexOf(stage)-1)]);}}>← पीछे</button>}
-    {camera==='product'&&<CameraCapture key={`${initial.id}-${shot}`} autoSave productName={draft.data.name} shotName={currentShot.hindi} guidance={currentShot.direction} angleHint={currentShot.angleHint} lightHint={currentShot.lightHint} icon={currentShot.icon} onUse={savePhoto} onClose={()=>setCamera('')}/>}
+    <header className="cs-phone-header-bar">
+      <span className="cs-phone-connected"><i/> {busy?'Saving…':status}</span>
+      <div className="cs-phone-mode-switch">
+        <button
+          type="button"
+          className={expressMode ? 'active' : ''}
+          onClick={() => setExpressMode(true)}
+        >
+          ⚡ Lightbox Fast (EN)
+        </button>
+        <button
+          type="button"
+          className={!expressMode ? 'active' : ''}
+          onClick={() => setExpressMode(false)}
+        >
+          📋 हिंदी Steps
+        </button>
+      </div>
+    </header>
+
+    {error && <p role="alert" className="cs-phone-error">{error}</p>}
+
+    {expressMode ? (
+      <div className="cs-express-card">
+        <div className="cs-express-top-row">
+          <div>
+            <span className="cs-ai-badge">🪔 DIWALI LIGHTBOX EXPRESS</span>
+            <h2>Snap, Weigh, Measure & Count</h2>
+          </div>
+          {onOpenCatalogue && (
+            <button type="button" className="cs-btn-open-cat-mini" onClick={onOpenCatalogue}>
+              📄 Build PDF Catalogue →
+            </button>
+          )}
+        </div>
+
+        {/* 1. Fast Camera & Photo Strip */}
+        <div className="cs-express-photo-section">
+          <div className="cs-express-shot-pills">
+            {requiredShots.map((s, idx) => {
+              const hasImg = draft.data.photos?.[s.id]?.url;
+              const imgUrl = draft.data.photos?.[s.id]?.cleanedPreview?.url || hasImg;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`cs-express-shot-slot ${shot === s.id ? 'active' : ''} ${hasImg ? 'filled' : ''}`}
+                  onClick={() => setShot(s.id)}
+                >
+                  {imgUrl ? (
+                    <img src={imgUrl} alt={s.name} />
+                  ) : (
+                    <span className="cs-slot-num">0{idx + 1}</span>
+                  )}
+                  <small>{s.name}</small>
+                </button>
+              );
+            })}
+          </div>
+
+          <input
+            ref={nativeCameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) savePhoto(f, shot);
+            }}
+          />
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={async (e) => {
+              const files = Array.from(e.target.files || []);
+              e.target.value = '';
+              const slotIds = ['hero', 'front', 'back', 'detail'];
+              let startIdx = slotIds.indexOf(shot);
+              if (startIdx < 0) startIdx = 0;
+              for (let i = 0; i < files.length && startIdx + i < slotIds.length; i++) {
+                await savePhoto(files[i], slotIds[startIdx + i]);
+              }
+            }}
+          />
+
+          <div className="cs-express-cam-actions">
+            <button
+              type="button"
+              className="cs-primary cs-express-snap-btn"
+              disabled={busy}
+              onClick={() => nativeCameraInputRef.current?.click()}
+            >
+              📷 Snap {currentShot.name} (iPhone Camera)
+            </button>
+            <button
+              type="button"
+              className="cs-express-gallery-btn"
+              disabled={busy}
+              onClick={() => galleryInputRef.current?.click()}
+            >
+              🖼️ Choose from Photos
+            </button>
+            <button
+              type="button"
+              className="cs-express-live-btn"
+              disabled={busy}
+              onClick={() => setCamera('product')}
+            >
+              ◎ Live Framing Guide
+            </button>
+          </div>
+
+          {Object.values(draft.data.photos || {}).some((p) => p?.url) && (
+            <div className="cs-express-ai-bar">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleCleanHeroBackground}
+              >
+                🪄 Clean Lightbox to Pure White
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleExpressAutoEnrich}
+              >
+                ✨ AI Auto-Name & Enrich
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 2. Weight & Available Quantity (Hero Inputs) */}
+        <div className="cs-express-grid-2">
+          <label className="cs-express-field highlight">
+            <span>⚖️ Net Weight (grams) *</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="1"
+              placeholder="e.g. 754"
+              value={expressForm.weight_g}
+              onChange={(e) =>
+                setExpressForm((prev) => ({ ...prev, weight_g: e.target.value }))
+              }
+            />
+            {expressForm.weight_g > 0 && (
+              <small className="cs-express-hint gold">
+                ✦ {weightBadge.shortLabel} · {weightBadge.tier}
+              </small>
+            )}
+          </label>
+
+          <label className="cs-express-field highlight">
+            <span>📦 Available Stock (Units) *</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="1"
+              placeholder="e.g. 24"
+              value={expressForm.sellable}
+              onChange={(e) =>
+                setExpressForm((prev) => ({ ...prev, sellable: e.target.value }))
+              }
+            />
+            <small className="cs-express-hint">Ready to ship for Diwali</small>
+          </label>
+        </div>
+
+        {/* 3. Dimensions in cm (with live inches preview) */}
+        <div className="cs-express-dims-box">
+          <div className="cs-express-dims-head">
+            <strong>📐 Dimensions (cm)</strong>
+            <span>Auto-calculates inches for PDF catalogue</span>
+          </div>
+          <div className="cs-express-grid-3">
+            <label className="cs-express-field">
+              <span>↕️ Height (cm)</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                placeholder="H"
+                value={expressForm.height}
+                onChange={(e) =>
+                  setExpressForm((prev) => ({ ...prev, height: e.target.value }))
+                }
+              />
+              {expressForm.height > 0 && (
+                <small>{cmToInches(expressForm.height)} in</small>
+              )}
+            </label>
+            <label className="cs-express-field">
+              <span>↔️ Width (cm)</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                placeholder="W"
+                value={expressForm.width}
+                onChange={(e) =>
+                  setExpressForm((prev) => ({ ...prev, width: e.target.value }))
+                }
+              />
+              {expressForm.width > 0 && (
+                <small>{cmToInches(expressForm.width)} in</small>
+              )}
+            </label>
+            <label className="cs-express-field">
+              <span>📏 Depth (cm)</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                placeholder="D"
+                value={expressForm.length}
+                onChange={(e) =>
+                  setExpressForm((prev) => ({ ...prev, length: e.target.value }))
+                }
+              />
+              {expressForm.length > 0 && (
+                <small>{cmToInches(expressForm.length)} in</small>
+              )}
+            </label>
+          </div>
+        </div>
+
+        {/* 4. Product Identity & Optional Pricing */}
+        <div className="cs-express-identity-box">
+          <label className="cs-express-field">
+            <span>🏷️ Product Name</span>
+            <input
+              type="text"
+              placeholder="e.g. Handcrafted Brass Peacock Diya Pair"
+              value={expressForm.name}
+              onChange={(e) =>
+                setExpressForm((prev) => ({ ...prev, name: e.target.value }))
+              }
+            />
+          </label>
+          <div className="cs-express-grid-3">
+            <label className="cs-express-field">
+              <span>Category</span>
+              <select
+                value={expressForm.category}
+                onChange={(e) =>
+                  setExpressForm((prev) => ({ ...prev, category: e.target.value }))
+                }
+              >
+                {categoryChoices.map(([val, icon]) => (
+                  <option key={val} value={val}>
+                    {icon} {val}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="cs-express-field">
+              <span>Material</span>
+              <select
+                value={expressForm.material}
+                onChange={(e) =>
+                  setExpressForm((prev) => ({ ...prev, material: e.target.value }))
+                }
+              >
+                {materialChoices.map(([val]) => (
+                  <option key={val} value={val}>
+                    {val}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="cs-express-field">
+              <span>Includes / Set</span>
+              <input
+                type="text"
+                placeholder="1 Pc / Set of 2"
+                value={expressForm.unit}
+                onChange={(e) =>
+                  setExpressForm((prev) => ({ ...prev, unit: e.target.value }))
+                }
+              />
+            </label>
+          </div>
+
+          <div className="cs-express-grid-2">
+            <label className="cs-express-field">
+              <span>💰 Selling Price ₹ (Optional)</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                placeholder="MRP ₹"
+                value={expressForm.mrp}
+                onChange={(e) =>
+                  setExpressForm((prev) => ({ ...prev, mrp: e.target.value }))
+                }
+              />
+            </label>
+            <label className="cs-express-field">
+              <span>📍 Rack / Section</span>
+              <input
+                type="text"
+                placeholder="Lightbox / Section 1"
+                value={expressForm.locationName}
+                onChange={(e) =>
+                  setExpressForm((prev) => ({ ...prev, locationName: e.target.value }))
+                }
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* 5. Save & Next Product Buttons */}
+        <div className="cs-express-footer-actions">
+          <button
+            type="button"
+            className="cs-primary cs-mobile-action"
+            disabled={busy}
+            onClick={() => saveExpressForm(expressForm, true, 'Saved! Opening next product…')}
+          >
+            {busy ? 'Saving…' : '💾 Save & Shoot Next Product (+)'}
+          </button>
+          <div className="cs-express-sub-actions">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => saveExpressForm(expressForm, false, 'Saved to Decorbeats ✓')}
+            >
+              ✓ Save Progress
+            </button>
+            <a href="/admin/capture?phone=1" className="cs-express-back-link">
+              ← All Products List
+            </a>
+          </div>
+        </div>
+      </div>
+    ) : (
+      <>
+        <div className="cs-phone-progress"><span style={{width:`${progress}%`}}/></div>
+        <fieldset className="cs-phone-body" disabled={busy}>{body}</fieldset>
+        {stage!=='submitted'&&<button className="cs-phone-back" disabled={busy} onClick={()=>{setValue(null);setError('');if(stage==='photos'){const index=requiredShots.findIndex(s=>s.id===shot);if(index>0)setShot(requiredShots[index-1].id);else window.location.href='/admin/capture?phone=1';}else setStage(steps[Math.max(0,steps.indexOf(stage)-1)]);}}>← पीछे</button>}
+      </>
+    )}
+
+    {camera==='product'&&<CameraCapture key={`${initial.id}-${shot}`} autoSave productName={draft.data.name} shotName={expressMode?currentShot.name:currentShot.hindi} guidance={expressMode?currentShot.tip:currentShot.direction} angleHint={currentShot.angleHint} lightHint={currentShot.lightHint} icon={currentShot.icon} onUse={savePhoto} onClose={()=>setCamera('')}/>}
     {camera==='location'&&<CameraCapture key={`${initial.id}-location`} autoSave productName={draft.data.name} shotName="रैक की फोटो" angleHint="कैमरा स्थिर रखें" lightHint="रैक नंबर साफ दिखे" guidance="रैक का नंबर और सामान दोनों दिखाएँ।" icon="🗄️" onUse={saveLocationPhoto} onClose={()=>setCamera('')}/>} 
   </section>;
 }

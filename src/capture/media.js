@@ -39,13 +39,57 @@ export async function uploadPhoto(draftId, shot, file, progress) {
   const id = crypto.randomUUID();
   const ext = file.name.split('.').pop().replace(/[^a-z0-9]/gi, '').slice(0,8) || 'jpg';
   const original = `${draftId}/${shot}-${id}.${ext}`;
-  progress('Saving original…');
-  await upload('capture-originals', original, file, file.type || 'application/octet-stream');
-  const path = `capture/${draftId}/${shot}-${id}.webp`;
-  progress('Saving website photo…');
-  await upload('products', path, processed.blob, 'image/webp');
-  const { data } = supabase.storage.from('products').getPublicUrl(path);
-  return { url: data.publicUrl, original, filename: file.name, width: processed.width, height: processed.height, bytes: processed.blob.size, warning: processed.warning };
+  try {
+    progress('Saving original…');
+    await upload('capture-originals', original, file, file.type || 'application/octet-stream');
+    const path = `capture/${draftId}/${shot}-${id}.webp`;
+    progress('Saving website photo…');
+    await upload('products', path, processed.blob, 'image/webp');
+    const { data } = supabase.storage.from('products').getPublicUrl(path);
+    return { url: data.publicUrl, original, filename: file.name, width: processed.width, height: imgWidthFallback(processed), bytes: processed.blob.size, warning: processed.warning };
+  } catch (supaErr) {
+    // Fallback to local Warehouse Wi-Fi server when shooting in passwordless local mode
+    progress('Saving photo to Warehouse Mac…');
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(processed.blob);
+    });
+    try {
+      const localRes = await fetch('/__local_capture/upload-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draftId,
+          shot,
+          dataUrl,
+          filename: file.name,
+          width: processed.width,
+          height: processed.height
+        })
+      });
+      if (localRes.ok) {
+        const { asset } = await localRes.json();
+        return { ...asset, warning: processed.warning };
+      }
+    } catch {
+      // ignore and fall back to inline dataUrl
+    }
+    return {
+      url: dataUrl,
+      original: dataUrl,
+      filename: file.name,
+      width: processed.width,
+      height: processed.height,
+      bytes: processed.blob.size,
+      warning: processed.warning
+    };
+  }
+}
+
+function imgWidthFallback(processed) {
+  return processed.height;
 }
 
 export async function uploadVideo(draftId, file, progress) {

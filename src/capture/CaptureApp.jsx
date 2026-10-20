@@ -17,6 +17,7 @@ import { mergeCaptureDraft, sameValue, updateSharedDraft } from './sharedDraft';
 import { filterAndSortProducts, filterAndSortDrafts, nextQtySort } from './inventorySort';
 import AmazonImportModal from './AmazonImportModal';
 import { updateCatalogListing } from './amazonImporter';
+import CatalogueStudio from './CatalogueStudio';
 
 const categories = ['Bell','Bowl','Box','Decor','Diya','Idol','Jars','Misc','Planter','Plate','Tree','Urli','Wall Decor'];
 const materials = ['Brass','Metal','Ceramic','Wood','Glass','Clay','Mixed','Other'];
@@ -30,9 +31,9 @@ function Select({ label, value, values, onChange }) {
 
 export default function CaptureApp() {
   const [session,setSession] = useState(null), [authReady,setAuthReady] = useState(false);
-  const [allowed,setAllowed] = useState(false), [email,setEmail] = useState(''), [password,setPassword] = useState('');
+  const [allowed,setAllowed] = useState(false), [email,setEmail] = useState('ashwaryagupta02@gmail.com'), [password,setPassword] = useState('');
   const [products,setProducts] = useState([]), [drafts,setDrafts] = useState([]), [draft,setDraft] = useState(null);
-  const [search,setSearch] = useState(''), [queue,setQueue] = useState(()=>['pricing','review','drafts','published'].includes(new URLSearchParams(window.location.search).get('view'))?new URLSearchParams(window.location.search).get('view'):window.location.pathname.replace(/\/+$/, '')==='/admin'?'review':'capture'), [location,setLocation] = useState('');
+  const [search,setSearch] = useState(''), [queue,setQueue] = useState(()=>['pricing','review','drafts','published','catalogue'].includes(new URLSearchParams(window.location.search).get('view'))?new URLSearchParams(window.location.search).get('view'):window.location.pathname.replace(/\/+$/, '')==='/admin'?'review':'capture'), [location,setLocation] = useState('');
   const [busy,setBusy] = useState(false), [message,setMessage] = useState(''), [error,setError] = useState('');
   const [dirty,setDirty] = useState(false), [step,setStep] = useState(0), [shot,setShot] = useState('hero');
   const [pair,setPair] = useState(false), [guide,setGuide] = useState(false), [confirm,setConfirm] = useState(false);
@@ -45,6 +46,7 @@ export default function CaptureApp() {
   const [qtyFilter, setQtyFilter] = useState('all');
   const [amazonModalOpen, setAmazonModalOpen] = useState(false);
   const phoneMode = new URLSearchParams(window.location.search).get('phone')==='1';
+  const isLocalLan = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(window.location.hostname);
   const [movement,setMovement]=useState(new URLSearchParams(window.location.search).get('view')==='movements');
   const [passwordPrompt,setPasswordPrompt]=useState(()=>typeof window!=='undefined'&&/type=(?:invite|recovery)/.test(window.location.hash));
   const [newPassword,setNewPassword]=useState('');
@@ -64,7 +66,16 @@ export default function CaptureApp() {
   },[]);
 
   useEffect(()=>{
-    if(!session){setAllowed(false);setProducts([]);setDrafts([]);setDraft(null);return;}
+    if(!session){
+      if(isLocalLan){
+        window.__DECORBEATS_LOCAL_WAREHOUSE_MODE__ = true;
+        setAllowed(true);
+        refresh();
+        return;
+      }
+      setAllowed(false);setProducts([]);setDrafts([]);setDraft(null);return;
+    }
+    window.__DECORBEATS_LOCAL_WAREHOUSE_MODE__ = false;
     let active=true;
     supabase.rpc('is_decorbeats_admin').then(async ({data,error})=>{
       if(!active)return;
@@ -72,7 +83,7 @@ export default function CaptureApp() {
       setAllowed(true);await refresh();
     });
     return ()=>{active=false;};
-  },[session?.user?.id]);
+  },[session?.user?.id, isLocalLan]);
 
   useEffect(()=>{
     const warn=e=>{if(dirty||inFlight.current){e.preventDefault();e.returnValue='';}};
@@ -86,6 +97,17 @@ export default function CaptureApp() {
       if(reading||inFlight.current||document.hidden)return;
       reading=true;
       try{
+        if(window.__DECORBEATS_LOCAL_WAREHOUSE_MODE__){
+          const res=await fetch('/__local_capture/drafts');
+          const payload=await res.json();
+          const remote=(payload.drafts||[]).find(x=>x.id===draft.id);
+          if(remote&&remote.revision!==savedBase.current?.revision){
+            const merged=mergeCaptureDraft(currentDraft.current,savedBase.current,remote);
+            savedBase.current=remote;setDraft(merged);setDirty(!sameValue(merged.data,remote.data));
+            setDrafts(old=>[remote,...old.filter(x=>x.id!==remote.id)]);
+          }
+          return;
+        }
         const {data:remote,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();
         if(error)throw error;
         if(!active||inFlight.current||currentDraft.current?.id!==remote.id)return;
@@ -105,13 +127,19 @@ export default function CaptureApp() {
   const pairUrl = `${window.location.origin}/admin/capture${draft?.revision ? `?draft=${draft.id}&phone=1` : ''}`;
 
   async function refresh(openFromUrl=true){
-    const [p,d]=await Promise.all([
+    const [p,d,localRes]=await Promise.all([
       supabase.from('products').select('*').is('archived_at',null).order('name'),
-      supabase.from('capture_drafts').select('*').order('updated_at',{ascending:false}).limit(500)
+      window.__DECORBEATS_LOCAL_WAREHOUSE_MODE__
+        ? Promise.resolve({ data: [], error: null })
+        : supabase.from('capture_drafts').select('*').order('updated_at',{ascending:false}).limit(500),
+      fetch('/__local_capture/drafts').then(r=>r.ok?r.json():{drafts:[]}).catch(()=>({drafts:[]}))
     ]);
-    if(p.error||d.error){setError(d.error ? 'The capture workspace is not ready yet. Your existing inventory has not changed.' : p.error.message);return;}
-    setProducts(p.data);setDrafts(d.data);
-    if(openFromUrl){const id=new URLSearchParams(window.location.search).get('draft'); const found=d.data.find(x=>x.id===id);if(found)open(found);}
+    if(p.error){setError(p.error.message);return;}
+    const localDrafts = Array.isArray(localRes?.drafts) ? localRes.drafts : [];
+    const remoteDrafts = Array.isArray(d?.data) ? d.data : [];
+    const combinedDrafts = [...localDrafts, ...remoteDrafts.filter(rd => !localDrafts.some(ld => ld.id === rd.id))];
+    setProducts(p.data||[]);setDrafts(combinedDrafts);
+    if(openFromUrl){const id=new URLSearchParams(window.location.search).get('draft'); const found=combinedDrafts.find(x=>x.id===id);if(found)open(found);}
   }
   async function run(fn){
     if(inFlight.current)return;
@@ -146,7 +174,13 @@ export default function CaptureApp() {
   }
   async function persist(candidate=draft,nextStep=step){
     let data;
-    if(candidate.revision){
+    if(window.__DECORBEATS_LOCAL_WAREHOUSE_MODE__){
+      const payloadDraft={...candidate,data:{...candidate.data,step:nextStep}};
+      const res=await fetch('/__local_capture/save-draft',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({draft:payloadDraft})});
+      const payload=await res.json();
+      if(!res.ok)throw new Error(payload.error||'Could not save local draft');
+      data=payload.draft;
+    }else if(candidate.revision){
       const base=savedBase.current, local={...candidate,data:{...candidate.data,step:nextStep}};
       data=await updateSharedDraft(supabase,candidate.id,remote=>mergeCaptureDraft(local,base,remote));
     }else{
@@ -649,7 +683,7 @@ export default function CaptureApp() {
 
   return <div className={`cs ${phoneMode?'cs-phone-mode':''} ${draft&&step===3&&!phoneMode?'cs-review-mode':''}`}>
     <header className="cs-header"><a href="/admin" className="cs-brand"><img src="/assets/brand/decorbeats-logo.svg" alt=""/><span>DECORBEATS<small>Capture studio</small></span></a>
-      <div className="cs-header-actions"><button onClick={()=>setGuide(!guide)}>Setup guide</button>{allowed&&!phoneMode&&<button disabled={busy} onClick={()=>run(async()=>{if(draft&&(dirty||!draft.revision))await persist();setCameraOpen(false);setPair(!pair);})}>Connect iPhone ↗</button>}{!!draft?.revision&&!published&&!phoneMode&&<button disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();if(error)throw error;open(data);setMessage('Latest saved version loaded');})}>Refresh from phone</button>}{allowed&&!phoneMode&&<button onClick={()=>setPasswordPrompt(true)}>Set password</button>}<a href="/admin/capture">Inventory ↗</a>{!phoneMode&&<><a href="/admin">Review</a><a href="/admin?view=pricing">Megha · Prices</a><a href="/admin?legacy=1">Sales & older tools</a></>}{session&&!phoneMode&&<button onClick={()=>supabase.auth.signOut()}>Sign out</button>}</div>
+      <div className="cs-header-actions"><button type="button" className="cs-btn-diwali-header" onClick={()=>{setDraft(null);setMovement(false);setQueue('catalogue');history.replaceState(null,'','/admin/capture?view=catalogue');}}>🪔 Diwali Catalogue & PDF</button><button onClick={()=>setGuide(!guide)}>Setup guide</button>{allowed&&!phoneMode&&<button disabled={busy} onClick={()=>run(async()=>{if(draft&&(dirty||!draft.revision))await persist();setCameraOpen(false);setPair(!pair);})}>Connect iPhone ↗</button>}{!!draft?.revision&&!published&&!phoneMode&&<button disabled={dirty||busy} onClick={()=>run(async()=>{const {data,error}=await supabase.from('capture_drafts').select('*').eq('id',draft.id).single();if(error)throw error;open(data);setMessage('Latest saved version loaded');})}>Refresh from phone</button>}{allowed&&!phoneMode&&<button onClick={()=>setPasswordPrompt(true)}>Set password</button>}<a href="/admin/capture">Inventory ↗</a>{!phoneMode&&<><a href="/admin">Review</a><a href="/admin?view=pricing">Megha · Prices</a><a href="/admin?legacy=1">Sales & older tools</a></>}{session&&!phoneMode&&<button onClick={()=>supabase.auth.signOut()}>Sign out</button>}</div>
     </header>
     <main className="cs-main">
       {error&&<div role="alert" className="cs-alert">{error}<button onClick={()=>setError('')} aria-label="Dismiss error">×</button></div>}
@@ -665,9 +699,9 @@ export default function CaptureApp() {
           <button className="cs-primary" disabled={busy||!supabase}>{busy?'Signing in…':'Open capture studio →'}</button>
           <button type="button" onClick={()=>setResetMode(true)} style={{marginTop:12,background:'none',border:'none',color:'#666',cursor:'pointer',fontSize:13,textDecoration:'underline'}}>Set up new password / forgot password?</button>
         </form>}
-      </section>:phoneMode&&draft?<PhoneCapture key={draft.id} initial={draft}/>:phoneMode?<PhoneStart products={products} drafts={drafts} search={search} setSearch={setSearch} busy={busy} onStart={startOnPhone}/>:!draft?<>
-        <div className="cs-heading"><div><h1>{queue==='capture'?'Inventory photography':queue==='pricing'?'Megha · Prices':'Capture review'}</h1>{queue==='pricing'&&<p>Enter cost and selling price. Save each row.</p>}</div><div className="cs-row-actions"><button type="button" className="cs-btn-amazon-import" onClick={()=>setAmazonModalOpen(true)}>🛒 Import from Amazon</button><button className="cs-primary" onClick={()=>start(null)}>+ New product</button></div></div>
-        <div className="cs-row-actions"><button onClick={()=>setMovement(!movement)}>{movement?'Back to inventory':'Stock arrived / sold / count'}</button></div>
+      </section>:phoneMode&&draft?<PhoneCapture key={draft.id} initial={draft} onStartNew={startOnPhone} onOpenCatalogue={()=>{setDraft(null);setQueue('catalogue');history.replaceState(null,'','/admin/capture?view=catalogue');}}/>:phoneMode&&queue!=='catalogue'?<PhoneStart products={products} drafts={drafts} search={search} setSearch={setSearch} busy={busy} onStart={startOnPhone} onOpenDraft={open} onOpenCatalogue={()=>{setQueue('catalogue');history.replaceState(null,'','/admin/capture?view=catalogue');}}/>:!draft?<>
+        <div className="cs-heading"><div><h1>{queue==='catalogue'?'Diwali Stock Catalogue & Digital Detail Book':queue==='capture'?'Inventory photography':queue==='pricing'?'Megha · Prices':'Capture review'}</h1>{queue==='pricing'&&<p>Enter cost and selling price. Save each row.</p>}</div><div className="cs-row-actions"><button type="button" className="cs-btn-diwali-cta" onClick={()=>{setMovement(false);setQueue(queue==='catalogue'?'capture':'catalogue');}}>{queue==='catalogue'?'← Back to Capture Queue':'🪔 Diwali PDF & Detail Book'}</button><button type="button" className="cs-btn-amazon-import" onClick={()=>setAmazonModalOpen(true)}>🛒 Import from Amazon</button><button className="cs-primary" onClick={()=>start(null)}>+ New product</button></div></div>
+        <div className="cs-row-actions"><button onClick={()=>setMovement(!movement)}>{movement?'Back to inventory':'Stock arrived / sold / count'}</button>{phoneCamera&&!phoneMode&&<a className="cs-btn-phone-express" href="/admin/capture?phone=1">📱 Open iPhone Lightbox Express Mode</a>}</div>
         {movement?<StockIntake/>:<>
         {queue==='capture'&&<><p>Enter prices and Save each row. This updates website prices; stock and photos stay unchanged.</p><details><summary>Capture progress & recent work</summary><section className="cs-dashboard" aria-label="Capture progress">
           <button type="button" onClick={()=>setQueue('capture')}><span>Inventory</span><strong>{products.length}</strong><small>active products</small></button>
@@ -675,6 +709,7 @@ export default function CaptureApp() {
           <button type="button" className="cs-review-tile" onClick={()=>setQueue('review')}><span>Ready to review</span><strong>{readyForReview.length}</strong><small>check and publish</small></button>
           <button type="button" onClick={()=>setQueue('pricing')}><span>For Megha</span><strong>{awaitingPricing.length}</strong><small>need price approval</small></button>
           <button type="button" onClick={()=>setQueue('published')}><span>Completed</span><strong>{completed.length}</strong><small>published to website</small></button>
+          <button type="button" className="cs-catalogue-tile" onClick={()=>setQueue('catalogue')}><span>🪔 Diwali Catalogue</span><strong>PDF + Reels</strong><small>9:16 lookbook & Flow</small></button>
         </section>
         <section className="cs-next-action">
           <div><strong>Resume without guessing</strong><span>Current section: {location||'choose below before starting'}</span></div>
@@ -689,9 +724,9 @@ export default function CaptureApp() {
           <ol>{drafts.slice(0,5).map(x=>{const place=x.data.locations?.find(l=>l.name)?.name;return <li key={x.id}><span><strong>{x.data.name||'Unnamed new product'}</strong><small>{place||'Section not recorded'}</small></span><span>{Object.keys(x.data.photos||{}).length} photos · {countTotal(x.data)} units</span><time dateTime={x.updated_at}>{new Date(x.updated_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'})}</time></li>})}</ol>
         </section>
         </details></>}
-        <section className="cs-toolbar">{queue==='capture'&&<Field label="Working location / section" value={location} onChange={setLocation} placeholder="e.g. Section 1 · Rack A"/>}<Field label="Find product" value={search} onChange={setSearch} placeholder="Name or SKU"/><div className="cs-qty-sort-group"><label className="cs-field"><span>Sort by quantity</span><select value={qtySort} onChange={e=>setQtySort(e.target.value)}><option value="none">Default ({queue==='capture'?'Name':'Recent'})</option><option value="asc">Stock: Low → High (↑)</option><option value="desc">Stock: High → Low (↓)</option></select></label><label className="cs-field"><span>Stock filter</span><select value={qtyFilter} onChange={e=>setQtyFilter(e.target.value)}><option value="all">All stock</option><option value="in_stock">In stock (&gt;0)</option><option value="low_stock">Low stock (1–5)</option><option value="out_of_stock">Out of stock (0)</option></select></label></div><button disabled={busy} onClick={()=>run(()=>refresh(false))}>↻ Refresh</button></section>
-        <div className="cs-tabs" role="tablist" aria-label="Capture queues">{[['capture',`Inventory · ${products.length}`],['drafts',`In progress · ${workingDrafts.length}`],['review',`Review · ${readyForReview.length}`],['pricing',`For Megha · ${awaitingPricing.length}`],['published',`Completed · ${completed.length}`]].map(([key,title])=><button key={key} role="tab" aria-selected={queue===key} className={queue===key?'active':''} onClick={()=>setQueue(key)}>{title}</button>)}</div>
-        {queue==='capture'?<InventoryTable products={visibleProducts} pending={pending} busy={busy} onOpen={start} onSaved={saved=>setProducts(old=>old.map(p=>p.id===saved.id?saved:p))} qtySort={qtySort} onToggleQtySort={()=>setQtySort(s=>nextQtySort(s))}/>:<ReviewTable rows={visibleDraftRows} busy={busy} onSaved={saved=>setDrafts(old=>old.map(x=>x.id===saved.id?saved:x))} onOpen={x=>{open(x);if(queue==='pricing'||queue==='review')setStep(3);}} onDelete={deleteWork} qtySort={qtySort} onToggleQtySort={()=>setQtySort(s=>nextQtySort(s))}/> }
+        {queue!=='catalogue'&&<section className="cs-toolbar">{queue==='capture'&&<Field label="Working location / section" value={location} onChange={setLocation} placeholder="e.g. Section 1 · Rack A"/>}<Field label="Find product" value={search} onChange={setSearch} placeholder="Name or SKU"/><div className="cs-qty-sort-group"><label className="cs-field"><span>Sort by quantity</span><select value={qtySort} onChange={e=>setQtySort(e.target.value)}><option value="none">Default ({queue==='capture'?'Name':'Recent'})</option><option value="asc">Stock: Low → High (↑)</option><option value="desc">Stock: High → Low (↓)</option></select></label><label className="cs-field"><span>Stock filter</span><select value={qtyFilter} onChange={e=>setQtyFilter(e.target.value)}><option value="all">All stock</option><option value="in_stock">In stock (&gt;0)</option><option value="low_stock">Low stock (1–5)</option><option value="out_of_stock">Out of stock (0)</option></select></label></div><button disabled={busy} onClick={()=>run(()=>refresh(false))}>↻ Refresh</button></section>}
+        <div className="cs-tabs" role="tablist" aria-label="Capture queues">{[['capture',`Inventory · ${products.length}`],['drafts',`In progress · ${workingDrafts.length}`],['review',`Review · ${readyForReview.length}`],['pricing',`For Megha · ${awaitingPricing.length}`],['published',`Completed · ${completed.length}`],['catalogue','🪔 Diwali Catalogue & PDF']].map(([key,title])=><button key={key} role="tab" aria-selected={queue===key} className={queue===key?'active':''} onClick={()=>setQueue(key)}>{title}</button>)}</div>
+        {queue==='catalogue'?<CatalogueStudio products={products} drafts={drafts} onStartLightboxCapture={()=>start(null)} onOpenDraft={x=>{open(x);setStep(3);}} onRefresh={refresh}/>:queue==='capture'?<InventoryTable products={visibleProducts} pending={pending} busy={busy} onOpen={start} onSaved={saved=>setProducts(old=>old.map(p=>p.id===saved.id?saved:p))} qtySort={qtySort} onToggleQtySort={()=>setQtySort(s=>nextQtySort(s))}/>:<ReviewTable rows={visibleDraftRows} busy={busy} onSaved={saved=>setDrafts(old=>old.map(x=>x.id===saved.id?saved:x))} onOpen={x=>{open(x);if(queue==='pricing'||queue==='review')setStep(3);}} onDelete={deleteWork} qtySort={qtySort} onToggleQtySort={()=>setQtySort(s=>nextQtySort(s))}/> }
         </>}
       </>:<>
         <div className="cs-heading"><div><button className="cs-back" disabled={busy} onClick={()=>dirty?save(true):exit()}>← {dirty?'Save & return to products':'Products'}</button><h1>{d.name||'New product'}</h1><p>{d.sku||'A permanent SKU is assigned when published'} <span className="cs-pill">{published?'Published':dirty?'Unsaved changes':'Saved draft'}</span></p></div><div className="cs-current">System stock<strong>{draft.baseline?.quantity??'New'}</strong></div></div>
@@ -716,7 +751,7 @@ export default function CaptureApp() {
           {d.locationPhoto?.url&&<div className="cs-location-reference"><img src={d.locationPhoto.url} alt="Storage location reference"/><span>Storage location photo</span></div>}
           <label className="cs-check"><input type="checkbox" checked={d.allLocations} onChange={e=>change('allLocations',e.target.checked)}/>I have counted this product in all its locations.</label><label className="cs-check"><input type="checkbox" checked={d.stockConfirmed} onChange={e=>change('stockConfirmed',e.target.checked)}/>These sellable units are in Decorbeats’ control and ready for us to fulfil.</label>
         </section><section className="cs-panel"><h2>Measure once. Use everywhere.</h2><p>Use centimetres and grams. Measure the complete sellable unit.</p><div className="cs-measure-grid">{[['Product, without packaging',''],['Packed, ready to ship','packed_']].map(([label,prefix])=><div key={prefix}><h3>{label}</h3><div className="cs-fields">{[['length','Length (cm)'],['width','Width (cm)'],['height','Height (cm)'],['weight_g','Weight (g)']].map(([key,title])=><Field key={key} label={title} type="number" min="0.01" step="any" inputMode="decimal" value={d[prefix+key]} onChange={v=>change(prefix+key,v)}/>)}</div></div>)}</div></section></>}
-        {step===3&&<ProductReview draft={draft} change={change} onInspect={setAssetPreview} onPhotos={()=>setStep(1)} onUploadEdited={uploadEditedPhotos} onUploadVideos={uploadProductVideos} onGenerate={generateListing} onAutoEnrich={autoEnrichProduct} onStageLifestyle={stageLifestylePhoto} onEnhancePhoto={enhancePhoto} onAddDimensionsPhoto={generateDimensionRulerPhoto} onDeletePhoto={deletePhoto} enrichState={enrichState} busy={busy} dirty={dirty} issues={issues} products={visibleProducts} allProducts={products} search={search} setSearch={setSearch} onMatch={linkProduct} onCompare={()=>run(async()=>{const {data,error}=await supabase.from('products').select('*').eq('id',draft.product_id).single();if(error)throw error;setLiveComparison(data);})} onOpenAmazonModal={()=>setAmazonModalOpen(true)}/>}
+        {step===3&&<ProductReview draft={draft} change={change} onInspect={setAssetPreview} onPhotos={()=>setStep(1)} onUploadEdited={uploadEditedPhotos} onUploadVideos={uploadProductVideos} onGenerate={generateListing} onAutoEnrich={autoEnrichProduct} onStageLifestyle={stageLifestylePhoto} onEnhancePhoto={enhancePhoto} onAddDimensionsPhoto={generateDimensionRulerPhoto} onDeletePhoto={deletePhoto} enrichState={enrichState} busy={busy} dirty={dirty} issues={issues} products={visibleProducts} allProducts={products} search={search} setSearch={setSearch} onMatch={linkProduct} onCompare={()=>run(async()=>{const {data,error}=await supabase.from('products').select('*').eq('id',draft.product_id).single();if(error)throw error;setLiveComparison(data);})} onOpenAmazonModal={()=>setAmazonModalOpen(true)} onOpenCatalogueStudio={()=>{setDraft(null);setQueue('catalogue');history.replaceState(null,'','/admin/capture?view=catalogue');}}/>}
         </fieldset>
         <footer className="cs-footer"><div><span className={`cs-save-dot ${dirty?'pending':''}`}/>{busy?'Saving…':published?'Published to website':dirty?'Changes waiting to save':'Saved to Decorbeats'}{dirty&&!published&&<button disabled={busy} onClick={()=>save(false)}>Save draft</button>}</div><div className="cs-footer-buttons">{published?<button className="cs-primary" onClick={exit}>Next product →</button>:<><button disabled={busy} onClick={()=>save(true)}>Save & next product</button>{step<3?<button className="cs-primary" disabled={busy} onClick={()=>run(async()=>{const next=nextCaptureStep(draft,step);await persist(draft,next);setStep(next);})}>{!draft.product_id&&step===1?'Save & add details →':'Save & continue →'}</button>:<button className="cs-primary" disabled={busy||issues.length>0} onClick={()=>setConfirm(true)}>Review & publish →</button>}</>}</div></footer>
         {confirm&&<div className="cs-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="cs-publish-title" className="cs-modal"><h2 id="cs-publish-title">Publish {d.name}?</h2><p>This sets website stock to <strong>{countTotal(d)} sellable units</strong>, changes the price to <strong>{money(d.mrp)}</strong>, and publishes the reviewed photos and details.</p><button disabled={busy} onClick={()=>setConfirm(false)}>Back to review</button><button disabled={busy} className="cs-primary" onClick={publish}>{busy?'Publishing…':'Confirm inventory & publish'}</button></section></div>}
@@ -739,20 +774,39 @@ export default function CaptureApp() {
   </div>;
 }
 
-function PhoneStart({products,drafts,search,setSearch,busy,onStart}){
+function PhoneStart({products,drafts,search,setSearch,busy,onStart,onOpenDraft,onOpenCatalogue}){
   const term=search.trim().toLowerCase();
+  const recentDrafts=drafts.filter(d=>d.status==='draft'&&(!term||`${d.data.name||''} ${d.data.category||''}`.toLowerCase().includes(term))).slice(0,8);
   const matches=products.filter(p=>!term||`${p.name} ${p.sku||''} ${p.category||''}`.toLowerCase().includes(term)).slice(0,18);
   return <section className="cs-phone-panel cs-phone-start">
-    <header><span className="cs-phone-connected"><i/> Decorbeats</span><span>Pranav · हिंदी v3</span></header>
+    <header><span className="cs-phone-connected"><i/> Decorbeats Lightbox</span><span>iPhone Studio</span></header>
     <div className="cs-mobile-entry">
-      <span>📦 शुरू करें</span>
-      <h1>सामान चुनें</h1>
-      <p>नाम लिखें या फोटो देखकर चुनें।</p>
-      <label><b>नाम या कोड से खोजें</b><div><input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Elephant, diya, SKU…"/></div></label>
-      <button className="cs-primary cs-mobile-action" disabled={busy} onClick={()=>onStart(null)}>📷 नया सामान जोड़ें</button>
+      <span>🪔 Deepawali Lightbox Station</span>
+      <h1>Shoot & Measure Stock</h1>
+      <p>Click photos, enter weight (g), dimensions (cm) & available quantity, then generate your 9:16 PDF Catalogue.</p>
+      <button className="cs-primary cs-mobile-action" disabled={busy} onClick={()=>onStart(null)}>📷 + Shoot New Lightbox Product</button>
+      {onOpenCatalogue&&<button type="button" className="cs-btn-mobile-catalogue" disabled={busy} onClick={onOpenCatalogue}>📄 Open Diwali PDF Catalogue & Detail Book ({drafts.length + products.length})</button>}
+      <label><b>Search existing product or SKU (नाम या कोड से खोजें)</b><div><input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Elephant, diya, urli, SKU…"/></div></label>
+      {recentDrafts.length>0&&(
+        <div className="cs-phone-product-list" style={{marginBottom:14}}>
+          <small style={{display:'block',fontWeight:700,color:'#8f6b24',marginBottom:6}}>RECENT LIGHTBOX CAPTURES ({recentDrafts.length})</small>
+          {recentDrafts.map(d=>{
+            const hero=d.data.photos?.hero?.cleanedPreview?.url||d.data.photos?.hero?.url||Object.values(d.data.photos||{})[0]?.url||'/assets/images/product-fallback.svg';
+            return <button type="button" key={d.id} disabled={busy} onClick={()=>onOpenDraft?onOpenDraft(d):onStart(null)}>
+              <img src={hero} alt=""/>
+              <span>
+                <strong>{d.data.name||'Unnamed Lightbox Capture'}</strong>
+                <small>{countTotal(d.data)||0} units · {d.data.weight_g?`${d.data.weight_g}g`:'Add weight'} · {d.data.height?`${d.data.height}cm H`:'Add size'}</small>
+              </span>
+              <b>›</b>
+            </button>;
+          })}
+        </div>
+      )}
       <div className="cs-phone-product-list">
-        {matches.map(p=>{const saved=drafts.find(d=>d.status==='draft'&&d.product_id===p.id);return <button type="button" key={p.id} disabled={busy} onClick={()=>onStart(p)}><img src={p.image_url||'/assets/images/product-fallback.svg'} alt=""/><span><strong>{p.name}</strong><small>{p.quantity||0} स्टॉक में{saved?' · सेव किया काम खोलें':''}</small></span><b>›</b></button>;})}
-        {!matches.length&&<p className="cs-empty">सामान नहीं मिला। “नया सामान जोड़ें” दबाएँ।</p>}
+        <small style={{display:'block',fontWeight:700,color:'#63584e',marginBottom:6}}>EXISTING INVENTORY ({matches.length})</small>
+        {matches.map(p=>{const saved=drafts.find(d=>d.status==='draft'&&d.product_id===p.id);return <button type="button" key={p.id} disabled={busy} onClick={()=>onStart(p)}><img src={p.image_url||'/assets/images/product-fallback.svg'} alt=""/><span><strong>{p.name}</strong><small>{p.quantity||0} in stock{saved?' · Continue saved draft':''}</small></span><b>›</b></button>;})}
+        {!matches.length&&<p className="cs-empty">No matching product. Tap “+ Shoot New Lightbox Product” above.</p>}
       </div>
     </div>
   </section>;
