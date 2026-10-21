@@ -6069,3 +6069,156 @@ header img {
     line-height: 1.45 !important;
   }
 }
+
+/* ==========================================================================
+   The Brass Book — Storefront Header & Discovery Banner Integration
+   ========================================================================== */
+
+.customer-header-brass-book {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(212, 175, 55, 0.12);
+  border: 1px solid rgba(139, 74, 42, 0.28);
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 180ms ease;
+  white-space: nowrap;
+}
+
+.customer-header-brass-book:hover {
+  background: rgba(212, 175, 55, 0.24);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.customer-brass-book-badge {
+  font-size: 0.9rem;
+}
+
+.customer-brass-book-banner {
+  margin: 3.5rem 0;
+  background: linear-gradient(135deg, #1b130e 0%, #2a1b12 50%, #150e09 100%);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: 28px;
+  padding: 2.25rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  box-shadow: 0 18px 46px rgba(44, 24, 16, 0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+@media (min-width: 850px) {
+  .customer-brass-book-banner {
+    grid-template-columns: 1.25fr 1fr;
+    align-items: center;
+    padding: 3.5rem;
+  }
+}
+
+.customer-brass-book-tag {
+  color: #d4af37;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+
+.customer-brass-book-banner h2 {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: clamp(2.2rem, 4.5vw, 3.4rem);
+  color: #fffaf4;
+  line-height: 1.05;
+  margin: 0 0 0.75rem;
+}
+
+.customer-brass-book-subtitle {
+  color: #f5e298;
+  font-size: 1.15rem;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  margin: 0 0 1rem;
+}
+
+.customer-brass-book-desc {
+  color: rgba(255, 250, 244, 0.78);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0 0 2rem;
+}
+
+.customer-brass-book-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.customer-brass-book-visual {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+.customer-brass-book-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.customer-brass-book-badge-overlay {
+  position: absolute;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  background: rgba(12, 9, 7, 0.85);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  backdrop-filter: blur(8px);
+  padding: 0.65rem 1.1rem;
+  border-radius: 12px;
+  text-align: center;
+  color: #fffaf4;
+}
+
+.customer-brass-book-badge-overlay span {
+  display: block;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #d4af37;
+  line-height: 1;
+}
+
+.customer-brass-book-badge-overlay small {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+}
+
+.customer-brass-book-footer-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 0.65rem;
+  display: block;
+  text-align: left;
+  letter-spacing: 0.02em;
+}
+
+.customer-brass-book-footer-link:hover {
+  text-decoration: underline;
+  color: var(--primary);
+}

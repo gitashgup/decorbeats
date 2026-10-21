@@ -8,7 +8,24 @@ import { useCaptureAdmin } from './adminRoute';
 const CatalogueStudio = lazy(() => import("./capture/catalogue/CatalogueStudio"));
 const CaptureApp = lazy(() => import("./capture/CaptureApp"));
 const PublicDiwaliLookbook = lazy(() => import("./capture/PublicDiwaliLookbook"));
+const TheBrassBook = lazy(() => import("./brass-book/TheBrassBook"));
 document.documentElement.classList.add("js");
+
+function isBrassBookRoute(pathname = "", search = "", hash = "") {
+  const clean = String(pathname || "").replace(/\/+$/, "").toLowerCase();
+  if (
+    clean === "/brass-book" ||
+    clean === "/the-brass-book" ||
+    clean === "/brassbook" ||
+    clean === "/encyclopedia"
+  ) {
+    return true;
+  }
+  const params = new URLSearchParams(search);
+  if (params.get("tab") === "brass-book" || params.get("page") === "brass-book") return true;
+  if (String(hash || "").toLowerCase().includes("brass-book")) return true;
+  return false;
+}
 
 function isDiwaliLookbookRoute(pathname = "", search = "", hash = "") {
   const clean = String(pathname || "").replace(/\/+$/, "").toLowerCase();
@@ -53,6 +70,7 @@ function Root() {
   }, []);
 
   const isCaptureRoute = useCaptureAdmin(route.pathname, route.search, route.hash);
+  const isBrassBook = isBrassBookRoute(route.pathname, route.search, route.hash);
   const isDiwaliLookbook = isDiwaliLookbookRoute(route.pathname, route.search, route.hash);
 
   // Isolated local review only. Vite removes this branch from production builds.
@@ -66,6 +84,16 @@ function Root() {
       ) : isCaptureRoute ? (
         <Suspense fallback={<div style={{ padding: 24, fontFamily: "sans-serif" }}>Opening capture studio…</div>}>
           <CaptureApp />
+        </Suspense>
+      ) : isBrassBook ? (
+        <Suspense fallback={<div style={{ padding: 32, fontFamily: "serif", background: "#0c0907", color: "#d4af37", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.25rem" }}>Opening The Brass Book Encyclopedia…</div>}>
+          <TheBrassBook
+            onBackToStore={() => {
+              window.history.pushState({}, "", "/");
+              window.dispatchEvent(new Event("decorbeats:navigate"));
+            }}
+          />
+          <Analytics />
         </Suspense>
       ) : isDiwaliLookbook ? (
         <Suspense fallback={<div style={{ padding: 24, fontFamily: "sans-serif" }}>Opening Diwali 2026 Verified Stock Lookbook…</div>}>

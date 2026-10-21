@@ -3547,6 +3547,18 @@ function CustomerHeader({
           <span>{tickerMessage}</span>
         </div>
       )}
+      <button
+        type="button"
+        className="customer-header-brass-book"
+        onClick={() => {
+          window.history.pushState({}, "", "/brass-book");
+          window.dispatchEvent(new Event("decorbeats:navigate"));
+        }}
+        title="Explore The Brass Book — Encyclopedia of Indian Brasscraft"
+      >
+        <span>The Brass Book</span>
+        <span className="customer-brass-book-badge" aria-hidden="true">📖</span>
+      </button>
       <button type="button" className="customer-header-admin-link" onClick={onAdmin}>
         Admin
       </button>
@@ -3890,6 +3902,55 @@ function EditorialSection() {
           <WhatsAppIcon />
           <span>Enquire for Festive Bulk Orders</span>
         </a>
+      </div>
+    </section>
+  );
+}
+
+function CustomerBrassBookBanner() {
+  return (
+    <section className="customer-brass-book-banner desktop-reveal" aria-label="The Brass Book Encyclopedia">
+      <div className="customer-brass-book-banner-content">
+        <div className="customer-brass-book-tag">✦ Original Publication · Decorbeats Atelier ✦</div>
+        <h2>The Brass Book</h2>
+        <p className="customer-brass-book-subtitle">
+          The Living Encyclopedia of Indian Brasscraft, Metallurgy &amp; Sacred Heritage.
+        </p>
+        <p className="customer-brass-book-desc">
+          Explore the alchemy of Peetal, the 7 sacred steps of Moradabad lost-wax casting, Vastu entrance placement, our interactive Real vs Fake authenticity inspector, and the definitive care protocol.
+        </p>
+        <div className="customer-brass-book-actions">
+          <button
+            type="button"
+            className="primary-button customer-brass-book-btn"
+            onClick={() => {
+              window.history.pushState({}, "", "/brass-book");
+              window.dispatchEvent(new Event("decorbeats:navigate"));
+            }}
+          >
+            <span>Open The Brass Book 📖</span>
+          </button>
+          <a
+            className="ghost-button customer-brass-book-wa"
+            href="https://wa.me/919811133661?text=Hi%20Megha!%20I%20saw%20The%20Brass%20Book%20on%20Decorbeats%20and%20would%20love%20guidance%20on%20genuine%20brass."
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span>Ask Megha on WhatsApp →</span>
+          </a>
+        </div>
+      </div>
+      <div className="customer-brass-book-visual" aria-hidden="true">
+        <img
+          src="/assets/images/lifestyle/pooja-mandir.jpg"
+          alt="The Brass Book by Decorbeats"
+          className="customer-brass-book-img"
+          loading="lazy"
+        />
+        <div className="customer-brass-book-badge-overlay">
+          <span>5,000+ Yrs</span>
+          <small>Vedic Heritage</small>
+        </div>
       </div>
     </section>
   );
@@ -4345,6 +4406,16 @@ function CustomerFooter({ onAdmin, showAdminLink = true }) {
           </a>
         </div>
         <div className="customer-footer-owner">
+          <button
+            type="button"
+            className="customer-brass-book-footer-link"
+            onClick={() => {
+              window.history.pushState({}, "", "/brass-book");
+              window.dispatchEvent(new Event("decorbeats:navigate"));
+            }}
+          >
+            The Brass Book (Encyclopedia) 📖 →
+          </button>
           {showAdminLink ? (
             <button type="button" className="customer-admin-link" onClick={onAdmin}>
               Admin Login →
@@ -8476,6 +8547,7 @@ export default function App() {
             onShop={handleScrollToCollection}
           />
           <EditorialSection />
+          <CustomerBrassBookBanner />
           <section className="customer-product-grid">
             {filteredProducts.map((product) => (
               <CustomerProductCard key={product.id} product={product} onSelect={handleProductSelect} />
