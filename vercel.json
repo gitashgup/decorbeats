@@ -35,6 +35,22 @@
     {
       "source": "/diwali-stock/:path*",
       "destination": "/"
+    },
+    {
+      "source": "/brass-book",
+      "destination": "/"
+    },
+    {
+      "source": "/brass-book/:path*",
+      "destination": "/"
+    },
+    {
+      "source": "/the-brass-book",
+      "destination": "/"
+    },
+    {
+      "source": "/the-brass-book/:path*",
+      "destination": "/"
     }
   ],
   "functions": {
