@@ -20,14 +20,22 @@ export default function TheBrassBook({ onBackToStore }) {
 
   // Chapter 1: Alloy Interactive State
   const [copperRatio, setCopperRatio] = useState(70);
+  const [isSphereStriking, setIsSphereStriking] = useState(false);
+  const alloyScrollRef = useRef(null);
+
   const activeAlloyPreset = useMemo(() => {
-    if (copperRatio <= 64) return ALLOY_PRESETS[0];
-    if (copperRatio >= 80) return ALLOY_PRESETS[2];
-    return ALLOY_PRESETS[1];
+    return (
+      ALLOY_PRESETS.find((p) => p.copper === copperRatio) ||
+      ALLOY_PRESETS.reduce((prev, curr) =>
+        Math.abs(curr.copper - copperRatio) < Math.abs(prev.copper - copperRatio) ? curr : prev
+      )
+    );
   }, [copperRatio]);
 
   // Chapter 2: Craft Steps State
   const [activeStepIndex, setActiveStepIndex] = useState(0);
+  const [showFlowModal, setShowFlowModal] = useState(null);
+  const [flowCopied, setFlowCopied] = useState(false);
   const activeStep = SEVEN_CRAFT_STEPS[activeStepIndex];
 
   // Chapter 4: Authenticity Inspector State
@@ -111,6 +119,31 @@ export default function TheBrassBook({ onBackToStore }) {
     } catch (err) {
       console.info("Web Audio play error:", err);
       setIsChiming(false);
+    }
+  }
+
+  // Crucible strike sound & shockwave trigger
+  function handleCrucibleStrike() {
+    setIsSphereStriking(true);
+    setTimeout(() => setIsSphereStriking(false), 800);
+    const pitch = activeAlloyPreset?.pitchMultiplier || 1.0;
+    playBrassBellChime(pitch, true);
+  }
+
+  // Preset option selection & audio feedback
+  function handleSelectPreset(preset) {
+    setCopperRatio(preset.copper);
+    setIsSphereStriking(true);
+    setTimeout(() => setIsSphereStriking(false), 800);
+    playBrassBellChime(preset.pitchMultiplier || 1.0, true);
+  }
+
+  // Google Flow prompt copy helper
+  function handleCopyFlowPrompt(text) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setFlowCopied(true);
+      setTimeout(() => setFlowCopied(false), 2200);
     }
   }
 
@@ -292,27 +325,104 @@ export default function TheBrassBook({ onBackToStore }) {
           <div className="bb-alloy-box">
             <div className="bb-alloy-visual">
               <div
-                className="bb-crucible-sphere"
+                role="button"
+                tabIndex={0}
+                aria-label={`Strike molten crucible sphere to hear acoustic chime of ${activeAlloyPreset.name}`}
+                className={`bb-crucible-sphere ${isSphereStriking ? "is-striking" : ""}`}
+                onClick={handleCrucibleStrike}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleCrucibleStrike();
+                  }
+                }}
                 style={{
                   background: `radial-gradient(circle at 35% 35%, #ffffff 0%, ${activeAlloyPreset.color} 50%, #5c3809 100%)`,
-                  boxShadow: `0 0 60px ${activeAlloyPreset.glow}`
+                  boxShadow: isSphereStriking
+                    ? `0 0 95px ${activeAlloyPreset.color}, 0 0 150px ${activeAlloyPreset.glow}`
+                    : `0 0 60px ${activeAlloyPreset.glow}`
                 }}
               >
+                {isSphereStriking && <span className="bb-strike-shockwave" />}
                 <div className="bb-crucible-inner-text">
                   {copperRatio}% Cu : {100 - copperRatio}% Zn
                 </div>
+                <div className="bb-crucible-strike-hint">
+                  {isSphereStriking ? "✨ Resonating..." : "Tap sphere to strike"}
+                </div>
               </div>
-              <small style={{ color: "var(--bb-muted)", fontSize: "0.8rem" }}>
+
+              <div
+                role="button"
+                tabIndex={0}
+                className="bb-crucible-strike-cta"
+                onClick={handleCrucibleStrike}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleCrucibleStrike();
+                  }
+                }}
+              >
+                <span className="bb-strike-icon">🔔</span>
+                <span>
+                  {isSphereStriking
+                    ? `Resonating: ${activeAlloyPreset.resonance}`
+                    : `Tap circle to strike & hear ${activeAlloyPreset.shortName || activeAlloyPreset.name.split('(')[0]} acoustic resonance`}
+                </span>
+              </div>
+
+              <small style={{ color: "var(--bb-muted)", fontSize: "0.8rem", marginTop: "0.35rem" }}>
                 Molten Crucible Representation @ 950°C
               </small>
             </div>
 
             <div className="bb-alloy-controls">
+              {/* Horizontal Scroll Rail for Mobile & Quick Selection */}
+              <div className="bb-alloy-scroll-section">
+                <div className="bb-alloy-scroll-header">
+                  <span className="bb-alloy-scroll-title">Select / Swipe Alloy Profiles</span>
+                  <span className="bb-alloy-scroll-hint">← Swipe to explore →</span>
+                </div>
+                <div className="bb-alloy-scroll-rail" ref={alloyScrollRef}>
+                  {ALLOY_PRESETS.map((preset) => {
+                    const isSelected = activeAlloyPreset.copper === preset.copper;
+                    return (
+                      <button
+                        key={preset.copper}
+                        type="button"
+                        className={`bb-alloy-card-pill ${isSelected ? "selected" : ""}`}
+                        onClick={() => handleSelectPreset(preset)}
+                      >
+                        <span
+                          className="bb-alloy-card-orb"
+                          style={{
+                            background: `radial-gradient(circle at 30% 30%, #fff 0%, ${preset.color} 60%, #4a2903 100%)`,
+                            boxShadow: `0 0 14px ${preset.glow}`
+                          }}
+                        />
+                        <div className="bb-alloy-card-body">
+                          <div className="bb-alloy-card-title">
+                            <strong>{preset.shortName || preset.name.split('(')[0]}</strong>
+                            <span className="bb-alloy-card-ratio">{preset.copper}:{preset.zinc}</span>
+                          </div>
+                          <div className="bb-alloy-card-sub">{preset.traditionalName}</div>
+                          <div className="bb-alloy-card-tag">{preset.tag}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Range Slider for Fluid Ratio Tuning */}
               <div className="bb-slider-container">
                 <div className="bb-slider-labels">
-                  <span>60% Copper (Muntz / Tensile)</span>
-                  <span><strong>{copperRatio}% Cu</strong> ({100 - copperRatio}% Zn)</span>
-                  <span>90% Copper (Red Tombac)</span>
+                  <span>60% Cu (Muntz)</span>
+                  <span className="bb-slider-current">
+                    <strong>{copperRatio}% Copper</strong> : {100 - copperRatio}% Zinc
+                  </span>
+                  <span>88% Cu (Red Tombac)</span>
                 </div>
                 <input
                   type="range"
@@ -323,19 +433,9 @@ export default function TheBrassBook({ onBackToStore }) {
                   className="bb-range-slider"
                   aria-label="Copper to Zinc Ratio Slider"
                 />
-              </div>
-
-              <div className="bb-preset-chips">
-                {ALLOY_PRESETS.map((preset) => (
-                  <button
-                    key={preset.copper}
-                    type="button"
-                    className={copperRatio === preset.copper ? "bb-preset-chip active" : "bb-preset-chip"}
-                    onClick={() => setCopperRatio(preset.copper)}
-                  >
-                    {preset.name.split("(")[0]} ({preset.copper}:{preset.zinc})
-                  </button>
-                ))}
+                <div className="bb-slider-mobile-note">
+                  <span>💡 Tip: Tap sphere to strike, swipe cards above, or drag slider</span>
+                </div>
               </div>
 
               <div className="bb-alloy-details-card">
@@ -423,14 +523,14 @@ export default function TheBrassBook({ onBackToStore }) {
                 aria-selected={activeStepIndex === index}
               >
                 <span>{s.icon}</span>
-                <span>Step 0{s.step}: {s.title.split("(")[0]}</span>
+                <span>Stage 0{s.step}: {s.title.split("(")[0]}</span>
               </button>
             ))}
           </div>
 
           {/* Active Step Showcase */}
           <div className="bb-step-card-active">
-            <div>
+            <div className="bb-step-info-col">
               <div className="bb-step-number-badge">Stage {activeStep.step} of 07</div>
               <div className="bb-step-hindi-title">{activeStep.hindiTitle}</div>
               <h3 className="bb-step-title">{activeStep.title}</h3>
@@ -451,19 +551,94 @@ export default function TheBrassBook({ onBackToStore }) {
                   <span className="bb-meta-chip-val">{activeStep.duration}</span>
                 </div>
               </div>
+
+              {/* Mobile Stage Nav Buttons */}
+              <div className="bb-step-mobile-nav">
+                <button
+                  type="button"
+                  className="bb-step-nav-btn"
+                  disabled={activeStepIndex === 0}
+                  onClick={() => setActiveStepIndex((prev) => Math.max(0, prev - 1))}
+                >
+                  ← Stage 0{activeStepIndex === 0 ? 1 : activeStepIndex}
+                </button>
+                <span className="bb-step-nav-counter">Stage {activeStepIndex + 1} of 7</span>
+                <button
+                  type="button"
+                  className="bb-step-nav-btn next"
+                  disabled={activeStepIndex === SEVEN_CRAFT_STEPS.length - 1}
+                  onClick={() => setActiveStepIndex((prev) => Math.min(SEVEN_CRAFT_STEPS.length - 1, prev + 1))}
+                >
+                  Stage 0{activeStepIndex + 2 <= 7 ? activeStepIndex + 2 : 7} →
+                </button>
+              </div>
             </div>
 
             <div className="bb-step-visual-pane">
               <img
-                src="/assets/images/decorbeats-atelier-campaign-v2.jpg"
+                src={activeStep.image}
                 alt={activeStep.title}
+                className="bb-step-img bb-ken-burns"
                 loading="lazy"
               />
               <div className="bb-step-visual-overlay">
-                <span className="bb-step-visual-caption">
-                  Decorbeats Atelier · Handcrafting in Moradabad
-                </span>
+                <div>
+                  <span className="bb-step-visual-caption">
+                    Stage {activeStep.step}: {activeStep.title.split('(')[0]}
+                  </span>
+                  <div className="bb-step-visual-sub">
+                    Moradabad Atelier Heritage Photography
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="bb-btn-flow-spec"
+                  onClick={() => setShowFlowModal(showFlowModal === activeStep.step ? null : activeStep.step)}
+                  title="View Google Flow 4K cinematic video clip prompt & camera specs"
+                >
+                  <span>🎬</span>
+                  <span>{showFlowModal === activeStep.step ? "Close Flow Spec" : "Flow 4K Video Spec"}</span>
+                </button>
               </div>
+
+              {/* Google Flow Prompt Modal/Overlay */}
+              {showFlowModal === activeStep.step && (
+                <div className="bb-flow-spec-overlay">
+                  <div className="bb-flow-spec-header">
+                    <h4>🎬 {activeStep.flowPrompt?.title || "Google Flow 4K Atelier Spec"}</h4>
+                    <button
+                      type="button"
+                      className="bb-flow-close"
+                      onClick={() => setShowFlowModal(null)}
+                      aria-label="Close Flow Spec"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="bb-flow-spec-meta">
+                    <span><strong>Duration:</strong> {activeStep.flowPrompt?.duration}</span>
+                    <span><strong>Format:</strong> {activeStep.flowPrompt?.aspectRatio}</span>
+                  </div>
+                  <div className="bb-flow-spec-block">
+                    <span className="bb-flow-spec-label">Camera Motion & Optics:</span>
+                    <p>{activeStep.flowPrompt?.cameraMotion}</p>
+                  </div>
+                  <div className="bb-flow-spec-block">
+                    <span className="bb-flow-spec-label">Cinematic Prompt:</span>
+                    <p className="bb-flow-prompt-text">{activeStep.flowPrompt?.prompt}</p>
+                  </div>
+                  <div className="bb-flow-spec-actions">
+                    <button
+                      type="button"
+                      className="bb-btn-copy-flow"
+                      onClick={() => handleCopyFlowPrompt(activeStep.flowPrompt?.prompt)}
+                    >
+                      {flowCopied ? "✓ Flow Prompt Copied!" : "📋 Copy Prompt for Google Flow"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

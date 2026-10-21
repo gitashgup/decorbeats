@@ -1,0 +1,86 @@
+[
+  {
+    "stage": 1,
+    "title": "Google Flow 4K Atelier — Step 1: Reti & Bhatti Clay Core Sculpting",
+    "duration": "10 Seconds Continuous Loop",
+    "aspectRatio": "16:9 Cinema 4K",
+    "cameraMotion": "Slow orbital macro tracking around artisan's hands, 85mm f/2.0 anamorphic cinema lens",
+    "lighting": "Warm 2700K afternoon sunlight streaming through wooden slats, casting soft specular dust highlights",
+    "prompt": "Cinematic 16:9 documentary footage inside a Moradabad metalcraft workshop. An experienced Indian craftsman's weathered hands sculpt a damp red clay and Ramganga river-sand mould for an ornamental brass urli. Sunlight pierces dust motes in the air. Natural clay texture, wooden modeling styluses, drying moulds in the background, ultra-realistic slow-motion tactile craftsmanship, 4K resolution, authentic atelier ambiance.",
+    "negativePrompt": "digital rendering, plastic texture, modern electric tools, cartoonish colors, jerky camera",
+    "imagePoster": "/assets/images/craft/step1-reti-bhatti.jpg",
+    "targetVideo": "/assets/videos/craft/step1-reti-bhatti.mp4"
+  },
+  {
+    "stage": 2,
+    "title": "Google Flow 4K Atelier — Step 2: Madhuchishtavidhana Vedic Lost-Wax Detailing",
+    "duration": "10 Seconds Continuous Loop",
+    "aspectRatio": "16:9 Cinema 4K",
+    "cameraMotion": "Extreme macro push-in focusing on heated stylus carving beeswax feathers and jewelry",
+    "lighting": "Amber glow from adjacent glowing charcoal brazier with deep atmospheric shadows",
+    "prompt": "Cinematic 16:9 macro footage in a heritage Indian sculpting room. An elderly master Sthapathi sculptor with wire-rimmed spectacles uses a warm bronze stylus to meticulously carve the crown of a beeswax Lord Ganesha model. Molten resin bead forms on the tip, intricate freehand jewelry relief, soft amber brazier light, 4K cinema documentary, no modern clutter.",
+    "negativePrompt": "plastic model, 3D printing artifacts, modern lighting, deformed anatomy, shaky handheld camera",
+    "imagePoster": "/assets/images/craft/step2-madhuchishtavidhana-wax.jpg",
+    "targetVideo": "/assets/videos/craft/step2-madhuchishtavidhana.mp4"
+  },
+  {
+    "stage": 3,
+    "title": "Google Flow 4K Atelier — Step 3: Galaai Crucible Smelting at 950°C",
+    "duration": "10 Seconds Continuous Loop",
+    "aspectRatio": "16:9 Cinema 4K",
+    "cameraMotion": "Slow crane down into glowing foundry furnace pit, heat-wave distortion shimmering across lens",
+    "lighting": "Blinding incandescent golden-orange molten liquid glow with emerald green copper sparks",
+    "prompt": "Cinematic 16:9 high-contrast footage of a heavy graphite crucible inside an underground coal-fired foundry furnace in Moradabad. 950°C molten brass bubbles and swirls like liquid sunlight. Vivid emerald-green copper flame sparks flare upward into dark smoky foundry rafters. Intense heat distortion, visceral molten metallic reflections, 4K documentary.",
+    "negativePrompt": "water splash, cold metal, dull lighting, CGI cartoon flame, flat digital sensor noise",
+    "imagePoster": "/assets/images/craft/step3-galaai-smelting.jpg",
+    "targetVideo": "/assets/videos/craft/step3-galaai-smelting.mp4"
+  },
+  {
+    "stage": 4,
+    "title": "Google Flow 4K Atelier — Step 4: Dhaalai Continuous Molten Pour",
+    "duration": "10 Seconds Continuous Loop",
+    "aspectRatio": "16:9 Cinema 4K",
+    "cameraMotion": "Smooth lateral tracking shot following the molten stream from crucible lip to mould sprue",
+    "lighting": "Dramatic rim-lighting on foundrymen's faces from the brilliant yellow-orange liquid metal stream",
+    "prompt": "Cinematic 16:9 documentary footage of two Indian foundrymen in leather aprons using heavy steel tongs to tilt a red-hot graphite crucible, pouring an unbroken luminous stream of molten liquid brass into an earth-baked mould. White smoke and golden sparks erupt as the wax vaporizes, dramatic chiaroscuro foundry ambiance, 4K resolution.",
+    "negativePrompt": "spills, chaotic camera wobble, oversaturated flat video, plastic tools, modern neon signage",
+    "imagePoster": "/assets/images/craft/step4-dhaalai-pour.jpg",
+    "targetVideo": "/assets/videos/craft/step4-dhaalai-pour.mp4"
+  },
+  {
+    "stage": 5,
+    "title": "Google Flow 4K Atelier — Step 5: Chhilai & Retai Rough-Cast Turning",
+    "duration": "10 Seconds Continuous Loop",
+    "aspectRatio": "16:9 Cinema 4K",
+    "cameraMotion": "Close-up tracking the chisel edge chipping crust, showering glittering golden brass curls",
+    "lighting": "Crisp directional studio daylight highlighting texture difference between dark burnt crust and bright gold brass",
+    "prompt": "Cinematic 16:9 slow-motion footage of a craftsman on a lathe chipping away the blackened burnt-sand crust of a freshly cast brass bowl with a hardened steel chisel. Gleaming golden brass shavings and fine metal ribbons curl and fly off in slow motion, revealing the bright virgin 22K gold brass underneath, 4K documentary.",
+    "negativePrompt": "sparklers, laser cutting, plastic lathe, blurred details, jittery frame rate",
+    "imagePoster": "/assets/images/craft/step5-chhilai-retai.jpg",
+    "targetVideo": "/assets/videos/craft/step5-chhilai-retai.mp4"
+  },
+  {
+    "stage": 6,
+    "title": "Google Flow 4K Atelier — Step 6: Naqqashi Master Hand Engraving",
+    "duration": "10 Seconds Continuous Loop",
+    "aspectRatio": "16:9 Cinema 4K",
+    "cameraMotion": "Macro 100mm lens tracking the fine tip of steel qalam and brass hathodi striking at 180 BPM",
+    "lighting": "Direct warm tungsten work-lamp focused on the chiseled groove, creating razor-sharp metallic highlights",
+    "prompt": "Cinematic 16:9 macro footage of a master Moradabad Naqqash engraver's hands. Left hand guides an ultra-fine steel chisel (qalam) while right hand rapidly taps with a miniature brass hammer (hathodi), freehand carving intricate Mughal floral arabesques and peacock feathers into solid brass. Microscopic golden curls glint in the light, 4K cinema.",
+    "negativePrompt": "machine engraving, laser CNC sound, blurred hands, artificial digital artifacts",
+    "imagePoster": "/assets/images/craft/step6-naqqashi-engraving.jpg",
+    "targetVideo": "/assets/videos/craft/step6-naqqashi-engraving.mp4"
+  },
+  {
+    "stage": 7,
+    "title": "Google Flow 4K Atelier — Step 7: Rangaai & Buffing Wheel Mirror Finish",
+    "duration": "10 Seconds Continuous Loop",
+    "aspectRatio": "16:9 Cinema 4K",
+    "cameraMotion": "Slow panoramic reveal of the mirror reflection on the brass body catching anamorphic lens flares",
+    "lighting": "Soft ambient atelier light with dramatic blinding specular reflection on the polished brass surface",
+    "prompt": "Cinematic 16:9 slow-motion footage of a craftsman pressing an ornate brass peacock deepam against a spinning high-speed cotton buffing wheel. Green polishing compound melts into a brilliant mirror-like 22K golden surface reflection, soft cotton fibers catching the wind, glorious golden specular luster, 4K editorial documentary.",
+    "negativePrompt": "plastic shine, chrome finish, oversaturated yellow paint, foggy lens, digital glitches",
+    "imagePoster": "/assets/images/craft/step7-rangaai-buffing.jpg",
+    "targetVideo": "/assets/videos/craft/step7-rangaai-buffing.mp4"
+  }
+]
