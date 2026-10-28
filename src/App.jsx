@@ -8436,7 +8436,7 @@ export default function App() {
           style={{
             background: "linear-gradient(90deg, #161311 0%, #13332D 50%, #161311 100%)",
             borderBottom: "2px solid #C59B43",
-            padding: "12px 16px",
+            padding: "10px 16px",
             color: "#FAF6EE"
           }}
         >
@@ -8447,29 +8447,11 @@ export default function App() {
               display: "flex",
               flexWrap: "wrap",
               alignItems: "center",
-              justifyContent: "space-between",
+              justifyContent: "center",
               gap: 12
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span
-                style={{
-                  background: "#C59B43",
-                  color: "#161311",
-                  fontWeight: 800,
-                  fontSize: 11,
-                  padding: "4px 10px",
-                  borderRadius: 999,
-                  letterSpacing: "0.05em"
-                }}
-              >
-                LIVE WAREHOUSE STOCK · OCT 2026
-              </span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#FFFFFF" }}>
-                🪔 54 Verified Moradabad Brass &amp; Festive Designs (2,002 Ready Units) — Studio Weighed &amp; Measured
-              </span>
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
               <a
                 href="/diwali-stock"
                 onClick={(e) => {
@@ -8480,7 +8462,7 @@ export default function App() {
                 style={{
                   background: "#C59B43",
                   color: "#161311",
-                  padding: "7px 15px",
+                  padding: "7px 16px",
                   borderRadius: 999,
                   fontSize: 13,
                   fontWeight: 800,
@@ -8496,14 +8478,14 @@ export default function App() {
                   background: "rgba(255,255,255,0.1)",
                   color: "#E5C878",
                   border: "1px solid #C59B43",
-                  padding: "7px 14px",
+                  padding: "7px 16px",
                   borderRadius: 999,
                   fontSize: 13,
                   fontWeight: 700,
                   textDecoration: "none"
                 }}
               >
-                ⬇ Download 54-Item PDF
+                ⬇ Download Item Catalogue
               </a>
             </div>
           </div>

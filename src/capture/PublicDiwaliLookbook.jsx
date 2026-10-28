@@ -10,7 +10,7 @@ import {
 const PACK_FILTERS = [
   {
     id: 'all',
-    label: 'All 54',
+    label: 'All Designs',
     match: () => true
   },
   {
@@ -608,7 +608,7 @@ export default function PublicDiwaliLookbook({ onBackToStore }) {
                     letterSpacing: '0.04em'
                   }}
                 >
-                  54 Designs · {totalUnitsAll.toLocaleString('en-IN')} Ready Units
+                  Moradabad Brass · {totalUnitsAll.toLocaleString('en-IN')} Ready Units
                 </span>
               </div>
 
@@ -1030,7 +1030,7 @@ export default function PublicDiwaliLookbook({ onBackToStore }) {
                   cursor: 'pointer'
                 }}
               >
-                View All 54 Designs →
+                View All Designs →
               </button>
             </div>
 
@@ -1251,7 +1251,7 @@ export default function PublicDiwaliLookbook({ onBackToStore }) {
                 cursor: 'pointer'
               }}
             >
-              Show All 54 Designs
+              Show All Designs
             </button>
           </div>
         ) : (
